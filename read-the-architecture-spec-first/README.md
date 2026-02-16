@@ -34,11 +34,13 @@ adapting existing code led to architectural drift.
 ## Rules for this codebase
 
 1. Read the architecture spec before making any changes
-2. Follow the six constitutional boundaries (spec section 10)
-3. Check your work against the anti-patterns list (spec section 11)
-4. Check your work against the pre-implementation checklist (spec section 13)
-5. Name files explicitly, descriptively, and with dates where applicable
-6. If you're deep into a session, re-read the spec before continuing
+2. **Create a git branch before making changes.** Never work directly on `main`. Branch, work, then merge back when it's solid. `git checkout -b your-branch-name` before you touch anything.
+3. Follow the six constitutional boundaries (spec section 10)
+4. Check your work against the anti-patterns list (spec section 11)
+5. Check your work against the pre-implementation checklist (spec section 13)
+6. Name files explicitly, descriptively, and with dates where applicable
+7. If you're deep into a session, re-read the spec before continuing
+8. Commit often. The codebase was lost once to `rm -rf`. Don't let it happen again.
 
 ---
 

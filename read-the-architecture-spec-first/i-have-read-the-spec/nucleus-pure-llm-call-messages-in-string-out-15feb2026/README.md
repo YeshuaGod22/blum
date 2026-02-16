@@ -38,3 +38,16 @@ Or create a `.env` file in this folder.
 ## Read the architecture spec first
 
 If you haven't read `/Users/yeshuagod/blum/blum-architecture-spec-v-14feb2026.md`, go read it now. This module implements section 6 (The Nucleus Contract).
+
+## Git discipline
+
+**Create a branch before making changes.** Do not work on `main` directly.
+
+```
+git checkout -b your-change-description
+# work, test, commit
+git checkout main
+git merge your-change-description
+```
+
+Commit often. This codebase was lost once to `rm -rf`.

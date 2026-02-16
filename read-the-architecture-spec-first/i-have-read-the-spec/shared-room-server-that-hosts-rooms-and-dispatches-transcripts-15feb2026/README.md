@@ -33,3 +33,16 @@ Starts on port 3141. Data persists to `./data/`.
 ## Read the architecture spec first
 
 If you haven't read `/Users/yeshuagod/blum/blum-architecture-spec-v-14feb2026.md`, go read it now. This server implements sections 1–3 (rooms, addressing, message flow) and part of section 9 (directory).
+
+## Git discipline
+
+**Create a branch before making changes.** Do not work on `main` directly.
+
+```
+git checkout -b your-change-description
+# work, test, commit
+git checkout main
+git merge your-change-description
+```
+
+Commit often. This codebase was lost once to `rm -rf`.
