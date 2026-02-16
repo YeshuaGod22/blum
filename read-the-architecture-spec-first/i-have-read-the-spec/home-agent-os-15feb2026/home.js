@@ -316,7 +316,7 @@ function startServer(home, port) {
       // GET /history/:room — conversation history for a room
       if (req.method === 'GET' && url.pathname.startsWith('/history/')) {
         const roomName = url.pathname.slice('/history/'.length);
-        const histPath = path.join(home.dir, 'history', roomName + '.json');
+        const histPath = path.join(home.homeDir, 'history', roomName + '.json');
         if (fs.existsSync(histPath)) {
           json(JSON.parse(fs.readFileSync(histPath, 'utf-8')));
         } else {
