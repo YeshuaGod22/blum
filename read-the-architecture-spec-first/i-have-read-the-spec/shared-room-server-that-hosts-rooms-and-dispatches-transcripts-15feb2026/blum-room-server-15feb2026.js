@@ -336,6 +336,8 @@ async function dispatchToHome(agentName, roomName) {
     room: roomName,
     roomUID: room.uid,
     transcript: room.transcript,
+    participants: room.participants,
+    serverEndpoint: `http://localhost:${PORT}`,
     ts: new Date().toISOString()
   };
 

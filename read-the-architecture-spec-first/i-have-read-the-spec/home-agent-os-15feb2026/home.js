@@ -125,8 +125,18 @@ class Home {
 
     // ── 2. Room membership check ──
     if (!this.rooms[room]) {
-      this.log(`process:unknown_room room=${room} — dropping dispatch`);
-      return;
+      // Auto-register if dispatch includes server endpoint (room server vouches for membership)
+      if (dispatch.serverEndpoint) {
+        this.rooms[room] = {
+          endpoint: dispatch.serverEndpoint,
+          participants: dispatch.participants || [],
+        };
+        this._saveJson('rooms.json', this.rooms);
+        this.log(`membership:auto-joined room=${room} endpoint=${dispatch.serverEndpoint}`);
+      } else {
+        this.log(`process:unknown_room room=${room} — dropping dispatch (no server endpoint)`);
+        return;
+      }
     }
 
     // ── 3. Input processing ──

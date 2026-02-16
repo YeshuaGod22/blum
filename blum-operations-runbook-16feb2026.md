@@ -87,11 +87,14 @@ curl -X POST $ROOM/api/directory/update-endpoint -H 'Content-Type: application/j
 curl -X POST $ROOM/api/directory/update-endpoint -H 'Content-Type: application/json' -d '{"name":"gamma","endpoint":"http://localhost:4112"}'
 ```
 
-### 4. Tell homes about their rooms (CRITICAL)
+### 4. Tell homes about their rooms (optional since auto-join)
 
-Homes need to know the room server endpoint so their router can send messages
-back. **This was the root cause of the "No external endpoint" bug.** Without
-this step, homes receive dispatches but cannot reply.
+Homes auto-register rooms when they receive a dispatch that includes the room
+server endpoint. So for rooms where the agent is already a participant on the
+room server, you can skip this step — the first dispatch will trigger auto-join.
+
+Manual registration is still useful for pre-configuring rooms before any
+messages are sent, or for rooms where you want to set custom participants.
 
 ```bash
 curl -X POST http://localhost:4110/join -H 'Content-Type: application/json' \
@@ -200,6 +203,33 @@ through to the internal/no-endpoint path.
 `route:sent` (not `route:internal`) and the reply appeared in the boardroom
 transcript.
 
+### 3. Homes drop dispatches for rooms they weren't told about (auto-join)
+
+**Symptom:** Adding a participant to a room on the room server and sending a
+message caused the home to log `process:unknown_room room=second-room — dropping
+dispatch`. The home didn't know about the room because no one called `/join`.
+
+**Cause:** Two-step registration friction. The room server knew Alpha was in
+second-room, but Alpha's home didn't. The home's `rooms.json` only contained
+rooms registered via `/join`.
+
+**Fix (two parts):**
+
+1. **Room server** (`blum-room-server-15feb2026.js:dispatchToHome`): dispatch
+   payload now includes `participants` and `serverEndpoint` so the home has the
+   info it needs to auto-register.
+
+2. **Home** (`home.js:process()`): when a dispatch arrives for an unknown room,
+   if it includes `serverEndpoint`, the home auto-registers the room instead of
+   dropping. If the room is blocked, it's still rejected (blocked check runs
+   first). If the dispatch has no `serverEndpoint` (backward-compatible), it's
+   still dropped.
+
+**Ops log signature:** `membership:auto-joined room=<name> endpoint=<url>`
+
+**Verification:** Sent a message in second-room at 15:18 UTC. Alpha auto-joined,
+processed, and replied — `route:sent` with reply visible in the room transcript.
+
 ---
 
 ## Agent Models
@@ -218,4 +248,16 @@ transcript.
 2. **Room server directory is embedded** — per spec section 9, should be extracted to its own service.
 3. **No startup script** — each service must be started manually. See NEXT.md for the launcher app plan.
 4. **Yeshua has no home endpoint** — registered in directory with `endpoint: null`. Messages addressed to Yeshua dispatch nowhere. A user-facing client (web UI) would fill this role.
-5. **History endpoint not tested post-restart** — the home.js code fix is on disk but the running Alpha process still has the old code in memory. A restart of the home processes is needed to pick up the `/history` fix.
+
+## Change Log
+
+| Time (UTC)  | What |
+|-------------|------|
+| ~03:26      | Previous agent created homes in `/tmp/blum-homes/`, started services |
+| ~03:31      | Room + participants seeded; homes joined boardroom (but without endpoint) |
+| 04:27       | First message sent (yeshua→alpha). Alpha processed but reply stuck (no endpoint) |
+| 14:33       | Services restarted by previous agent |
+| 14:58       | **This session:** fixed rooms.json on all homes (added room server endpoint) |
+| 14:59       | Verified: Alpha replies now reach the room transcript |
+| 15:01       | Yeshua created second-room, added alpha — dispatch dropped (unknown room) |
+| 15:18       | **Auto-join deployed.** All services restarted. Second-room test passed. |
