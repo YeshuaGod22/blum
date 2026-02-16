@@ -108,6 +108,9 @@ class Home {
   // ── The Run Loop ────────────────────────
   // This is where the home orchestrates.
   // NOT a pipeline. The home is in control.
+  //
+  // The modules are resources. The home calls them.
+  // See spec section 5.
 
   async process(dispatch) {
     const room = dispatch.room;
@@ -123,9 +126,8 @@ class Home {
       return;
     }
 
-    // ── 2. Room membership check ──
+    // ── 2. Room membership check (with auto-join) ──
     if (!this.rooms[room]) {
-      // Auto-register if dispatch includes server endpoint (room server vouches for membership)
       if (dispatch.serverEndpoint) {
         this.rooms[room] = {
           endpoint: dispatch.serverEndpoint,
@@ -148,47 +150,34 @@ class Home {
       return;
     }
 
-    // ── 4. Update history ──
-    let history = this._loadHistory(room);
-    // Room server sends 'transcript', generic sends 'messages'
+    // ── 4. Update history for the triggering room ──
+    let roomHistory = this._loadHistory(room);
     const incoming = dispatch.transcript || dispatch.messages || [];
-    // Append new entries, avoiding duplicates by message ID or timestamp
-    const existingIds = new Set(history.map(m => m.id).filter(Boolean));
-    const lastTs = history.length > 0 ? (history[history.length - 1].ts || 0) : 0;
+    const existingIds = new Set(roomHistory.map(m => m.id).filter(Boolean));
+    const lastTs = roomHistory.length > 0 ? (roomHistory[roomHistory.length - 1].ts || 0) : 0;
     const newEntries = incoming.filter(m => {
       if (m.id && existingIds.has(m.id)) return false;
       if (!m.id && m.ts && m.ts <= lastTs) return false;
       return true;
     });
-    history.push(...newEntries);
-    this._saveHistory(room, history);
+    roomHistory.push(...newEntries);
+    this._saveHistory(room, roomHistory);
 
-    // Build full conversation from history
-    const fullConversation = inputProcessor.process(
-      { room, transcript: history },
-      this.config.name
-    );
+    // ── 5. Boot assembly — builds identity prefix (X tokens) ──
+    // The boot assembler only knows identity, not context.
+    const agentConfig = { ...this.config, homeDir: this.homeDir };
+    const bootDocuments = bootAssembler.assemble(agentConfig, null);
+    this.log(`process:boot documents=${bootDocuments.length}`);
 
-    // ── 5. Boot assembly ──
-    // Find who triggered this dispatch (last message addressed to this agent)
-    const transcript = dispatch.transcript || dispatch.messages || [];
-    const triggerMsg = [...transcript].reverse().find(
-      m => m.to === this.config.name && m.from !== this.config.name
-    );
-    const roomInfo = this.rooms[room];
-    const bootConfig = {
-      ...this.config,
-      currentRoom: room,
-      replyTo: triggerMsg ? `${triggerMsg.from}@${room}` : null,
-      roomContext: `Room: ${room}. Participants: ${roomInfo.participants?.join(', ') || 'unknown'}.`,
-    };
-    const systemMessages = bootAssembler.assemble(bootConfig);
-    this.log(`process:boot system_tokens_est=${systemMessages[0].content.length / 4 | 0}`);
-
-    // ── 6. Context management (non-negotiable) ──
+    // ── 6. Context management — the final gate (non-negotiable) ──
+    // The context manager is part of the home. It has access to
+    // everything the home knows: rooms, history, config.
+    // It builds room context, loads cross-room history,
+    // and fits everything within the token budget.
+    // Boot documents are identity — never trimmed.
     const tokenBudget = this.config.tokenBudget || 100000;
-    const fitted = contextManager.fit(systemMessages, fullConversation, tokenBudget);
-    this.log(`process:context total_messages=${fitted.length} budget=${tokenBudget}`);
+    const fitted = contextManager.build(this, dispatch, bootDocuments, tokenBudget);
+    this.log(`process:context fitted=${fitted.length} budget=${tokenBudget}`);
 
     // ── 7. Nucleus call ──
     this.log(`process:nucleus model=${this.config.model || 'default'}`);
@@ -203,32 +192,38 @@ class Home {
     const parsed = outputProcessor.parse(response);
     this.log(`process:output thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0}`);
 
-    // ── 9. Record thinking and private text ──
-    if (parsed.thinking.length > 0 || parsed.private) {
-      // These stay in the home. Never routed.
-      this.log(`process:thinking blocks=${parsed.thinking.length}`);
-    }
-
-    // ── 10. Add own messages to history ──
+    // ── 9. Add own outbound messages to triggering room history ──
     for (const msg of parsed.messages) {
-      history.push({
-        from: this.config.name,
-        content: msg.content,
-        to: msg.to,
-        ts: Date.now(),
-      });
+      // Only add to room history if it's addressed to a room participant
+      const atIndex = msg.to.indexOf('@');
+      if (atIndex !== -1) {
+        const targetRoom = msg.to.slice(atIndex + 1);
+        if (targetRoom === room) {
+          roomHistory.push({
+            from: this.config.name,
+            content: msg.content,
+            to: msg.to,
+            ts: Date.now(),
+          });
+        }
+      }
     }
-    this._saveHistory(room, history);
+    this._saveHistory(room, roomHistory);
 
-    // ── 11. Route ──
-    if (parsed.messages.length > 0) {
-      const routeResults = await router.dispatch(parsed, {
-        name: this.config.name,
-        rooms: this.rooms,
-        log: (entry) => this.log(entry),
-      });
-      this.log(`process:routed results=${JSON.stringify(routeResults)}`);
-    }
+    // ── 10. Route — the router handles EVERYTHING from here ──
+    // Writes to the home's transcript, routes to rooms, routes internal addresses.
+    // The router always runs, even with 0 outbound messages,
+    // because it records the transcript.
+    const routeResults = await router.dispatch(parsed, {
+      name: this.config.name,
+      homeDir: this.homeDir,
+      rooms: this.rooms,
+      triggeringRoom: room,
+      nucleusResponse: response,
+      fittedContext: fitted,
+      log: (entry) => this.log(entry),
+    });
+    this.log(`process:routed results=${JSON.stringify(routeResults)}`);
 
     this.log(`process:done room=${room}`);
     return parsed;
@@ -327,6 +322,26 @@ function startServer(home, port) {
         safe.rooms = Object.keys(home.rooms);
         safe.blocked = home.blocked;
         json(safe);
+        return;
+      }
+
+      // GET /transcript — home transcript (JSONL → array)
+      // Each entry is one full inference cycle: context in, response out, routing.
+      if (req.method === 'GET' && url.pathname === '/transcript') {
+        const transcriptPath = path.join(home.homeDir, 'transcript', 'home-transcript.jsonl');
+        if (fs.existsSync(transcriptPath)) {
+          const lines = fs.readFileSync(transcriptPath, 'utf-8').trim().split('\n').filter(Boolean);
+          const entries = lines.map((line, i) => {
+            try {
+              const parsed = JSON.parse(line);
+              parsed._index = i;
+              return parsed;
+            } catch { return null; }
+          }).filter(Boolean);
+          json(entries);
+        } else {
+          json([]);
+        }
         return;
       }
 

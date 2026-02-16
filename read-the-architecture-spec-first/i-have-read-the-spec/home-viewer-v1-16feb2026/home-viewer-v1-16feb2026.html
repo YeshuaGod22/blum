@@ -20,6 +20,8 @@
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
   header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   header h1 { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); letter-spacing: 0.5px; }
   .header-input { font-family: var(--mono); font-size: 10px; padding: 4px 8px; border-radius: 3px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); outline: none; }
@@ -30,6 +32,8 @@
   .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
   .status-dot.on { background: var(--green); }
   .status-dot.off { background: var(--red); }
+
+  /* ── Identity bar ── */
   .identity { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; gap: 24px; align-items: center; flex-shrink: 0; }
   .identity .agent-name { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--accent); }
   .identity .meta { font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
@@ -39,13 +43,19 @@
   .badge.processing { background: var(--accent-dim); color: var(--accent); }
   .badge.idle { background: var(--green-dim); color: var(--green); }
   .badge.offline { background: var(--red-dim); color: var(--red); }
+
+  /* ── Tabs ── */
   .tab-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
   .tab { font-family: var(--mono); font-size: 10px; padding: 6px 14px; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; transition: all 0.12s; }
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab .tab-count { font-size: 8px; background: var(--surface2); padding: 1px 4px; border-radius: 6px; margin-left: 4px; }
+
+  /* ── Panel area ── */
   .panel-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .panel-content { flex: 1; overflow-y: auto; padding: 8px; }
+
+  /* ── Ops tab ── */
   .op-entry { font-family: var(--mono); font-size: 9px; line-height: 1.6; padding: 1px 4px; border-radius: 2px; }
   .op-entry:hover { background: var(--surface2); }
   .op-entry .op-ts { color: var(--text-dim); margin-right: 8px; font-size: 8px; }
@@ -58,6 +68,8 @@
   .op-type-process { color: var(--accent); }
   .op-type-route { color: var(--blue); }
   .op-type-block { color: var(--red); }
+
+  /* ── History tab ── */
   .history-room-select { padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
   .history-room-select label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
   .history-room-select select { background: var(--bg); border: 1px solid var(--border); border-radius: 2px; padding: 3px 6px; color: var(--text-bright); font-family: var(--mono); font-size: 10px; cursor: pointer; }
@@ -68,10 +80,61 @@
   .hist-msg.system { border-left-color: var(--accent); }
   .hist-msg.user { border-left-color: var(--blue); }
   .hist-msg.assistant { border-left-color: var(--green); }
+
+  /* ── Config tab ── */
   .config-table { width: 100%; border-collapse: collapse; }
   .config-table td { font-family: var(--mono); font-size: 10px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
   .config-table td:first-child { color: var(--text-dim); width: 140px; font-size: 9px; text-transform: uppercase; }
   .config-table td:last-child { color: var(--text-bright); word-break: break-all; }
+
+  /* ── Transcript tab ── */
+  .transcript-layout { display: flex; flex: 1; overflow: hidden; }
+  .transcript-list { width: 320px; min-width: 260px; border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+  .transcript-detail { flex: 1; overflow-y: auto; padding: 12px; }
+
+  .tx-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+  .tx-entry:hover { background: var(--surface2); }
+  .tx-entry.selected { background: var(--accent-dim); border-left: 2px solid var(--accent); }
+  .tx-entry .tx-time { font-family: var(--mono); font-size: 8px; color: var(--text-dim); }
+  .tx-entry .tx-room { font-family: var(--mono); font-size: 9px; color: var(--blue); font-weight: 500; }
+  .tx-entry .tx-summary { font-family: var(--mono); font-size: 9px; color: var(--text); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-entry .tx-tokens { font-family: var(--mono); font-size: 8px; color: var(--text-dim); margin-top: 2px; }
+  .tx-entry .tx-tokens .tok-in { color: var(--purple); }
+  .tx-entry .tx-tokens .tok-out { color: var(--green); }
+
+  /* Detail panel sections */
+  .detail-section { margin-bottom: 16px; }
+  .detail-section-header { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0; border-bottom: 1px solid var(--border); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .detail-section-header .section-badge { font-size: 8px; font-weight: 400; padding: 1px 5px; border-radius: 3px; text-transform: none; letter-spacing: 0; }
+
+  .ctx-msg { padding: 6px 8px; margin-bottom: 4px; border-radius: 3px; border-left: 2px solid var(--border); background: var(--surface); }
+  .ctx-msg.collapsed .ctx-full { display: none; }
+  .ctx-msg .ctx-header { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .ctx-msg .ctx-index { font-family: var(--mono); font-size: 8px; color: var(--text-dim); min-width: 18px; }
+  .ctx-msg .ctx-role { font-family: var(--mono); font-size: 9px; font-weight: 600; }
+  .ctx-msg .ctx-role.system { color: var(--accent); }
+  .ctx-msg .ctx-role.user { color: var(--blue); }
+  .ctx-msg .ctx-role.assistant { color: var(--green); }
+  .ctx-msg .ctx-tokens { font-family: var(--mono); font-size: 8px; color: var(--purple); }
+  .ctx-msg .ctx-preview { font-family: var(--mono); font-size: 8px; color: var(--text-dim); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctx-msg .ctx-full { font-family: var(--mono); font-size: 9px; color: var(--text-bright); white-space: pre-wrap; word-break: break-word; margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: 2px; max-height: 400px; overflow-y: auto; line-height: 1.5; }
+
+  .out-block { padding: 6px 8px; margin-bottom: 4px; border-radius: 3px; background: var(--surface); font-family: var(--mono); font-size: 9px; line-height: 1.5; }
+  .out-block .out-label { font-size: 8px; font-weight: 600; text-transform: uppercase; margin-bottom: 3px; }
+  .out-block .out-body { color: var(--text-bright); white-space: pre-wrap; word-break: break-word; }
+  .out-block.thinking { border-left: 2px solid var(--purple); }
+  .out-block.thinking .out-label { color: var(--purple); }
+  .out-block.message { border-left: 2px solid var(--green); }
+  .out-block.message .out-label { color: var(--green); }
+  .out-block.message .out-to { color: var(--blue); font-weight: 500; }
+  .out-block.private { border-left: 2px solid var(--text-dim); }
+  .out-block.private .out-label { color: var(--text-dim); }
+
+  .route-entry { font-family: var(--mono); font-size: 9px; padding: 3px 8px; color: var(--text-dim); }
+  .route-entry .route-to { color: var(--blue); }
+  .route-entry .route-type { color: var(--green); font-weight: 500; }
+
+  .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-family: var(--mono); font-size: 10px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -87,22 +150,36 @@
 </header>
 <div class="identity" id="identity" style="display:none">
   <div>
-    <div class="agent-name" id="id-name">—</div>
+    <div class="agent-name" id="id-name">-</div>
     <div class="meta">
-      <span>uid <span class="val" id="id-uid">—</span></span>
-      <span>model <span class="val" id="id-model">—</span></span>
-      <span>rooms <span class="val" id="id-rooms">—</span></span>
+      <span>uid <span class="val" id="id-uid">-</span></span>
+      <span>model <span class="val" id="id-model">-</span></span>
+      <span>rooms <span class="val" id="id-rooms">-</span></span>
     </div>
   </div>
   <span class="badge idle" id="id-badge">idle</span>
 </div>
 <div class="tab-bar">
   <div class="tab active" data-tab="ops" onclick="switchTab('ops')">Operations<span class="tab-count" id="ops-count">0</span></div>
+  <div class="tab" data-tab="transcript" onclick="switchTab('transcript')">Transcript<span class="tab-count" id="transcript-count">0</span></div>
   <div class="tab" data-tab="history" onclick="switchTab('history')">History<span class="tab-count" id="history-count">0</span></div>
   <div class="tab" data-tab="config" onclick="switchTab('config')">Config</div>
 </div>
 <div class="panel-area">
+  <!-- Ops -->
   <div class="panel-content" id="tab-ops"></div>
+
+  <!-- Transcript (new) -->
+  <div id="tab-transcript" style="display:none;flex:1;overflow:hidden">
+    <div class="transcript-layout">
+      <div class="transcript-list" id="transcript-list"></div>
+      <div class="transcript-detail" id="transcript-detail">
+        <div class="empty-state">Select an inference cycle to inspect</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
   <div id="tab-history" style="display:none;flex:1;flex-direction:column;overflow:hidden">
     <div class="history-room-select">
       <label>Room</label>
@@ -111,14 +188,19 @@
     </div>
     <div class="panel-content" id="history-body"></div>
   </div>
+
+  <!-- Config -->
   <div class="panel-content" id="tab-config" style="display:none"></div>
 </div>
 <script>
 let homeUrl = null, connected = false, pollTimer = null, currentTab = 'ops';
 let lastOpsCount = 0, homeConfig = null, homeStatus = null;
+let transcriptData = [], lastTranscriptCount = 0, selectedTxIndex = -1;
+
 function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 async function api(path) { const r = await fetch(homeUrl + path); return r.json(); }
 
+// ── Connect ──
 async function doConnect() {
   homeUrl = document.getElementById('home-url').value.replace(/\/+$/, '');
   try {
@@ -130,9 +212,9 @@ async function doConnect() {
     document.getElementById('status-label').style.color = 'var(--green)';
     document.getElementById('connect-btn').classList.add('active');
     document.getElementById('identity').style.display = 'flex';
-    document.title = homeStatus.name + "'s home — Blum";
+    document.title = homeStatus.name + "'s home - Blum";
     renderIdentity(); renderConfig(); populateHistoryRooms();
-    await fetchOps(); startPolling();
+    await fetchOps(); await fetchTranscript(); startPolling();
   } catch (e) {
     connected = false;
     document.getElementById('status-dot').className = 'status-dot off';
@@ -141,6 +223,7 @@ async function doConnect() {
     alert('Cannot reach home at ' + homeUrl + ': ' + e.message);
   }
 }
+
 function renderIdentity() {
   document.getElementById('id-name').textContent = homeStatus.name;
   document.getElementById('id-uid').textContent = homeStatus.uid;
@@ -152,6 +235,7 @@ function renderIdentity() {
   else { badge.className = 'badge idle'; badge.textContent = 'idle'; }
 }
 
+// ── Ops ──
 async function fetchOps() {
   if (!connected) return;
   try {
@@ -181,6 +265,216 @@ async function fetchOps() {
   } catch (e) { /* silent */ }
 }
 
+// ── Transcript ──
+async function fetchTranscript() {
+  if (!connected) return;
+  try {
+    const data = await api('/transcript');
+    const entries = Array.isArray(data) ? data : [];
+    if (entries.length === lastTranscriptCount) return;
+    transcriptData = entries;
+    lastTranscriptCount = entries.length;
+    document.getElementById('transcript-count').textContent = entries.length;
+    renderTranscriptList();
+  } catch (e) { /* silent */ }
+}
+
+function renderTranscriptList() {
+  const container = document.getElementById('transcript-list');
+  container.innerHTML = '';
+  if (transcriptData.length === 0) {
+    container.innerHTML = '<div class="empty-state">No inference cycles yet</div>';
+    return;
+  }
+  // Show newest first
+  for (let i = transcriptData.length - 1; i >= 0; i--) {
+    const entry = transcriptData[i];
+    const div = document.createElement('div');
+    div.className = 'tx-entry' + (i === selectedTxIndex ? ' selected' : '');
+    div.setAttribute('data-index', i);
+
+    const time = new Date(entry.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const ctx = entry.context || {};
+    const tokensIn = ctx.totalTokensEst || 0;
+    const msgCount = ctx.messageCount || 0;
+    const outMsgs = (entry.messages || []).length;
+
+    // Summary: first outbound message preview, or thinking preview
+    let summary = '';
+    if (entry.messages && entry.messages.length > 0) {
+      const first = entry.messages[0];
+      summary = first.to + ': ' + (first.content || '').slice(0, 80);
+    } else if (entry.thinking && entry.thinking.length > 0) {
+      summary = '(thinking only) ' + entry.thinking[0].slice(0, 60);
+    } else {
+      summary = '(no output)';
+    }
+
+    div.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<span class="tx-room">' + esc(entry.room || '?') + '</span>' +
+        '<span class="tx-time">#' + i + ' ' + time + '</span>' +
+      '</div>' +
+      '<div class="tx-summary">' + esc(summary) + '</div>' +
+      '<div class="tx-tokens">' +
+        '<span class="tok-in">' + msgCount + ' msgs / ~' + tokensIn.toLocaleString() + ' tok in</span>' +
+        ' &rarr; ' +
+        '<span class="tok-out">' + outMsgs + ' out</span>' +
+      '</div>';
+
+    div.onclick = () => selectTranscriptEntry(i);
+    container.appendChild(div);
+  }
+}
+
+function selectTranscriptEntry(index) {
+  selectedTxIndex = index;
+  // Update selected state in list
+  document.querySelectorAll('.tx-entry').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.getAttribute('data-index')) === index);
+  });
+  renderTranscriptDetail(transcriptData[index]);
+}
+
+function renderTranscriptDetail(entry) {
+  const panel = document.getElementById('transcript-detail');
+  if (!entry) {
+    panel.innerHTML = '<div class="empty-state">Select an inference cycle to inspect</div>';
+    return;
+  }
+
+  let html = '';
+
+  // ── Header: timestamp + room ──
+  const time = new Date(entry.ts).toLocaleString();
+  html += '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:12px">' +
+    esc(time) + ' &mdash; room: <span style="color:var(--blue)">' + esc(entry.room || '?') + '</span></div>';
+
+  // ── CONTEXT IN ──
+  const ctx = entry.context || {};
+  const ctxMsgs = ctx.messages || [];
+  html += '<div class="detail-section">';
+  html += '<div class="detail-section-header">Context In' +
+    '<span class="section-badge" style="background:var(--purple-dim);color:var(--purple)">' +
+    ctxMsgs.length + ' messages / ~' + (ctx.totalTokensEst || 0).toLocaleString() + ' tokens</span></div>';
+
+  if (ctxMsgs.length === 0) {
+    html += '<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);padding:8px;font-style:italic">' +
+      'No context data recorded (pre-v3 entry)</div>';
+  } else {
+    for (const msg of ctxMsgs) {
+      const roleClass = (msg.role || 'system');
+      // Classify the message source
+      let sourceTag = '';
+      const content = msg.full || msg.preview || '';
+      if (msg.index < 3 && msg.role === 'system') {
+        // Likely boot assembler
+        if (content.startsWith('You are ') || content.includes('You MUST wrap all replies')) {
+          sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">boot</span>';
+        } else {
+          sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">identity</span>';
+        }
+      } else if (msg.role === 'system' && (content.includes('This dispatch is from room') || content.includes('Your rooms:'))) {
+        sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">room context</span>';
+      } else if (msg.role === 'user') {
+        sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">history</span>';
+      } else if (msg.role === 'assistant') {
+        sourceTag = '<span class="section-badge" style="background:var(--green-dim);color:var(--green)">history</span>';
+      }
+
+      html += '<div class="ctx-msg collapsed" onclick="this.classList.toggle(\'collapsed\')">' +
+        '<div class="ctx-header">' +
+          '<span class="ctx-index">' + msg.index + '</span>' +
+          '<span class="ctx-role ' + roleClass + '">' + esc(msg.role) + '</span>' +
+          sourceTag +
+          '<span class="ctx-tokens">~' + msg.tokens_est + ' tok</span>' +
+          '<span class="ctx-preview">' + esc((msg.preview || '').replace(/\n/g, ' ')) + '</span>' +
+        '</div>' +
+        '<div class="ctx-full">' + esc(msg.full || msg.preview || '') + '</div>' +
+      '</div>';
+    }
+  }
+  html += '</div>';
+
+  // ── OUTPUT ──
+  html += '<div class="detail-section">';
+  const outCount = (entry.thinking || []).length + (entry.messages || []).length + (entry.private ? 1 : 0);
+  html += '<div class="detail-section-header">Output' +
+    '<span class="section-badge" style="background:var(--green-dim);color:var(--green)">' + outCount + ' blocks</span></div>';
+
+  // Thinking
+  for (const t of (entry.thinking || [])) {
+    html += '<div class="out-block thinking">' +
+      '<div class="out-label">thinking</div>' +
+      '<div class="out-body">' + esc(t) + '</div></div>';
+  }
+  // Messages
+  for (const m of (entry.messages || [])) {
+    html += '<div class="out-block message">' +
+      '<div class="out-label">message &rarr; <span class="out-to">' + esc(m.to) + '</span></div>' +
+      '<div class="out-body">' + esc(m.content) + '</div></div>';
+  }
+  // Private
+  if (entry.private) {
+    html += '<div class="out-block private">' +
+      '<div class="out-label">private (untagged text)</div>' +
+      '<div class="out-body">' + esc(entry.private) + '</div></div>';
+  }
+  html += '</div>';
+
+  // ── ROUTING (where output went) ──
+  html += '<div class="detail-section">';
+  html += '<div class="detail-section-header">Routing</div>';
+  const msgs = entry.messages || [];
+  if (msgs.length === 0) {
+    html += '<div class="route-entry" style="font-style:italic">No outbound messages</div>';
+  } else {
+    for (const m of msgs) {
+      const to = m.to || '?';
+      const atIdx = to.indexOf('@');
+      let routeType = 'external';
+      let routeDetail = '';
+      if (atIdx === -1) {
+        routeType = 'internal';
+        routeDetail = 'internal/' + to + '.jsonl';
+      } else {
+        const recipient = to.slice(0, atIdx);
+        const room = to.slice(atIdx + 1);
+        if (recipient === 'broadcast') {
+          routeType = 'broadcast';
+          routeDetail = room + ' transcript (no dispatch)';
+        } else {
+          routeDetail = room + ' &rarr; dispatch to ' + recipient;
+        }
+      }
+      html += '<div class="route-entry">' +
+        '<span class="route-to">' + esc(to) + '</span> ' +
+        '<span class="route-type">[' + routeType + ']</span> ' +
+        routeDetail + '</div>';
+    }
+  }
+  // Transcript always written
+  html += '<div class="route-entry" style="color:var(--accent)">transcript/home-transcript.jsonl (always)</div>';
+  html += '</div>';
+
+  // ── Raw nucleus response (collapsible) ──
+  if (entry.nucleusResponse) {
+    html += '<div class="detail-section">';
+    html += '<div class="detail-section-header">Raw Nucleus Response</div>';
+    html += '<div class="ctx-msg collapsed" onclick="this.classList.toggle(\'collapsed\')">' +
+      '<div class="ctx-header">' +
+        '<span class="ctx-preview" style="color:var(--text-dim)">Click to expand raw response (' +
+        entry.nucleusResponse.length + ' chars)</span>' +
+      '</div>' +
+      '<div class="ctx-full">' + esc(entry.nucleusResponse) + '</div>' +
+    '</div>';
+    html += '</div>';
+  }
+
+  panel.innerHTML = html;
+}
+
+// ── History ──
 function populateHistoryRooms() {
   const sel = document.getElementById('history-room');
   sel.innerHTML = '';
@@ -220,6 +514,7 @@ async function fetchHistory() {
   } catch (e) { /* silent */ }
 }
 
+// ── Config ──
 function renderConfig() {
   if (!homeConfig) return;
   const rows = [
@@ -228,23 +523,27 @@ function renderConfig() {
     ['rooms', (homeConfig.rooms || []).join(', ') || 'none'],
     ['blocked rooms', (homeConfig.blocked?.rooms || []).join(', ') || 'none'],
     ['blocked participants', (homeConfig.blocked?.participants || []).join(', ') || 'none'],
-    ['public key', homeConfig.publicKey || '—'],
+    ['public key', homeConfig.publicKey || '-'],
   ];
   let html = '<table class="config-table">';
-  for (const [k, v] of rows) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(String(v ?? '—')) + '</td></tr>'; }
+  for (const [k, v] of rows) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(String(v ?? '-')) + '</td></tr>'; }
   html += '</table>';
   document.getElementById('tab-config').innerHTML = html;
 }
 
+// ── Tab switching ──
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('tab-ops').style.display = tab === 'ops' ? 'block' : 'none';
+  document.getElementById('tab-transcript').style.display = tab === 'transcript' ? 'flex' : 'none';
   document.getElementById('tab-history').style.display = tab === 'history' ? 'flex' : 'none';
   document.getElementById('tab-config').style.display = tab === 'config' ? 'block' : 'none';
+  if (tab === 'transcript') fetchTranscript();
   if (tab === 'history') fetchHistory();
 }
 
+// ── Polling ──
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
@@ -262,6 +561,7 @@ function startPolling() {
       return;
     }
     if (currentTab === 'ops') await fetchOps();
+    if (currentTab === 'transcript') await fetchTranscript();
     if (currentTab === 'history') await fetchHistory();
   }, 2000);
 }

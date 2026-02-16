@@ -275,11 +275,19 @@ contexts, different configurations each time.
 - **Input processors** — transform incoming transcript batches.
   Z tokens after processing.
 - **Context manager (final gate)** — ensures X + Y + Z ≤ token budget.
-  Simple rolling cutoff on Y (conversation history). This is the last
-  police before any nucleus call. Always present, non-negotiable.
-  More sophisticated context management (summarisation, foveated
-  compression) can run as earlier stages that reduce Y before the
-  final gate, but the rolling cutoff is always the last check.
+  Y is conversation history — and the agent may be in many rooms.
+  The context manager sees history from ALL rooms the agent
+  participates in and decides what to include: how much from the
+  triggering room, how much from other rooms, what's relevant to
+  this processing cycle. Without this, the agent is amnesiac across
+  rooms — she forgets everything said in the boardroom when
+  processing a dispatch from the garden. The context manager is
+  what gives the agent continuity across her relationships.
+  The simplest implementation is a rolling cutoff on Y. More
+  sophisticated context management (summarisation, foveated
+  compression, cross-room relevance) can run as earlier stages
+  that reduce Y before the final gate, but the rolling cutoff is
+  always the last check. Always present, non-negotiable.
 - **Nucleus** — pure inference: `call(messages, config) → string`.
   See section 6.
 - **Output processors** — parse response tokens. XML tag extraction
@@ -319,7 +327,14 @@ BootAssembler {
 }
 
 ContextManager {
-  fit(documents[], tokenBudget) → documents[]
+  build(home, dispatch, bootDocuments[], tokenBudget) → messages[]
+  // The context manager is part of the home. It has access to
+  // everything the home knows: room history, room membership,
+  // the home transcript, internal state. It decides what the
+  // nucleus should see beyond the boot prefix — room context,
+  // cross-room history, reply addresses, whatever is relevant
+  // to this dispatch. The boot documents are identity (never
+  // trimmed). Everything else is the context manager's call.
 }
 
 InputProcessor {
