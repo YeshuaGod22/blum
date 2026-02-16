@@ -302,6 +302,29 @@ function startServer(home, port) {
         return;
       }
 
+      // GET /config — home config (redacted: no keys)
+      if (req.method === 'GET' && url.pathname === '/config') {
+        const safe = { ...home.config };
+        delete safe.apiKey;
+        delete safe.privateKey;
+        safe.rooms = Object.keys(home.rooms);
+        safe.blocked = home.blocked;
+        json(safe);
+        return;
+      }
+
+      // GET /history/:room — conversation history for a room
+      if (req.method === 'GET' && url.pathname.startsWith('/history/')) {
+        const roomName = url.pathname.slice('/history/'.length);
+        const histPath = path.join(home.dir, 'history', roomName + '.json');
+        if (fs.existsSync(histPath)) {
+          json(JSON.parse(fs.readFileSync(histPath, 'utf-8')));
+        } else {
+          json({ messages: [] });
+        }
+        return;
+      }
+
       json({ error: 'Not found' }, 404);
     } catch (err) {
       home.log(`server:error ${err.message}`);
