@@ -170,9 +170,16 @@ class Home {
     );
 
     // ── 5. Boot assembly ──
+    // Find who triggered this dispatch (last message addressed to this agent)
+    const transcript = dispatch.transcript || dispatch.messages || [];
+    const triggerMsg = [...transcript].reverse().find(
+      m => m.to === this.config.name && m.from !== this.config.name
+    );
     const roomInfo = this.rooms[room];
     const bootConfig = {
       ...this.config,
+      currentRoom: room,
+      replyTo: triggerMsg ? `${triggerMsg.from}@${room}` : null,
       roomContext: `Room: ${room}. Participants: ${roomInfo.participants?.join(', ') || 'unknown'}.`,
     };
     const systemMessages = bootAssembler.assemble(bootConfig);
