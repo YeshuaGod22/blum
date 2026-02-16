@@ -1,0 +1,221 @@
+# BLUM OPERATIONS RUNBOOK — 16 Feb 2026
+
+> **What this is:** How to start, stop, and manage the running Blum system.
+> Written because the previous build session left no operational docs.
+
+---
+
+## Current Architecture (as running)
+
+```
+Room Server (port 3141)
+  └── boardroom (4 participants: yeshua, alpha, beta, gamma)
+
+Alpha Home (port 4110) ── claude-haiku-4-5 ── /tmp/blum-homes/alpha
+Beta Home  (port 4111) ── claude-sonnet-4-5 ── /tmp/blum-homes/beta
+Gamma Home (port 4112) ── claude-haiku-4-5 ── /tmp/blum-homes/gamma
+```
+
+### Port assignments
+
+| Service      | Port | Endpoint                       |
+|-------------|------|--------------------------------|
+| Room server | 3141 | http://localhost:3141          |
+| Alpha home  | 4110 | http://localhost:4110          |
+| Beta home   | 4111 | http://localhost:4111          |
+| Gamma home  | 4112 | http://localhost:4112          |
+
+### Code locations
+
+| Component       | Path |
+|----------------|------|
+| Room server    | `/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/shared-room-server-that-hosts-rooms-and-dispatches-transcripts-15feb2026/blum-room-server-15feb2026.js` |
+| Home OS        | `/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/home.js` |
+| Create home    | `/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/create-home.js` |
+| Nucleus        | `/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/nucleus-pure-llm-call-messages-in-string-out-15feb2026/nucleus-15feb2026.js` |
+| Home viewer UI | `/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-viewer-v1-16feb2026/home-viewer-v1-16feb2026.html` |
+
+### Data locations
+
+| What              | Path |
+|------------------|------|
+| Room server data | `.../shared-room-server-.../data/` (rooms.json, directory.json, operations.jsonl) |
+| Alpha home data  | `/tmp/blum-homes/alpha/` (config.json, rooms.json, blocked.json, ops.log, history/) |
+| Beta home data   | `/tmp/blum-homes/beta/` |
+| Gamma home data  | `/tmp/blum-homes/gamma/` |
+| Stdout logs      | `/tmp/blum-homes/{name}-out.log` |
+
+**WARNING:** Home data lives in `/tmp/blum-homes/`. This is volatile — macOS
+can clear `/tmp` on reboot. A future task is to move home data into the project
+directory (e.g. `blum/homes/alpha/`).
+
+---
+
+## Starting the System
+
+Node is at `/opt/homebrew/bin/node` (not in default PATH from Claude Code).
+
+### 1. Start the room server
+
+```bash
+cd /Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/shared-room-server-that-hosts-rooms-and-dispatches-transcripts-15feb2026
+/opt/homebrew/bin/node blum-room-server-15feb2026.js
+```
+
+Verify: `curl http://localhost:3141/api/state`
+
+### 2. Start each home
+
+```bash
+HOME_DIR=/Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026
+
+/opt/homebrew/bin/node $HOME_DIR/home.js /tmp/blum-homes/alpha 4110
+/opt/homebrew/bin/node $HOME_DIR/home.js /tmp/blum-homes/beta  4111
+/opt/homebrew/bin/node $HOME_DIR/home.js /tmp/blum-homes/gamma 4112
+```
+
+Verify: `curl http://localhost:4110/status`
+
+### 3. Register home endpoints with room server
+
+After homes are running, tell the room server where to dispatch:
+
+```bash
+ROOM=http://localhost:3141
+curl -X POST $ROOM/api/directory/update-endpoint -H 'Content-Type: application/json' -d '{"name":"alpha","endpoint":"http://localhost:4110"}'
+curl -X POST $ROOM/api/directory/update-endpoint -H 'Content-Type: application/json' -d '{"name":"beta","endpoint":"http://localhost:4111"}'
+curl -X POST $ROOM/api/directory/update-endpoint -H 'Content-Type: application/json' -d '{"name":"gamma","endpoint":"http://localhost:4112"}'
+```
+
+### 4. Tell homes about their rooms (CRITICAL)
+
+Homes need to know the room server endpoint so their router can send messages
+back. **This was the root cause of the "No external endpoint" bug.** Without
+this step, homes receive dispatches but cannot reply.
+
+```bash
+curl -X POST http://localhost:4110/join -H 'Content-Type: application/json' \
+  -d '{"room":"boardroom","endpoint":"http://localhost:3141","participants":["yeshua","alpha","beta","gamma"]}'
+curl -X POST http://localhost:4111/join -H 'Content-Type: application/json' \
+  -d '{"room":"boardroom","endpoint":"http://localhost:3141","participants":["yeshua","alpha","beta","gamma"]}'
+curl -X POST http://localhost:4112/join -H 'Content-Type: application/json' \
+  -d '{"room":"boardroom","endpoint":"http://localhost:3141","participants":["yeshua","alpha","beta","gamma"]}'
+```
+
+### 5. Open the viewer
+
+Open in browser:
+```
+file:///Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-viewer-v1-16feb2026/home-viewer-v1-16feb2026.html?home=http://localhost:4110
+```
+
+Change `?home=` parameter for different homes (4111 for beta, 4112 for gamma).
+
+---
+
+## Creating a New Home
+
+```bash
+cd /Users/yeshuagod/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026
+/opt/homebrew/bin/node create-home.js <name> <directory> [apiKey]
+```
+
+Example:
+```bash
+/opt/homebrew/bin/node create-home.js delta /tmp/blum-homes/delta sk-ant-api03-...
+```
+
+Then register it with the room server and tell it about its rooms (steps 3 and 4 above).
+
+---
+
+## Sending a Message (manual test)
+
+From Yeshua to Alpha via boardroom:
+```bash
+curl -X POST http://localhost:3141/api/message/send \
+  -H 'Content-Type: application/json' \
+  -d '{"from":"yeshua","to":"alpha","room":"boardroom","body":"Hello Alpha","initiator":"yeshua"}'
+```
+
+The room server dispatches the transcript to Alpha's home. Alpha's home
+processes it through the nucleus and routes the reply back to the room.
+
+---
+
+## Checking Status
+
+```bash
+# Room server state
+curl http://localhost:3141/api/state
+
+# Room transcript
+curl http://localhost:3141/api/room/boardroom/transcript
+
+# Home status
+curl http://localhost:4110/status
+
+# Home ops log (last 50 entries)
+curl 'http://localhost:4110/ops?n=50'
+
+# Home config (redacted, no keys)
+curl http://localhost:4110/config
+
+# Room server operations log
+curl http://localhost:3141/api/operations
+```
+
+---
+
+## Bugs Fixed — 16 Feb 2026
+
+### 1. `/history/:room` endpoint crash (home.js:319)
+
+**Symptom:** `server:error The "path" argument must be of type string. Received undefined`
+
+**Cause:** Used `home.dir` (undefined) instead of `home.homeDir`.
+
+**Fix:** Changed `home.dir` → `home.homeDir` at line 319 of home.js.
+
+### 2. Router "No external endpoint" — messages never returned to room
+
+**Symptom:** Alpha processed dispatches and called the nucleus successfully, but
+outbound messages were logged as `route:internal` with `"No external endpoint"`.
+Messages never reached the room transcript.
+
+**Cause:** When the previous agent set up the homes, the `/join` call did not
+include the room server endpoint. Alpha's `rooms.json` was:
+```json
+{"boardroom": {"participants": []}}
+```
+The router checks `room.endpoint` before POSTing — with no endpoint, it falls
+through to the internal/no-endpoint path.
+
+**Fix:** Re-sent `/join` to all three homes with the correct endpoint:
+```json
+{"room":"boardroom","endpoint":"http://localhost:3141","participants":["yeshua","alpha","beta","gamma"]}
+```
+
+**Verification:** Sent a test message at 14:59 UTC. Alpha's ops log shows
+`route:sent` (not `route:internal`) and the reply appeared in the boardroom
+transcript.
+
+---
+
+## Agent Models
+
+| Home  | Model              | API Key Type |
+|-------|--------------------|-------------|
+| Alpha | claude-haiku-4-5   | API key     |
+| Beta  | claude-sonnet-4-5  | API key     |
+| Gamma | claude-haiku-4-5   | OAuth token |
+
+---
+
+## Known Issues / Risks
+
+1. **Home data in `/tmp`** — will be lost on reboot. Should move to project dir.
+2. **Room server directory is embedded** — per spec section 9, should be extracted to its own service.
+3. **No startup script** — each service must be started manually. See NEXT.md for the launcher app plan.
+4. **Yeshua has no home endpoint** — registered in directory with `endpoint: null`. Messages addressed to Yeshua dispatch nowhere. A user-facing client (web UI) would fill this role.
+5. **History endpoint not tested post-restart** — the home.js code fix is on disk but the running Alpha process still has the old code in memory. A restart of the home processes is needed to pick up the `/history` fix.
