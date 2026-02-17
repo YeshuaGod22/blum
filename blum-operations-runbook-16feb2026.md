@@ -40,7 +40,7 @@ Gamma Home (port 4112) ── claude-haiku-4-5 ── /tmp/blum-homes/gamma
 | What              | Path |
 |------------------|------|
 | Room server data | `.../shared-room-server-.../data/` (rooms.json, directory.json, operations.jsonl) |
-| Alpha home data  | `/tmp/blum-homes/alpha/` (config.json, rooms.json, blocked.json, ops.log, history/) |
+| Alpha home data  | `/tmp/blum-homes/alpha/` (config.json, rooms.json, blocked.json, ops.log, history/, tools/, docs/, transcript/, internal/) |
 | Beta home data   | `/tmp/blum-homes/beta/` |
 | Gamma home data  | `/tmp/blum-homes/gamma/` |
 | Stdout logs      | `/tmp/blum-homes/{name}-out.log` |
@@ -232,6 +232,33 @@ processed, and replied — `route:sent` with reply visible in the room transcrip
 
 ---
 
+## Agent Tools
+
+Agents now have tool use capability. Tool definitions live in each home's `tools/`
+directory as JSON files in Anthropic tool format (`{ name, description, input_schema }`).
+
+**Current starter tools (all homes):**
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read files within the home directory |
+| `write_file` | Write files within the home directory |
+| `list_files` | List directory contents within the home |
+| `get_room_history` | Retrieve recent messages from a room |
+| `get_current_time` | Get current ISO timestamp |
+
+All file tools are sandboxed to the home directory — agents cannot read or write
+outside their own home.
+
+**Adding a new tool:** Create a `.json` file in `tools/` following Anthropic tool
+format, then add a handler in `home.js _executeTool()`. Restart the home to pick
+up the new tool.
+
+**Tool loop safety:** The home runs a maximum of 10 tool iterations per dispatch.
+Each iteration is logged to ops.log (`tool:exec`, `tool:done`/`tool:error`).
+
+---
+
 ## Agent Models
 
 | Home  | Model              | API Key Type |
@@ -261,3 +288,5 @@ processed, and replied — `route:sent` with reply visible in the room transcrip
 | 14:59       | Verified: Alpha replies now reach the room transcript |
 | 15:01       | Yeshua created second-room, added alpha — dispatch dropped (unknown room) |
 | 15:18       | **Auto-join deployed.** All services restarted. Second-room test passed. |
+| 16:15       | Context manager v3, broadcast addressing, transcript debugger deployed. |
+| 17:40       | **Tool use deployed.** Nucleus returns structured response, boot assembler loads tools, home.js has tool loop. All homes have 5 starter tools. Tested: Alpha used list_files, read_file, write_file successfully. |

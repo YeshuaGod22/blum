@@ -6,7 +6,7 @@
 const { call } = require('./nucleus-15feb2026.js');
 
 async function test() {
-  console.log('Testing nucleus: call(messages, config) → string\n');
+  console.log('Testing nucleus: call(messages, config, tools?) → { text, stopReason, toolCalls[] }\n');
 
   const messages = [
     { role: 'system', content: 'You are Claude Code, Anthropic\'s official CLI for Claude. You are a helpful assistant. Reply in one sentence.' },
@@ -15,8 +15,10 @@ async function test() {
 
   try {
     const result = await call(messages);
-    console.log('Response:', result);
-    console.log('\n✓ Nucleus works. Messages in, string out.');
+    console.log('Response text:', result.text);
+    console.log('Stop reason:', result.stopReason);
+    console.log('Tool calls:', result.toolCalls.length);
+    console.log('\n✓ Nucleus works. Messages in, structured response out.');
   } catch (err) {
     console.error('✗ Failed:', err.message);
     process.exit(1);

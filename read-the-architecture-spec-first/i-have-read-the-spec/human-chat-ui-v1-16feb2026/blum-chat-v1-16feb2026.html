@@ -208,6 +208,13 @@
   .msg.withdrawn { opacity: 0.3; }
   .msg.error { background: var(--red-dim); border-left-color: var(--red); color: var(--red); }
 
+  /* === CLICKABLE AGENT NAMES === */
+  .agent-link {
+    cursor: pointer; text-decoration: underline dotted;
+    text-underline-offset: 2px; text-decoration-thickness: 1px;
+  }
+  .agent-link:hover { text-decoration: underline solid; }
+
   /* === COMPOSE (bottom bar) === */
   .compose-bar {
     border-top: 1px solid var(--border); padding: 6px 12px;
@@ -309,7 +316,11 @@ let me = 'yeshua';
 let connected = false;
 let directory = {};   // from server
 let roomMeta = {};    // { name: { uid, participants } } — NO transcripts
+let homeConfigs = {}; // { name: { model, maxTokens, ... } } — fetched from home /config
 let pollTimer = null;
+let lastConfigFetch = 0; // throttle config fetches to every 30s
+
+const HOME_VIEWER_PATH = 'home-viewer-v1-16feb2026/home-viewer-v1-16feb2026.html';
 
 // Colors by name (deterministic)
 // Colors derived from name — no hardcoded identities
@@ -351,6 +362,7 @@ async function doConnect() {
     document.getElementById('status-label').style.color = 'var(--green)';
     document.getElementById('connect-btn').classList.add('active');
     document.getElementById('compose-from').textContent = me;
+    await fetchHomeConfigs();
     renderDirectory();
     rebuildGrid();
     populateComposeSelects();
@@ -380,14 +392,20 @@ function renderParticipantDir() {
   list.innerHTML = '';
   for (const [name, entry] of Object.entries(directory)) {
     const memberOf = Object.keys(roomMeta).filter(r => roomMeta[r].participants.includes(name));
-    const hasEndpoint = !!entry.endpoint;
+    const isAgent = !!entry.endpoint;
+    const cfg = homeConfigs[name];
+    const modelStr = cfg ? cfg.model : '';
     const div = document.createElement('div');
     div.className = 'dir-entry';
     div.innerHTML =
-      `<div class="dot" style="background:${pColor(name)}"></div>` +
+      `<div class="dot" style="background:${isAgent ? 'var(--green)' : pColor(name)}"></div>` +
       `<div>` +
-        `<div class="dir-name" style="color:${pColor(name)}">${name}</div>` +
-        `<div class="dir-detail">rooms: ${memberOf.length>0?memberOf.join(', '):'none'}${hasEndpoint?' · home ●':''}</div>` +
+        `<div class="dir-name${isAgent ? ' agent-link' : ''}" style="color:${pColor(name)}"` +
+          (isAgent ? ` onclick="openHome('${name}')" title="Open ${name}'s home viewer"` : '') +
+        `>${name}</div>` +
+        `<div class="dir-detail">${memberOf.length>0?memberOf.join(', '):'no rooms'}` +
+          `${modelStr ? ' · ' + modelStr : ''}` +
+          `${isAgent ? ' · <span style="color:var(--green)">home ●</span>' : ''}</div>` +
       `</div>`;
     list.appendChild(div);
   }
@@ -512,16 +530,29 @@ function renderRoomPanel(roomName, transcript) {
     const div = document.createElement('div');
     div.className = 'msg';
     div.style.borderLeftColor = pColor(msg.from);
-    const toStr = msg.to
-      ? `<span class="msg-arrow">→</span> <span style="color:${pColor(msg.to)}">${msg.to}@${roomName}</span>`
-      : `<span class="msg-arrow">→ broadcast</span>`;
+    // Clickable sender name if they have a home
+    const fromIsAgent = directory[msg.from] && directory[msg.from].endpoint;
+    const fromHtml = fromIsAgent
+      ? `<span class="msg-from agent-link" style="color:${pColor(msg.from)}" onclick="openHome('${msg.from}')" title="Open ${msg.from}'s home">${msg.from}@${roomName}</span>`
+      : `<span class="msg-from" style="color:${pColor(msg.from)}">${msg.from}@${roomName}</span>`;
+    // Clickable recipient name if they have a home
+    let toStr;
+    if (msg.to) {
+      const toIsAgent = directory[msg.to] && directory[msg.to].endpoint;
+      const toNameHtml = toIsAgent
+        ? `<span class="agent-link" style="color:${pColor(msg.to)}" onclick="openHome('${msg.to}')" title="Open ${msg.to}'s home">${msg.to}@${roomName}</span>`
+        : `<span style="color:${pColor(msg.to)}">${msg.to}@${roomName}</span>`;
+      toStr = `<span class="msg-arrow">→</span> ${toNameHtml}`;
+    } else {
+      toStr = `<span class="msg-arrow">→ broadcast</span>`;
+    }
     let quoteHtml = '';
     if (msg.replyTo && msg.quoteFrom) {
       quoteHtml = `<div class="msg-quote"><span class="quote-from" style="color:${pColor(msg.quoteFrom)}">${msg.quoteFrom}</span>: ${esc(msg.quoteBody||'')}</div>`;
     }
     div.innerHTML =
       `<div class="msg-meta">` +
-        `<span class="msg-from" style="color:${pColor(msg.from)}">${msg.from}@${roomName}</span> ` +
+        `${fromHtml} ` +
         toStr +
         `<span class="msg-ts">${msg.ts ? ts(msg.ts) : ''}</span>` +
       `</div>` +
@@ -576,6 +607,33 @@ async function doSend() {
   bodyEl.focus();
 }
 
+// ── Home config fetching (for model info) ──
+async function fetchHomeConfigs() {
+  homeConfigs = {};
+  const fetches = [];
+  for (const [name, entry] of Object.entries(directory)) {
+    if (entry.endpoint) {
+      fetches.push(
+        fetch(entry.endpoint + '/config')
+          .then(r => r.json())
+          .then(cfg => { homeConfigs[name] = cfg; })
+          .catch(() => { /* home offline — no config */ })
+      );
+    }
+  }
+  await Promise.all(fetches);
+  lastConfigFetch = Date.now();
+}
+
+// ── Open home viewer for an agent ──
+function openHome(name) {
+  const entry = directory[name];
+  if (!entry || !entry.endpoint) return;
+  const viewerUrl = new URL('../' + HOME_VIEWER_PATH, window.location.href);
+  viewerUrl.searchParams.set('home', entry.endpoint);
+  window.open(viewerUrl.href, '_blank');
+}
+
 // ── Polling: fetch EACH room's transcript independently ──
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
@@ -604,6 +662,10 @@ function startPolling() {
         renderDirectory();
       }
     } catch(e) { /* silent */ }
+    // Refresh home configs every 30s (not every poll)
+    if (Date.now() - lastConfigFetch > 30000) {
+      fetchHomeConfigs().then(() => renderDirectory());
+    }
     // Fetch each room's transcript
     for (const name of Object.keys(roomMeta)) {
       fetchRoomTranscript(name);

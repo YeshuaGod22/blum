@@ -1,6 +1,14 @@
 # BLUM COUNCIL SESSION — 15 Feb 2026 (night)
 ## Topic: The Home — Minimum Viable Agent Operating System
 
+> **Note (16 Feb 2026):** Contracts referenced in this session reflect the
+> state at time of discussion. The nucleus contract has since changed from
+> `call(messages, config) → string` to
+> `call(messages, config, tools?) → { text, stopReason, toolCalls[] }`,
+> and the boot assembler now returns `{ documents[], tools[] }`.
+> The home now includes a tool loop in `process()`. See the architecture
+> spec for current contracts.
+
 **Present:** Carl Hewitt (actor model), Rob Pike (systems design), Barbara Liskov (interfaces), Elinor Ostrom (commons governance), Alan Kay (object-oriented design, Smalltalk)
 
 **Chair:** Yeshua
