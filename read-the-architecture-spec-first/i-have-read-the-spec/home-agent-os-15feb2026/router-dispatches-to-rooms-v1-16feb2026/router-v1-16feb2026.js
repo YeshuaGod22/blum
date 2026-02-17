@@ -14,19 +14,22 @@
 // The home's transcript is the most vital component.
 // Everything the nucleus produces is recorded here:
 // thinking, private text, outbound messages — the full record.
+// Each entry carries full traceability metadata (_trace, UIDs).
 //
 // Contract: dispatch(parsedOutput, homeTopology) → sends to destinations
 // ========================================
 
 const fs = require('fs');
 const path = require('path');
+const { generateUID } = require('../../shared-uid-generator/generate-uid.js');
 
 /**
  * Dispatch parsed output to destinations.
  *
  * @param {object} parsedOutput - Output from output-processor.parse()
- * @param {string[]} parsedOutput.thinking - Thinking blocks
- * @param {Array<{to: string, content: string}>} parsedOutput.messages - Addressed messages
+ * @param {string} parsedOutput.parseId - UID for this parse result
+ * @param {Array<{blockId: string, content: string}>} parsedOutput.thinking - Thinking blocks
+ * @param {Array<{blockId: string, to: string, content: string}>} parsedOutput.messages - Addressed messages
  * @param {string} parsedOutput.private - Unmarked text
  * @param {object} homeTopology - The home's internal structure
  * @param {string} homeTopology.name - Agent's friendly name
@@ -34,11 +37,14 @@ const path = require('path');
  * @param {object} homeTopology.rooms - Room membership: { roomName: { endpoint } }
  * @param {string} homeTopology.triggeringRoom - Which room triggered this cycle
  * @param {string} homeTopology.nucleusResponse - The full raw response from the nucleus
+ * @param {Array} homeTopology.fittedContext - The exact messages[] sent to the nucleus
+ * @param {object} [homeTopology._traceContext] - Traceability context
  * @param {function} homeTopology.log - Operations log function
  * @returns {Promise<Array<{to: string, status: string, error?: string}>>}
  */
 async function dispatch(parsedOutput, homeTopology) {
   const results = [];
+  const _traceContext = homeTopology._traceContext || {};
 
   // ── 1. Write to the home's transcript ──
   // The transcript is the home's record of everything that happened.
@@ -47,7 +53,7 @@ async function dispatch(parsedOutput, homeTopology) {
 
   // ── 2. Route each addressed message ──
   for (const msg of parsedOutput.messages) {
-    const { to, content } = msg;
+    const { to, content, blockId } = msg;
 
     // Parse addressing: "name@room" or just a bare name (internal address)
     const atIndex = to.indexOf('@');
@@ -73,8 +79,6 @@ async function dispatch(parsedOutput, homeTopology) {
 
     // POST to room server's message API
     // "broadcast" means: post to the transcript, dispatch nobody.
-    // This is how a bot breaks the loop — it speaks to the room
-    // without poking any specific recipient into running inference.
     const isBroadcast = targetRecipient === 'broadcast';
 
     try {
@@ -99,14 +103,20 @@ async function dispatch(parsedOutput, homeTopology) {
 
       if (result.error) {
         homeTopology.log(`route:error to=${to} error=${result.error}`);
-        results.push({ to, status: 'error', error: result.error });
+        results.push({ to, status: 'error', error: result.error, blockId });
       } else {
-        homeTopology.log(`route:sent to=${to} msgId=${result.msg?.id || '?'}`);
-        results.push({ to, status: 'sent', msgId: result.msg?.id });
+        homeTopology.log(`route:sent to=${to} msgId=${result.msg?.id || '?'} blockId=${blockId || '-'}`);
+        results.push({
+          to,
+          status: 'sent',
+          msgId: result.msg?.id,
+          blockId: blockId || null,
+          cycleId: _traceContext.cycleId || null,
+        });
       }
     } catch (err) {
       homeTopology.log(`route:error to=${to} error=${err.message}`);
-      results.push({ to, status: 'error', error: err.message });
+      results.push({ to, status: 'error', error: err.message, blockId });
     }
   }
 
@@ -116,6 +126,7 @@ async function dispatch(parsedOutput, homeTopology) {
 /**
  * Write the full processing cycle output to the home's transcript.
  * This is the agent's memory of what she thought and said.
+ * Each entry carries full traceability metadata.
  */
 function writeToTranscript(parsedOutput, homeTopology) {
   const transcriptDir = path.join(homeTopology.homeDir, 'transcript');
@@ -123,25 +134,46 @@ function writeToTranscript(parsedOutput, homeTopology) {
     fs.mkdirSync(transcriptDir, { recursive: true });
   }
 
+  const _traceContext = homeTopology._traceContext || {};
+
   // fittedContext: the exact messages[] sent to the nucleus.
-  // Each element has { role, content }. We record them so the
+  // Each element has { role, content, _meta? }. We record them so the
   // context debugger can show exactly what tokens went in.
   const fitted = homeTopology.fittedContext || [];
-  const contextSummary = fitted.map((msg, i) => ({
-    index: i,
-    role: msg.role,
-    tokens_est: Math.ceil((msg.content || '').length / 4),
-    preview: (msg.content || '').slice(0, 200),
-    full: msg.content || '',
-  }));
+  const contextSummary = fitted.map((msg, i) => {
+    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    return {
+      index: i,
+      role: msg.role,
+      tokens_est: Math.ceil(content.length / 4),
+      preview: content.slice(0, 200),
+      full: content,
+      _meta: msg._meta || null,
+    };
+  });
 
+  const entryId = generateUID('entry');
   const entry = {
+    entryId,
+    cycleId: _traceContext.cycleId || null,
+    dispatchId: _traceContext.dispatchId || null,
     ts: new Date().toISOString(),
     room: homeTopology.triggeringRoom,
+    parseId: parsedOutput.parseId || null,
     thinking: parsedOutput.thinking,
     messages: parsedOutput.messages,
     private: parsedOutput.private || '',
     nucleusResponse: homeTopology.nucleusResponse || null,
+    _trace: {
+      agentName: _traceContext.agentName || null,
+      dispatchId: _traceContext.dispatchId || null,
+      cycleId: _traceContext.cycleId || null,
+      finalResponseId: _traceContext.finalResponseId || null,
+      totalIterations: _traceContext.totalIterations || 0,
+      iterations: _traceContext.iterations || [],
+      startedAt: _traceContext.startedAt || null,
+      completedAt: new Date().toISOString(),
+    },
     context: {
       messageCount: fitted.length,
       totalTokensEst: contextSummary.reduce((sum, m) => sum + m.tokens_est, 0),
@@ -153,7 +185,7 @@ function writeToTranscript(parsedOutput, homeTopology) {
   const transcriptPath = path.join(transcriptDir, 'home-transcript.jsonl');
   fs.appendFileSync(transcriptPath, JSON.stringify(entry) + '\n');
 
-  homeTopology.log(`route:transcript thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} private=${(parsedOutput.private || '').length > 0}`);
+  homeTopology.log(`route:transcript entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} private=${(parsedOutput.private || '').length > 0}`);
 }
 
 /**
@@ -167,21 +199,26 @@ function routeInternal(address, content, homeTopology) {
     fs.mkdirSync(internalDir, { recursive: true });
   }
 
+  const _traceContext = homeTopology._traceContext || {};
+  const entryId = generateUID('entry');
+
   // Each internal address maps to a file in internal/
   // journal → internal/journal.jsonl
   // memory → internal/memory.jsonl
   const targetPath = path.join(internalDir, `${address}.jsonl`);
 
   const entry = {
+    entryId,
+    cycleId: _traceContext.cycleId || null,
     ts: new Date().toISOString(),
     room: homeTopology.triggeringRoom,
     content,
   };
 
   fs.appendFileSync(targetPath, JSON.stringify(entry) + '\n');
-  homeTopology.log(`route:internal address=${address} content_length=${content.length}`);
+  homeTopology.log(`route:internal address=${address} entryId=${entryId} cycleId=${_traceContext.cycleId || '-'}`);
 
-  return { to: address, status: 'internal', note: `Written to ${address}` };
+  return { to: address, status: 'internal', entryId };
 }
 
 module.exports = { dispatch };

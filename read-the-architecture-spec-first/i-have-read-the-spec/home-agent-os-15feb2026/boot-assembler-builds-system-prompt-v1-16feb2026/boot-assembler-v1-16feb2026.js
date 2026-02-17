@@ -1,7 +1,7 @@
 // ========================================
 // BOOT ASSEMBLER — v3 — 16 Feb 2026
 //
-// assemble(agentConfig, history) → { documents[], tools[] }
+// assemble(agentConfig, history, _traceContext?) → { documents[], tools[] }
 //
 // Builds the prefix that makes the agent *her*.
 // Reads identity documents from the home's docs/ directory.
@@ -10,15 +10,19 @@
 // documents[] is identity — system messages.
 // tools[] is capability — tool definitions for the nucleus.
 //
+// Each document and tool gets a _meta field for traceability.
+// _meta is stripped by home.js before sending to the nucleus.
+//
 // Spec section 5: "builds the prefix (identity docs,
 // sysprompt, knowledge). X tokens. Makes the agent her.
 // Also loads tool definitions from the home's tools/ directory."
 //
-// Contract: assemble(agentConfig, history) → { documents[], tools[] }
+// Contract: assemble(agentConfig, history, _traceContext?) → { documents[], tools[] }
 // ========================================
 
 const fs = require('fs');
 const path = require('path');
+const { generateUID } = require('../../shared-uid-generator/generate-uid.js');
 
 /**
  * Assemble identity documents from the agent's home.
@@ -29,12 +33,12 @@ const path = require('path');
  * @param {string} [agentConfig.identity] - Identity/personality description (from config.json)
  * @param {string} [agentConfig.instructions] - Additional instructions (from config.json)
  * @param {object} history - NOT USED YET. Reserved for future use.
- *   The spec contract includes history so the assembler can eventually
- *   use it for relationship context. Accepting it keeps the contract correct.
- * @returns {{ documents: Array<{role: string, content: string}>, tools: Array }} { documents[], tools[] }
+ * @param {object} [_traceContext] - Traceability context (cycleId, etc.)
+ * @returns {{ documents: Array<{role: string, content: string, _meta: object}>, tools: Array }} { documents[], tools[] }
  */
-function assemble(agentConfig, history) {
+function assemble(agentConfig, history, _traceContext = {}) {
   const documents = [];
+  const cycleId = _traceContext.cycleId || null;
 
   // ── 1. Identity documents from disk ──
   // The home's docs/ directory contains the agent's identity, knowledge, etc.
@@ -51,7 +55,17 @@ function assemble(agentConfig, history) {
     for (const file of files) {
       const content = fs.readFileSync(path.join(docsDir, file), 'utf-8').trim();
       if (content) {
-        documents.push({ role: 'system', content });
+        documents.push({
+          role: 'system',
+          content,
+          _meta: {
+            docId: generateUID('doc'),
+            source: 'boot:identity',
+            file,
+            slot: documents.length,
+            cycleId,
+          },
+        });
       }
     }
   }
@@ -68,7 +82,16 @@ function assemble(agentConfig, history) {
     if (agentConfig.instructions) {
       parts.push(agentConfig.instructions);
     }
-    documents.push({ role: 'system', content: parts.join('\n\n') });
+    documents.push({
+      role: 'system',
+      content: parts.join('\n\n'),
+      _meta: {
+        docId: generateUID('doc'),
+        source: 'boot:config-identity',
+        slot: 0,
+        cycleId,
+      },
+    });
   }
 
   // ── 3. Communication protocol ──
@@ -92,7 +115,16 @@ function assemble(agentConfig, history) {
     'without causing another participant to run inference.',
   ].join('\n');
 
-  documents.push({ role: 'system', content: protocol });
+  documents.push({
+    role: 'system',
+    content: protocol,
+    _meta: {
+      docId: generateUID('doc'),
+      source: 'boot:protocol',
+      slot: documents.length,
+      cycleId,
+    },
+  });
 
   // ── 4. Tool definitions from disk ──
   // The home's tools/ directory contains tool definitions as JSON files.
@@ -115,7 +147,10 @@ function assemble(agentConfig, history) {
           fs.readFileSync(path.join(toolsDir, file), 'utf-8')
         );
         if (toolDef.name) {
-          tools.push(toolDef);
+          tools.push({
+            ...toolDef,
+            _meta: { file, cycleId },
+          });
         }
       } catch (e) {
         // Skip malformed tool definitions

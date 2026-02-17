@@ -1,7 +1,7 @@
 // ========================================
 // CONTEXT MANAGER — v3 — 16 Feb 2026
 //
-// build(home, dispatch, bootDocuments[], tokenBudget) → messages[]
+// build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
 //
 // The final gate. Part of the home. Has access to everything
 // the home knows. Decides what the nucleus should see beyond
@@ -12,11 +12,14 @@
 //   - Cross-room history (all rooms, prioritise triggering)
 //   - Fitting everything within the token budget
 //   - The boot documents are identity — never trimmed
+//   - _meta on each message for traceability (stripped before API call)
 //
 // "Always present, non-negotiable." — Spec section 5
 //
-// Contract: build(home, dispatch, bootDocuments[], tokenBudget) → messages[]
+// Contract: build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
 // ========================================
+
+const { generateUID } = require('../../shared-uid-generator/generate-uid.js');
 
 const CHARS_PER_TOKEN = 4;
 
@@ -25,7 +28,10 @@ function estimateTokens(text) {
 }
 
 function estimateMessagesTokens(messages) {
-  return messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+  return messages.reduce((sum, m) => {
+    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    return sum + estimateTokens(content) + 4;
+  }, 0);
 }
 
 /**
@@ -33,15 +39,18 @@ function estimateMessagesTokens(messages) {
  *
  * @param {object} home - The home instance (has rooms, config, history, etc.)
  * @param {object} dispatch - The triggering dispatch
- * @param {Array<{role: string, content: string}>} bootDocuments - Identity prefix from boot assembler
+ * @param {Array<{role: string, content: string, _meta?: object}>} bootDocuments - Identity prefix from boot assembler
  * @param {number} tokenBudget - Maximum total tokens
- * @returns {Array<{role: string, content: string}>}
+ * @param {object} [_traceContext] - Traceability context (cycleId, etc.)
+ * @returns {Array<{role: string, content: string, _meta?: object}>}
  */
-function build(home, dispatch, bootDocuments, tokenBudget) {
+function build(home, dispatch, bootDocuments, tokenBudget, _traceContext = {}) {
   const room = dispatch.room;
   const incoming = dispatch.transcript || dispatch.messages || [];
+  const cycleId = _traceContext.cycleId || null;
 
   // ── 1. Boot documents are identity. Never trimmed. ──
+  // They already have _meta from the boot assembler.
   const bootTokens = estimateMessagesTokens(bootDocuments);
   const available = tokenBudget - bootTokens;
 
@@ -66,7 +75,17 @@ function build(home, dispatch, bootDocuments, tokenBudget) {
     const marker = roomName === room ? ' ← this dispatch' : '';
     contextLines.push(`- ${roomName}: ${participants}${marker}`);
   }
-  const roomContextMsg = { role: 'system', content: contextLines.join('\n') };
+  const roomContextMsg = {
+    role: 'system',
+    content: contextLines.join('\n'),
+    _meta: {
+      ctxId: generateUID('ctx'),
+      source: 'context:room-info',
+      room,
+      dispatchId: _traceContext.dispatchId || null,
+      cycleId,
+    },
+  };
   const contextTokens = estimateMessagesTokens([roomContextMsg]);
   const historyBudget = available - contextTokens;
 
@@ -76,11 +95,11 @@ function build(home, dispatch, bootDocuments, tokenBudget) {
 
   // ── 3. Conversation history from ALL rooms ──
   // Triggering room gets priority. Other rooms fill remaining space.
-  const triggeringHistory = loadRoomHistory(home, room);
+  const triggeringHistory = loadRoomHistory(home, room, _traceContext);
   const otherRooms = Object.keys(home.rooms).filter(r => r !== room);
   const otherHistory = [];
   for (const r of otherRooms) {
-    const msgs = loadRoomHistory(home, r);
+    const msgs = loadRoomHistory(home, r, _traceContext);
     otherHistory.push(...msgs);
   }
 
@@ -109,10 +128,12 @@ function build(home, dispatch, bootDocuments, tokenBudget) {
 
 /**
  * Load and format a room's history as nucleus-ready messages.
+ * Each message gets _meta with source provenance.
  */
-function loadRoomHistory(home, roomName) {
+function loadRoomHistory(home, roomName, _traceContext = {}) {
   const history = home._loadHistory(roomName);
   if (!history || history.length === 0) return [];
+  const cycleId = _traceContext.cycleId || null;
 
   return history
     .filter(entry => !entry.withdrawn)
@@ -123,6 +144,14 @@ function loadRoomHistory(home, roomName) {
       return {
         role: isOwn ? 'assistant' : 'user',
         content: `[${from}@${roomName}]: ${content}`,
+        _meta: {
+          ctxId: generateUID('ctx'),
+          source: `history:${roomName}`,
+          originalMsgId: entry.id || null,
+          from,
+          ts: entry.ts || null,
+          cycleId,
+        },
       };
     });
 }
