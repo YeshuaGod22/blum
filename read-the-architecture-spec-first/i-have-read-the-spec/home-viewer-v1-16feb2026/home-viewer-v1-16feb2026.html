@@ -305,7 +305,8 @@ function renderTranscriptList() {
       const first = entry.messages[0];
       summary = first.to + ': ' + (first.content || '').slice(0, 80);
     } else if (entry.thinking && entry.thinking.length > 0) {
-      summary = '(thinking only) ' + entry.thinking[0].slice(0, 60);
+      const t0 = entry.thinking[0];
+      summary = '(thinking only) ' + (typeof t0 === 'string' ? t0 : t0.content || '').slice(0, 60);
     } else {
       summary = '(no output)';
     }
