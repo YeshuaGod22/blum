@@ -15,6 +15,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
 // ── Modules (swappable) ───────────────────
 const bootAssembler = require('./boot-assembler-builds-system-prompt-v1-16feb2026/boot-assembler-v1-16feb2026.js');
@@ -179,8 +180,18 @@ class Home {
   // See spec section 5.
 
   async process(dispatch) {
+    const cycleId = generateUID('cycle');
+    const dispatchId = dispatch.dispatchId || null;
     const room = dispatch.room;
-    this.log(`process:start room=${room}`);
+    const _traceContext = {
+      cycleId,
+      dispatchId,
+      room,
+      agentName: this.config.name,
+      startedAt: new Date().toISOString(),
+      iterations: [],
+    };
+    this.log(`process:start room=${room} cycleId=${cycleId} dispatchId=${dispatchId}`);
 
     // ── 1. Blocked check ──
     if (this.blocked.rooms.includes(room)) {
@@ -232,8 +243,8 @@ class Home {
     // ── 5. Boot assembly — builds identity prefix + tool definitions ──
     // The boot assembler knows identity and capabilities, not context.
     const agentConfig = { ...this.config, homeDir: this.homeDir };
-    const { documents: bootDocuments, tools } = bootAssembler.assemble(agentConfig, null);
-    this.log(`process:boot documents=${bootDocuments.length} tools=${tools.length}`);
+    const { documents: bootDocuments, tools } = bootAssembler.assemble(agentConfig, null, _traceContext);
+    this.log(`process:boot documents=${bootDocuments.length} tools=${tools.length} cycleId=${cycleId}`);
 
     // ── 6. Context management — the final gate (non-negotiable) ──
     // The context manager is part of the home. It has access to
@@ -242,8 +253,8 @@ class Home {
     // and fits everything within the token budget.
     // Boot documents are identity — never trimmed.
     const tokenBudget = this.config.tokenBudget || 100000;
-    const fitted = contextManager.build(this, dispatch, bootDocuments, tokenBudget);
-    this.log(`process:context fitted=${fitted.length} budget=${tokenBudget}`);
+    const fitted = contextManager.build(this, dispatch, bootDocuments, tokenBudget, _traceContext);
+    this.log(`process:context fitted=${fitted.length} budget=${tokenBudget} cycleId=${cycleId}`);
 
     // ── 7. Nucleus call + tool loop ──
     // The tool loop lives here in the home. The nucleus is pure — single call.
@@ -251,6 +262,9 @@ class Home {
     //
     // Loop: call nucleus → if tool_use, execute tools, append results, repeat
     //        if end_turn (or max iterations), break → output processor
+    //
+    // _meta fields on messages and tools are stripped before sending to the LLM.
+    // They carry traceability metadata — never part of the inference input.
     const nucleusConfig = {
       apiKey: this.config.apiKey,
       model: this.config.model,
@@ -261,15 +275,35 @@ class Home {
     let response;
     let iteration = 0;
 
-    this.log(`process:nucleus model=${this.config.model || 'default'} tools=${tools.length}`);
+    // Strip _meta from messages and tools before sending to nucleus
+    const cleanTools = tools.map(t => { const { _meta, ...def } = t; return def; });
+
+    this.log(`process:nucleus model=${this.config.model || 'default'} tools=${tools.length} cycleId=${cycleId}`);
 
     while (iteration < MAX_TOOL_ITERATIONS) {
       iteration++;
-      response = await nucleus.call(messages, nucleusConfig, tools);
-      this.log(`process:nucleus_iteration=${iteration} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
+      const iterationId = generateUID('iter');
+      const responseId = generateUID('resp');
+
+      // Strip _meta from messages before each nucleus call
+      const cleanMessages = messages.map(m => { const { _meta, ...clean } = m; return clean; });
+      response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
+
+      this.log(`process:nucleus_iteration=${iteration} iterationId=${iterationId} responseId=${responseId} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
+
+      // Record this iteration in the trace context
+      _traceContext.iterations.push({
+        iterationId,
+        number: iteration,
+        responseId,
+        stopReason: response.stopReason,
+        toolCalls: response.toolCalls.map(tc => ({ apiId: tc.id, name: tc.name })),
+        textLength: response.text.length,
+      });
 
       // If no tool calls, we're done
       if (response.stopReason !== 'tool_use' || response.toolCalls.length === 0) {
+        _traceContext.finalResponseId = responseId;
         break;
       }
 
@@ -277,7 +311,7 @@ class Home {
       // The home executes tools. The nucleus never does.
       const toolResults = [];
       for (const tc of response.toolCalls) {
-        this.log(`tool:exec name=${tc.name} id=${tc.id}`);
+        this.log(`tool:exec name=${tc.name} id=${tc.id} cycleId=${cycleId} iterationId=${iterationId}`);
         let result;
         try {
           result = await this._executeTool(tc.name, tc.input);
@@ -317,11 +351,15 @@ class Home {
       this.log(`process:tool_loop_max_iterations reached=${MAX_TOOL_ITERATIONS}`);
     }
 
-    this.log(`process:nucleus_done iterations=${iteration} response_length=${response.text.length}`);
+    _traceContext.totalIterations = iteration;
+    if (!_traceContext.finalResponseId && _traceContext.iterations.length > 0) {
+      _traceContext.finalResponseId = _traceContext.iterations[_traceContext.iterations.length - 1].responseId;
+    }
+    this.log(`process:nucleus_done cycleId=${cycleId} iterations=${iteration} responseId=${_traceContext.finalResponseId} response_length=${response.text.length}`);
 
     // ── 8. Output processing ──
-    const parsed = outputProcessor.parse(response.text);
-    this.log(`process:output thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0}`);
+    const parsed = outputProcessor.parse(response.text, _traceContext);
+    this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0}`);
 
     // ── 9. Add own outbound messages to triggering room history ──
     for (const msg of parsed.messages) {
@@ -352,11 +390,12 @@ class Home {
       triggeringRoom: room,
       nucleusResponse: response.text,
       fittedContext: fitted,
+      _traceContext,
       log: (entry) => this.log(entry),
     });
-    this.log(`process:routed results=${JSON.stringify(routeResults)}`);
+    this.log(`process:routed cycleId=${cycleId} results=${JSON.stringify(routeResults)}`);
 
-    this.log(`process:done room=${room}`);
+    this.log(`process:done room=${room} cycleId=${cycleId}`);
     return parsed;
   }
 }

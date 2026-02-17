@@ -310,10 +310,13 @@ function renderTranscriptList() {
       summary = '(no output)';
     }
 
+    const cycleShort = entry.cycleId ? entry.cycleId.slice(-8) : '';
     div.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
         '<span class="tx-room">' + esc(entry.room || '?') + '</span>' +
-        '<span class="tx-time">#' + i + ' ' + time + '</span>' +
+        '<span class="tx-time">#' + i + ' ' + time +
+          (cycleShort ? ' <span style="color:var(--accent)">' + cycleShort + '</span>' : '') +
+        '</span>' +
       '</div>' +
       '<div class="tx-summary">' + esc(summary) + '</div>' +
       '<div class="tx-tokens">' +
@@ -347,8 +350,18 @@ function renderTranscriptDetail(entry) {
 
   // ── Header: timestamp + room ──
   const time = new Date(entry.ts).toLocaleString();
-  html += '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:12px">' +
+  html += '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:4px">' +
     esc(time) + ' &mdash; room: <span style="color:var(--blue)">' + esc(entry.room || '?') + '</span></div>';
+
+  // ── Trace IDs (if available) ──
+  if (entry.cycleId || entry.entryId) {
+    html += '<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:12px">';
+    if (entry.cycleId) html += 'cycle: <span style="color:var(--accent)">' + esc(entry.cycleId) + '</span> ';
+    if (entry.dispatchId) html += '&larr; dispatch: <span style="color:var(--blue)">' + esc(entry.dispatchId) + '</span> ';
+    if (entry.entryId) html += '&mdash; entry: <span style="color:var(--green)">' + esc(entry.entryId) + '</span> ';
+    if (entry.parseId) html += '&mdash; parse: <span style="color:var(--purple)">' + esc(entry.parseId) + '</span>';
+    html += '</div>';
+  }
 
   // ── CONTEXT IN ──
   const ctx = entry.context || {};
@@ -364,22 +377,37 @@ function renderTranscriptDetail(entry) {
   } else {
     for (const msg of ctxMsgs) {
       const roleClass = (msg.role || 'system');
-      // Classify the message source
       let sourceTag = '';
-      const content = msg.full || msg.preview || '';
-      if (msg.index < 3 && msg.role === 'system') {
-        // Likely boot assembler
-        if (content.startsWith('You are ') || content.includes('You MUST wrap all replies')) {
-          sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">boot</span>';
-        } else {
-          sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">identity</span>';
+
+      // Use _meta if available (new format), fall back to heuristics (old format)
+      if (msg._meta && msg._meta.source) {
+        const src = msg._meta.source;
+        const srcColor = src.startsWith('boot') ? 'var(--accent)' :
+                         src.startsWith('context') ? 'var(--blue)' :
+                         src.startsWith('history') ? 'var(--green)' : 'var(--text-dim)';
+        const srcBg = src.startsWith('boot') ? 'var(--accent-dim)' :
+                      src.startsWith('context') ? 'var(--blue-dim)' :
+                      src.startsWith('history') ? 'var(--green-dim)' : 'var(--surface2)';
+        sourceTag = '<span class="section-badge" style="background:' + srcBg + ';color:' + srcColor + '">' + esc(src) + '</span>';
+        // Show short UID on hover
+        const shortId = (msg._meta.ctxId || msg._meta.docId || '');
+        if (shortId) sourceTag += '<span style="font-family:var(--mono);font-size:7px;color:var(--text-dim);margin-left:4px">' + esc(shortId.slice(-8)) + '</span>';
+      } else {
+        // Heuristic classification for old entries
+        const content = msg.full || msg.preview || '';
+        if (msg.index < 3 && msg.role === 'system') {
+          if (content.startsWith('You are ') || content.includes('You MUST wrap all replies')) {
+            sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">boot</span>';
+          } else {
+            sourceTag = '<span class="section-badge" style="background:var(--accent-dim);color:var(--accent)">identity</span>';
+          }
+        } else if (msg.role === 'system' && (content.includes('This dispatch is from room') || content.includes('Your rooms:'))) {
+          sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">room context</span>';
+        } else if (msg.role === 'user') {
+          sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">history</span>';
+        } else if (msg.role === 'assistant') {
+          sourceTag = '<span class="section-badge" style="background:var(--green-dim);color:var(--green)">history</span>';
         }
-      } else if (msg.role === 'system' && (content.includes('This dispatch is from room') || content.includes('Your rooms:'))) {
-        sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">room context</span>';
-      } else if (msg.role === 'user') {
-        sourceTag = '<span class="section-badge" style="background:var(--blue-dim);color:var(--blue)">history</span>';
-      } else if (msg.role === 'assistant') {
-        sourceTag = '<span class="section-badge" style="background:var(--green-dim);color:var(--green)">history</span>';
       }
 
       html += '<div class="ctx-msg collapsed" onclick="this.classList.toggle(\'collapsed\')">' +
@@ -402,16 +430,19 @@ function renderTranscriptDetail(entry) {
   html += '<div class="detail-section-header">Output' +
     '<span class="section-badge" style="background:var(--green-dim);color:var(--green)">' + outCount + ' blocks</span></div>';
 
-  // Thinking
+  // Thinking (handle both old string[] and new {blockId, content}[] formats)
   for (const t of (entry.thinking || [])) {
+    const content = typeof t === 'string' ? t : t.content;
+    const blkLabel = (t && t.blockId) ? '<span style="font-size:7px;color:var(--text-dim);float:right">' + esc(t.blockId.slice(-8)) + '</span>' : '';
     html += '<div class="out-block thinking">' +
-      '<div class="out-label">thinking</div>' +
-      '<div class="out-body">' + esc(t) + '</div></div>';
+      '<div class="out-label">thinking ' + blkLabel + '</div>' +
+      '<div class="out-body">' + esc(content) + '</div></div>';
   }
-  // Messages
+  // Messages (handle both old and new formats)
   for (const m of (entry.messages || [])) {
+    const blkLabel = m.blockId ? '<span style="font-size:7px;color:var(--text-dim);float:right">' + esc(m.blockId.slice(-8)) + '</span>' : '';
     html += '<div class="out-block message">' +
-      '<div class="out-label">message &rarr; <span class="out-to">' + esc(m.to) + '</span></div>' +
+      '<div class="out-label">message &rarr; <span class="out-to">' + esc(m.to) + '</span> ' + blkLabel + '</div>' +
       '<div class="out-body">' + esc(m.content) + '</div></div>';
   }
   // Private
@@ -456,6 +487,39 @@ function renderTranscriptDetail(entry) {
   // Transcript always written
   html += '<div class="route-entry" style="color:var(--accent)">transcript/home-transcript.jsonl (always)</div>';
   html += '</div>';
+
+  // ── TRACE (full traceability chain) ──
+  if (entry._trace) {
+    html += '<div class="detail-section">';
+    html += '<div class="detail-section-header">Trace</div>';
+    const trace = entry._trace;
+    html += '<table class="config-table">';
+    html += '<tr><td>Agent</td><td>' + esc(trace.agentName || '?') + '</td></tr>';
+    html += '<tr><td>Dispatch ID</td><td>' + esc(trace.dispatchId || '-') + '</td></tr>';
+    html += '<tr><td>Cycle ID</td><td>' + esc(trace.cycleId || '-') + '</td></tr>';
+    html += '<tr><td>Response ID</td><td>' + esc(trace.finalResponseId || '-') + '</td></tr>';
+    html += '<tr><td>Iterations</td><td>' + (trace.totalIterations || 0) + '</td></tr>';
+    html += '<tr><td>Started</td><td>' + esc(trace.startedAt || '-') + '</td></tr>';
+    html += '<tr><td>Completed</td><td>' + esc(trace.completedAt || '-') + '</td></tr>';
+    html += '</table>';
+
+    if (trace.iterations && trace.iterations.length > 0) {
+      html += '<div style="margin-top:8px;font-family:var(--mono);font-size:9px;color:var(--text-dim)">';
+      for (const iter of trace.iterations) {
+        html += '<div style="padding:2px 0">';
+        html += 'iter ' + iter.number + ' <span style="color:var(--accent)">' + esc(iter.iterationId.slice(-8)) + '</span>';
+        html += ' stop=' + esc(iter.stopReason || '?');
+        html += ' resp=<span style="color:var(--purple)">' + esc(iter.responseId.slice(-8)) + '</span>';
+        if (iter.toolCalls && iter.toolCalls.length > 0) {
+          html += ' tools=[' + iter.toolCalls.map(tc => esc(tc.name)).join(', ') + ']';
+        }
+        html += ' text=' + (iter.textLength || 0) + 'ch';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
 
   // ── Raw nucleus response (collapsible) ──
   if (entry.nucleusResponse) {

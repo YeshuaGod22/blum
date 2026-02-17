@@ -72,9 +72,7 @@ let seqCounter = readLines(OPS_FILE).length;
 function saveRooms() { saveJSON(ROOMS_FILE, rooms); }
 function saveDirectory() { saveJSON(DIRECTORY_FILE, directory); }
 
-function generateUID(prefix) {
-  return prefix + '_' + crypto.randomBytes(8).toString('hex');
-}
+const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
 function logOp(type, initiator, target, payload, reason) {
   seqCounter++;
@@ -331,7 +329,9 @@ async function dispatchToHome(agentName, roomName) {
   if (!entry || !room) return;
   if (!entry.endpoint) return; // no home registered yet
 
+  const dispatchId = generateUID('disp');
   const payload = {
+    dispatchId,
     type: 'push',
     room: roomName,
     roomUID: room.uid,
@@ -454,8 +454,9 @@ const server = http.createServer(async (req, res) => {
         if (!directory[agent]) return { error: `Unknown: ${agent}` };
         if (!rooms[roomName]) return { error: `Unknown room: ${roomName}` };
         if (!rooms[roomName].participants.includes(agent)) return { error: `${agent} not in ${roomName}` };
-        logOp('dispatch.pull', body.initiator || agent, roomName, { participant: agent });
-        return { success: true, room: roomName, transcript: rooms[roomName].transcript };
+        const dispatchId = generateUID('disp');
+        logOp('dispatch.pull', body.initiator || agent, roomName, { participant: agent, dispatchId });
+        return { success: true, dispatchId, room: roomName, transcript: rooms[roomName].transcript };
       },
     };
 
