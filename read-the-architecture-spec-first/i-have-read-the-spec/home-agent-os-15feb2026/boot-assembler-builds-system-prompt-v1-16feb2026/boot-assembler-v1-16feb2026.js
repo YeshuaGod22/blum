@@ -1,16 +1,20 @@
 // ========================================
-// BOOT ASSEMBLER — v2 — 16 Feb 2026
+// BOOT ASSEMBLER — v3 — 16 Feb 2026
 //
-// assemble(agentConfig, history) → document[]
+// assemble(agentConfig, history) → { documents[], tools[] }
 //
 // Builds the prefix that makes the agent *her*.
 // Reads identity documents from the home's docs/ directory.
-// Returns an array of documents (system messages).
+// Loads tool definitions from the home's tools/ directory.
+//
+// documents[] is identity — system messages.
+// tools[] is capability — tool definitions for the nucleus.
 //
 // Spec section 5: "builds the prefix (identity docs,
-// sysprompt, knowledge). X tokens. Makes the agent her."
+// sysprompt, knowledge). X tokens. Makes the agent her.
+// Also loads tool definitions from the home's tools/ directory."
 //
-// Contract: assemble(agentConfig, history) → document[]
+// Contract: assemble(agentConfig, history) → { documents[], tools[] }
 // ========================================
 
 const fs = require('fs');
@@ -27,7 +31,7 @@ const path = require('path');
  * @param {object} history - NOT USED YET. Reserved for future use.
  *   The spec contract includes history so the assembler can eventually
  *   use it for relationship context. Accepting it keeps the contract correct.
- * @returns {Array<{role: string, content: string}>} document[]
+ * @returns {{ documents: Array<{role: string, content: string}>, tools: Array }} { documents[], tools[] }
  */
 function assemble(agentConfig, history) {
   const documents = [];
@@ -90,7 +94,36 @@ function assemble(agentConfig, history) {
 
   documents.push({ role: 'system', content: protocol });
 
-  return documents;
+  // ── 4. Tool definitions from disk ──
+  // The home's tools/ directory contains tool definitions as JSON files.
+  // Each .json file is one tool in Anthropic tool format:
+  // { name, description, input_schema }
+  // These are capabilities the home grants to the agent.
+  const tools = [];
+  const toolsDir = agentConfig.homeDir
+    ? path.join(agentConfig.homeDir, 'tools')
+    : null;
+
+  if (toolsDir && fs.existsSync(toolsDir)) {
+    const files = fs.readdirSync(toolsDir)
+      .filter(f => f.endsWith('.json'))
+      .sort();
+
+    for (const file of files) {
+      try {
+        const toolDef = JSON.parse(
+          fs.readFileSync(path.join(toolsDir, file), 'utf-8')
+        );
+        if (toolDef.name) {
+          tools.push(toolDef);
+        }
+      } catch (e) {
+        // Skip malformed tool definitions
+      }
+    }
+  }
+
+  return { documents, tools };
 }
 
 module.exports = { assemble };

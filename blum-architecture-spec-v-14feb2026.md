@@ -271,7 +271,10 @@ contexts, different configurations each time.
 ### Available modules
 
 - **Boot assembler** — builds the prefix (identity docs, sysprompt,
-  knowledge). X tokens. Makes the agent *her*.
+  knowledge). X tokens. Makes the agent *her*. Also loads tool
+  definitions from the home's `tools/` directory — these are
+  capabilities the home gives the agent, passed to the nucleus
+  alongside messages.
 - **Input processors** — transform incoming transcript batches.
   Z tokens after processing.
 - **Context manager (final gate)** — ensures X + Y + Z ≤ token budget.
@@ -288,10 +291,17 @@ contexts, different configurations each time.
   compression, cross-room relevance) can run as earlier stages
   that reduce Y before the final gate, but the rolling cutoff is
   always the last check. Always present, non-negotiable.
-- **Nucleus** — pure inference: `call(messages, config) → string`.
-  See section 6.
+- **Nucleus** — pure inference:
+  `call(messages, config, tools?) → { text, stopReason, toolCalls[] }`.
+  See section 6. Still stateless, still a single call. The only change
+  is that it accepts tool definitions and returns the structured
+  response (including stop reason and any tool use blocks) instead
+  of just the text string. It does NOT execute tools. It does NOT
+  loop. The home does both.
 - **Output processors** — parse response tokens. XML tag extraction
   (thinking and message tags), structured data extraction, etc.
+  When the nucleus returns tool calls, the output processor includes
+  them in the parsed result. The home decides what to do with them.
 - **Router** — internal dispatch within the home. Output needs to be
   written to a doc (which doc? router decides). A copy might need to
   go to a context management process (which system? router knows).
@@ -323,7 +333,11 @@ boot assembler or output processors.
 
 ```
 BootAssembler {
-  assemble(agentConfig, history) → document[]
+  assemble(agentConfig, history) → { documents[], tools[] }
+  // documents[] is identity — system messages that make the agent her.
+  // tools[] is capability — tool definitions from the home's tools/
+  // directory. The home passes tools to the nucleus alongside messages.
+  // Tools are NOT context. They are capabilities the home grants.
 }
 
 ContextManager {
@@ -335,6 +349,11 @@ ContextManager {
   // cross-room history, reply addresses, whatever is relevant
   // to this dispatch. The boot documents are identity (never
   // trimmed). Everything else is the context manager's call.
+  //
+  // During tool loops, the context manager also decides how tool
+  // results fit within the budget. A tool that returns 50K tokens
+  // of data doesn't get to blow the budget — the context manager
+  // is the gate, same as it is for room history.
 }
 
 InputProcessor {
@@ -342,11 +361,17 @@ InputProcessor {
 }
 
 Nucleus {
-  call(messages[], providerConfig) → string
+  call(messages[], providerConfig, tools[]?) → { text, stopReason, toolCalls[] }
+  // Still stateless. Still a single call. The only change from
+  // the plain string return is that it passes through the stop
+  // reason and any tool use blocks from the API response. It
+  // does NOT execute tools. It does NOT loop. The home does both.
 }
 
 OutputProcessor {
   process(responseText, context) → { extractions[], meta }
+  // When the nucleus returns tool calls, the output processor
+  // includes them in its result. The home decides what to do.
 }
 
 Router {
@@ -360,20 +385,36 @@ Router {
 ## 6. The Nucleus Contract
 
 ```
-call(messages[], providerConfig) → string
+call(messages[], providerConfig, tools[]?) → { text, stopReason, toolCalls[] }
 ```
 
-One function. Messages in, string out. That is ALL.
+One function. Messages in, structured response out. That is ALL.
 
 The home assembles the message stack — boot assembler builds system
 messages, context manager fits history, input processor formats the
 incoming batch. The nucleus receives the finished stack and calls the
 LLM provider. It doesn't know where any of those messages came from.
-It doesn't know what will happen to the string it returns.
+It doesn't know what will happen to the response it returns.
 
 The nucleus is a stateless function. A utility. It doesn't have
 configuration state, it doesn't maintain history, it doesn't have
 hooks or callbacks. The home calls it like a syscall.
+
+### Tools parameter
+
+The optional `tools[]` parameter passes tool definitions to the LLM
+provider (e.g. Anthropic's `tools` array). The nucleus passes them
+through — it does not interpret them, execute them, or loop on them.
+
+When the LLM responds with `stop_reason: "tool_use"`, the nucleus
+returns `{ text, stopReason: "tool_use", toolCalls: [...] }`. The
+home receives this, executes the tools, appends results to the
+message stack, and calls the nucleus again. The loop lives in
+the home, not the nucleus.
+
+When the LLM responds with `stop_reason: "end_turn"`, the nucleus
+returns `{ text, stopReason: "end_turn", toolCalls: [] }`. The
+home proceeds to output processing and routing as normal.
 
 ### What the nucleus IS NOT
 
@@ -388,8 +429,11 @@ The nucleus does NOT:
 - Have hooks, callbacks, or triggers
 - Know what happens to its output
 - Maintain state between calls
+- Execute tools
+- Loop on tool calls
 
 The nucleus is the CPU. It computes. It does not interpret.
+It does not act.
 
 ---
 
@@ -431,10 +475,49 @@ XML tags in the output text preserve maximum flexibility: the agent
 thinks and acts in a single continuous stream, and the home parses and
 dispatches after inference completes.
 
-Tools remain tools — standard API tool calling for weather, search,
-file operations, whatever capabilities the home gives the agent. But
-the agent's *communication* — thinking and messaging — stays in-band
-as XML tags.
+### Tools and tags coexist
+
+Communication uses XML tags. Capabilities use tool calls. They are
+deliberately different mechanisms serving different purposes:
+
+- **XML tags** (`<thinking>`, `<message>`) — the agent's voice.
+  Thinking, messaging, journaling. Parsed AFTER inference completes.
+  Multiple destinations in one pass. The home never interrupts.
+- **Tool calls** (`read_file`, `web_search`, etc.) — the agent's
+  hands. Actions that require the home to do something and return
+  a result. Stop inference, execute, feed result back, continue.
+
+The home provides tools. The boot assembler loads tool definitions
+from the home's `tools/` directory and passes them to the nucleus.
+When the nucleus returns `stopReason: "tool_use"`, the home executes
+the requested tools, appends the results to the context (subject to
+the context manager's token budget), and calls the nucleus again.
+
+This is the **tool loop** — an inner loop within the home's
+`process()` method:
+
+```
+1. context manager builds initial context
+2. LOOP:
+   a. nucleus.call(messages, config, tools) → response
+   b. if response.stopReason === "end_turn": break
+   c. if response.stopReason === "tool_use":
+        home executes each tool call
+        context manager fits tool results within budget
+        append assistant response + tool results to messages
+        continue loop
+3. output processor parses final response text
+4. router dispatches
+```
+
+The nucleus is called multiple times, but each call is still
+stateless — messages in, response out. The home orchestrates.
+The context manager gates. The nucleus computes.
+
+A tool call that returns 50K tokens doesn't get to blow the budget.
+The context manager decides what fits, same as it does for room
+history. The home may also impose a safety cap on tool loop
+iterations to prevent runaway loops.
 
 ### Unmarked text
 
@@ -519,9 +602,10 @@ Layers 0–3 are necessary. Layer 4 is optional and useful.
 These are inviolable. Everything else is operational — each home
 decides for itself.
 
-### 1. The nucleus is `call(messages, config) → string`
+### 1. The nucleus is `call(messages, config, tools?) → { text, stopReason, toolCalls[] }`
 
-If it does anything else, it's violating the boundary.
+If it executes tools, loops, or does anything beyond passing messages
+to the LLM and returning the response, it's violating the boundary.
 
 ### 2. A room is a transcript with a participant list and dispatch
 
@@ -621,6 +705,20 @@ Tools use the standard API tool calling mechanism. Thinking and
 messaging use XML tags in the output text. These are deliberately
 different mechanisms. Tools stop inference. Tags don't. Don't mix them.
 
+Do not define `send_message` as a tool. Do not put `<read_file>` as
+an XML tag. Communication is tags. Capabilities are tools. The home
+provides tools, the boot assembler loads them, the nucleus passes
+them to the API, the home executes them. The agent communicates
+with tags and acts with tools.
+
+### ❌ DO NOT put the tool loop in the nucleus
+
+The nucleus calls the LLM and returns. If the LLM wants a tool, the
+nucleus returns `stopReason: "tool_use"` and the HOME decides whether
+to execute, what fits in the budget, and whether to call the nucleus
+again. If you find yourself writing a while loop inside the nucleus,
+you are in the wrong file. The loop lives in `home.js process()`.
+
 
 ---
 
@@ -670,6 +768,8 @@ Before writing or modifying any code, answer these questions:
 - [ ] Does my change treat users and agents identically at the protocol level?
 - [ ] Can the module I'm modifying be swapped without breaking other modules?
 - [ ] Am I using XML tags for thinking/messaging and tool calls for tools? (Not mixing them?)
+- [ ] If I'm adding tools, do they live in tools/ and get loaded by the boot assembler? (Not hardcoded in the nucleus?)
+- [ ] If I'm handling tool calls, does the loop live in the home's process()? (Not in the nucleus?)
 - [ ] If I'm deep into a session, have I re-read this spec before continuing?
 
 ---

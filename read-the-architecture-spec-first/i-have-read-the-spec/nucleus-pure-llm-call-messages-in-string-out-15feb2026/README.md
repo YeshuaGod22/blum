@@ -3,22 +3,23 @@
 The nucleus is a **pure, stateless inference function**:
 
 ```
-call(messages, config) → string
+call(messages, config, tools?) → { text, stopReason, toolCalls[] }
 ```
 
-Messages in, string out. That is ALL.
+Messages in, structured response out. That is ALL.
 
 ## What it does
 
-- Takes an array of messages and a provider config
+- Takes an array of messages, a provider config, and optional tool definitions
 - Calls the LLM API
-- Returns the response string
+- Returns the structured response (text, stop reason, any tool call requests)
 
 ## What it does NOT do
 
 - Know about rooms, homes, agents, or addresses
 - Parse XML tags
 - Route messages
+- Execute tools or loop on tool calls (the home does both)
 - Track participants or state
 - Have hooks, callbacks, or triggers
 - Know what happens to its output

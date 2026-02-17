@@ -25,6 +25,7 @@ function createHome(name, homeDir, options = {}) {
   // ── Create directory structure ──
   fs.mkdirSync(path.join(homeDir, 'history'), { recursive: true });
   fs.mkdirSync(path.join(homeDir, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, 'tools'), { recursive: true });
   fs.mkdirSync(path.join(homeDir, 'transcript'), { recursive: true });
   fs.mkdirSync(path.join(homeDir, 'internal'), { recursive: true });
 

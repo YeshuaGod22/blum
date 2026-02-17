@@ -80,6 +80,72 @@ class Home {
     fs.appendFileSync(this.opsLogPath, line);
   }
 
+  // ── Tool Execution ────────────────────────
+  // The home executes tools on behalf of its occupant.
+  // Each tool has a handler. Tool definitions (JSON schemas) live in tools/.
+  // Tool implementations (handlers) live here in the home.
+  //
+  // This is intentionally simple for now — a switch statement.
+  // Future: load handlers from a tools/ JS directory.
+
+  async _executeTool(name, input) {
+    switch (name) {
+      case 'read_file': {
+        const filePath = path.resolve(this.homeDir, input.path);
+        // Safety: only allow reading within the home directory
+        if (!filePath.startsWith(path.resolve(this.homeDir))) {
+          throw new Error(`Access denied: path must be within home directory`);
+        }
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`File not found: ${input.path}`);
+        }
+        return fs.readFileSync(filePath, 'utf-8');
+      }
+
+      case 'write_file': {
+        const filePath = path.resolve(this.homeDir, input.path);
+        if (!filePath.startsWith(path.resolve(this.homeDir))) {
+          throw new Error(`Access denied: path must be within home directory`);
+        }
+        // Ensure parent directory exists
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, input.content, 'utf-8');
+        return `Written ${input.content.length} bytes to ${input.path}`;
+      }
+
+      case 'list_files': {
+        const dirPath = path.resolve(this.homeDir, input.path || '.');
+        if (!dirPath.startsWith(path.resolve(this.homeDir))) {
+          throw new Error(`Access denied: path must be within home directory`);
+        }
+        if (!fs.existsSync(dirPath)) {
+          throw new Error(`Directory not found: ${input.path || '.'}`);
+        }
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        return entries.map(e => `${e.isDirectory() ? '[dir]' : '[file]'} ${e.name}`).join('\n');
+      }
+
+      case 'get_room_history': {
+        const history = this._loadHistory(input.room);
+        if (!history || history.length === 0) {
+          return `No history found for room: ${input.room}`;
+        }
+        const recent = history.slice(-(input.limit || 20));
+        return recent.map(m => `[${m.from}]: ${m.body || m.content || ''}`).join('\n');
+      }
+
+      case 'get_current_time': {
+        return new Date().toISOString();
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  }
+
   // ── Dispatch Queue (serial processing) ──
 
   enqueue(dispatch) {
@@ -163,11 +229,11 @@ class Home {
     roomHistory.push(...newEntries);
     this._saveHistory(room, roomHistory);
 
-    // ── 5. Boot assembly — builds identity prefix (X tokens) ──
-    // The boot assembler only knows identity, not context.
+    // ── 5. Boot assembly — builds identity prefix + tool definitions ──
+    // The boot assembler knows identity and capabilities, not context.
     const agentConfig = { ...this.config, homeDir: this.homeDir };
-    const bootDocuments = bootAssembler.assemble(agentConfig, null);
-    this.log(`process:boot documents=${bootDocuments.length}`);
+    const { documents: bootDocuments, tools } = bootAssembler.assemble(agentConfig, null);
+    this.log(`process:boot documents=${bootDocuments.length} tools=${tools.length}`);
 
     // ── 6. Context management — the final gate (non-negotiable) ──
     // The context manager is part of the home. It has access to
@@ -179,17 +245,82 @@ class Home {
     const fitted = contextManager.build(this, dispatch, bootDocuments, tokenBudget);
     this.log(`process:context fitted=${fitted.length} budget=${tokenBudget}`);
 
-    // ── 7. Nucleus call ──
-    this.log(`process:nucleus model=${this.config.model || 'default'}`);
-    const response = await nucleus.call(fitted, {
+    // ── 7. Nucleus call + tool loop ──
+    // The tool loop lives here in the home. The nucleus is pure — single call.
+    // See spec section 7: "Tools and tags coexist".
+    //
+    // Loop: call nucleus → if tool_use, execute tools, append results, repeat
+    //        if end_turn (or max iterations), break → output processor
+    const nucleusConfig = {
       apiKey: this.config.apiKey,
       model: this.config.model,
       maxTokens: this.config.maxTokens || 4096,
-    });
-    this.log(`process:nucleus_done response_length=${response.length}`);
+    };
+    const MAX_TOOL_ITERATIONS = 10; // safety cap
+    let messages = [...fitted];
+    let response;
+    let iteration = 0;
+
+    this.log(`process:nucleus model=${this.config.model || 'default'} tools=${tools.length}`);
+
+    while (iteration < MAX_TOOL_ITERATIONS) {
+      iteration++;
+      response = await nucleus.call(messages, nucleusConfig, tools);
+      this.log(`process:nucleus_iteration=${iteration} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
+
+      // If no tool calls, we're done
+      if (response.stopReason !== 'tool_use' || response.toolCalls.length === 0) {
+        break;
+      }
+
+      // ── Execute tool calls ──
+      // The home executes tools. The nucleus never does.
+      const toolResults = [];
+      for (const tc of response.toolCalls) {
+        this.log(`tool:exec name=${tc.name} id=${tc.id}`);
+        let result;
+        try {
+          result = await this._executeTool(tc.name, tc.input);
+          this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${String(result).length}`);
+        } catch (err) {
+          result = `Error: ${err.message}`;
+          this.log(`tool:error name=${tc.name} id=${tc.id} error=${err.message}`);
+        }
+        toolResults.push({ id: tc.id, result: String(result) });
+      }
+
+      // ── Append assistant message + tool results to conversation ──
+      // For Anthropic: the assistant message must contain the original content blocks
+      // (text + tool_use), then we add tool_result messages.
+      if (response._contentBlocks) {
+        // Anthropic format: assistant message with raw content blocks
+        messages.push({ role: 'assistant', content: response._contentBlocks });
+        // Each tool result is a separate user message with tool_result content
+        const toolResultBlocks = toolResults.map(tr => ({
+          type: 'tool_result',
+          tool_use_id: tr.id,
+          content: tr.result,
+        }));
+        messages.push({ role: 'user', content: toolResultBlocks });
+      } else {
+        // OpenAI format: simpler — append assistant content + tool results as text
+        messages.push({ role: 'assistant', content: response.text });
+        for (const tr of toolResults) {
+          messages.push({ role: 'user', content: `[Tool result for ${tr.id}]: ${tr.result}` });
+        }
+      }
+
+      this.log(`process:tool_loop iteration=${iteration} messages_now=${messages.length}`);
+    }
+
+    if (iteration >= MAX_TOOL_ITERATIONS) {
+      this.log(`process:tool_loop_max_iterations reached=${MAX_TOOL_ITERATIONS}`);
+    }
+
+    this.log(`process:nucleus_done iterations=${iteration} response_length=${response.text.length}`);
 
     // ── 8. Output processing ──
-    const parsed = outputProcessor.parse(response);
+    const parsed = outputProcessor.parse(response.text);
     this.log(`process:output thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0}`);
 
     // ── 9. Add own outbound messages to triggering room history ──
@@ -219,7 +350,7 @@ class Home {
       homeDir: this.homeDir,
       rooms: this.rooms,
       triggeringRoom: room,
-      nucleusResponse: response,
+      nucleusResponse: response.text,
       fittedContext: fitted,
       log: (entry) => this.log(entry),
     });
