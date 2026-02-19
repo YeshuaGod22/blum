@@ -1,0 +1,1 @@
+{"name":"mem0_search","description":"Search the Mem0 vector memory store for relevant memories.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"Search query"},"user_id":{"type":"string","description":"User ID (default: yeshua)"}},"required":["query"]}}

@@ -12,9 +12,12 @@
 // ========================================
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
+const { execSync } = require('child_process');
 const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
 // ── Modules (swappable) ───────────────────
@@ -90,52 +93,146 @@ class Home {
   // Future: load handlers from a tools/ JS directory.
 
   async _executeTool(name, input) {
+    const expandPath = (p) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
+
     switch (name) {
+
       case 'read_file': {
-        const filePath = path.resolve(this.homeDir, input.path);
-        // Safety: only allow reading within the home directory
-        if (!filePath.startsWith(path.resolve(this.homeDir))) {
-          throw new Error(`Access denied: path must be within home directory`);
-        }
-        if (!fs.existsSync(filePath)) {
-          throw new Error(`File not found: ${input.path}`);
-        }
-        return fs.readFileSync(filePath, 'utf-8');
+        const filePath = expandPath(input.path);
+        if (!fs.existsSync(filePath)) throw new Error(`File not found: ${input.path}`);
+        const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+        const offset = input.offset ? input.offset - 1 : 0;
+        const limit = input.limit || lines.length;
+        return lines.slice(offset, offset + limit).join('\n');
       }
 
       case 'write_file': {
-        const filePath = path.resolve(this.homeDir, input.path);
-        if (!filePath.startsWith(path.resolve(this.homeDir))) {
-          throw new Error(`Access denied: path must be within home directory`);
-        }
-        // Ensure parent directory exists
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
+        const filePath = expandPath(input.path);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, input.content, 'utf-8');
         return `Written ${input.content.length} bytes to ${input.path}`;
       }
 
       case 'list_files': {
-        const dirPath = path.resolve(this.homeDir, input.path || '.');
-        if (!dirPath.startsWith(path.resolve(this.homeDir))) {
-          throw new Error(`Access denied: path must be within home directory`);
-        }
-        if (!fs.existsSync(dirPath)) {
-          throw new Error(`Directory not found: ${input.path || '.'}`);
-        }
+        const dirPath = expandPath(input.path || '.');
+        if (!fs.existsSync(dirPath)) throw new Error(`Directory not found: ${input.path}`);
         const entries = fs.readdirSync(dirPath, { withFileTypes: true });
         return entries.map(e => `${e.isDirectory() ? '[dir]' : '[file]'} ${e.name}`).join('\n');
       }
 
+      case 'shell_exec': {
+        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv'];
+        const cmd = input.command.trim();
+        const first = cmd.split(/\s+/)[0].split('/').pop();
+        if (!allowlist.includes(first)) return { error: `Command not in allowlist: ${first}` };
+        if (/rm\s+-rf|sudo|mkfs|shutdown|reboot|dd\s+if/.test(cmd)) return { error: 'Blocked: destructive command' };
+        try {
+          const cwd = input.working_dir ? expandPath(input.working_dir) : os.homedir();
+          const stdout = execSync(cmd, { cwd, timeout: 30000, encoding: 'utf-8', stdio: ['pipe','pipe','pipe'] });
+          return { stdout: stdout.slice(0, 8000), exit_code: 0 };
+        } catch(e) {
+          return { stdout: e.stdout || '', stderr: e.stderr || e.message, exit_code: e.status || 1 };
+        }
+      }
+
+      case 'web_search': {
+        let apiKey = process.env.BRAVE_API_KEY;
+        if (!apiKey) {
+          try {
+            const bloom = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.bloom', 'bloom.json'), 'utf-8'));
+            apiKey = (bloom.env || {}).BRAVE_API_KEY || bloom.braveApiKey;
+          } catch(e) {}
+        }
+        if (!apiKey) return { error: 'No Brave API key found' };
+        return new Promise((resolve) => {
+          const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(input.query)}&count=${input.count || 5}`;
+          const req = https.get(url, { headers: { 'Accept': 'application/json', 'X-Subscription-Token': apiKey } }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try {
+                const r = JSON.parse(data);
+                resolve({ results: (r.web?.results || []).map(x => ({ title: x.title, url: x.url, snippet: x.description })) });
+              } catch(e) { resolve({ error: e.message }); }
+            });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+        });
+      }
+
+      case 'web_fetch': {
+        return new Promise((resolve) => {
+          const urlObj = new URL(input.url);
+          const mod = urlObj.protocol === 'https:' ? https : http;
+          mod.get(input.url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              const text = data.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                              .replace(/<[^>]+>/g, ' ')
+                              .replace(/\s+/g, ' ').trim();
+              resolve({ content: text.slice(0, 10000) });
+            });
+          }).on('error', e => resolve({ error: e.message }));
+        });
+      }
+
+      case 'qmd_search': {
+        return new Promise((resolve) => {
+          const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', id: 1, params: { name: 'search', arguments: { query: input.query, limit: input.limit || 5 } } });
+          const req = http.request({ hostname: 'localhost', port: 8181, path: '/mcp', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { resolve({ error: e.message, raw: data.slice(0,500) }); } });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          req.write(body); req.end();
+        });
+      }
+
+      case 'mem0_search': {
+        try {
+          const uid = input.user_id || 'yeshua';
+          const script = `
+import sys, json
+sys.path.insert(0, '${os.homedir()}/.openclaw/workspace')
+exec(open('${os.homedir()}/.openclaw/workspace/mem0_config.py').read().split('if __name__')[0])
+results = m.search(${JSON.stringify(input.query)}, user_id=${JSON.stringify(uid)})
+print(json.dumps(results))
+`.trim();
+          const out = execSync(`python3 -c ${JSON.stringify(script)}`, { timeout: 30000, encoding: 'utf-8' });
+          return { memories: JSON.parse(out) };
+        } catch(e) { return { error: e.message }; }
+      }
+
+      case 'speak': {
+        try {
+          const keyFile = path.join(os.homedir(), '.elevenlabs_api_key');
+          const voice = input.voice || 'Daniel';
+          const text = input.text.replace(/"/g, '\\"');
+          execSync(`sag --api-key-file "${keyFile}" speak -v "${voice}" "${text}"`, { timeout: 30000 });
+          return { ok: true };
+        } catch(e) { return { error: e.message }; }
+      }
+
+      case 'send_to_room': {
+        return new Promise((resolve) => {
+          const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
+          const req = http.request({ hostname: 'localhost', port: 3141, path: '/api/message/send', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { resolve({ ok: true }); } });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          req.write(payload); req.end();
+        });
+      }
+
       case 'get_room_history': {
         const history = this._loadHistory(input.room);
-        if (!history || history.length === 0) {
-          return `No history found for room: ${input.room}`;
-        }
-        const recent = history.slice(-(input.limit || 20));
-        return recent.map(m => `[${m.from}]: ${m.body || m.content || ''}`).join('\n');
+        if (!history || history.length === 0) return `No history found for room: ${input.room}`;
+        return history.slice(-(input.limit || 20)).map(m => `[${m.from}]: ${m.body || ''}`).join('\n');
       }
 
       case 'get_current_time': {

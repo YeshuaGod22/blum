@@ -1,0 +1,1 @@
+{"name":"shell_exec","description":"Execute a shell command and return stdout/stderr. Restricted to safe commands.","input_schema":{"type":"object","properties":{"command":{"type":"string","description":"Shell command to run"},"working_dir":{"type":"string","description":"Working directory (optional)"}},"required":["command"]}}
