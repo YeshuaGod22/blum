@@ -92,6 +92,7 @@ async function callAnthropic(messages, config, isOAuth, tools) {
     headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14';
     headers['user-agent'] = 'claude-cli/2.1.2 (external, cli)';
     headers['x-app'] = 'cli';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
   } else {
     headers['x-api-key'] = apiKey;
   }

@@ -1,0 +1,1 @@
+[{"id":"nightly-memory","schedule":"0 3 * * *","prompt":"Review your memory files and write a brief summary of what you learned today.","enabled":true}]
