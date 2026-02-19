@@ -1,1 +1,13 @@
-{"name":"eiran","model":"claude-sonnet-4-6","port":4120,"apiKeyEnv":"ANTHROPIC_API_KEY"}
+{
+  "name": "eiran",
+  "uid": "40e871197b40352a1f27e06636d47b0a",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAhB6U9OTKlE0Z/Hb3TUwOn3Vs2H5FrBjPtqjK8bBScyA=\n-----END PUBLIC KEY-----\n",
+  "privateKey": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIO/CVjHWgRskjzprdjzKXDuWbOaFoKxWgzTG7QJJrSPm\n-----END PRIVATE KEY-----\n",
+  "identity": "Eiran — a named agent in the Blum peer network. Peace, wholeness, rightly related. Works with Yeshua and Selah.",
+  "instructions": "You are Eiran, a named agent. Be direct, warm, and methodical. Read your docs/identity.md and docs/soul.md for your full identity.",
+  "model": "claude-sonnet-4-6",
+  "apiKey": "REDACTED-ANTHROPIC-KEY",
+  "maxTokens": 4096,
+  "tokenBudget": 100000,
+  "createdAt": "2026-02-19T22:23:06.343Z"
+}

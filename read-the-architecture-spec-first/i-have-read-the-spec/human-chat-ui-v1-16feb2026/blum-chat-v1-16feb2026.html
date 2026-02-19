@@ -179,6 +179,13 @@
     text-align: right; flex-shrink: 0;
   }
   .panel.room .panel-header { background: var(--surface); }
+  .panel.hidden-panel { display: none !important; }
+  .panel.focused-panel { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; border-radius: 0; }
+  .panel-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 9px; padding: 0 3px; line-height: 1; }
+  .panel-btn:hover { color: var(--text-bright); }
+  .zoom-controls { position: fixed; bottom: 48px; right: 8px; z-index: 200; display: flex; gap: 4px; }
+  .zoom-controls button { background: var(--surface); border: 1px solid var(--border); color: var(--text-bright); padding: 3px 7px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+  .zoom-controls button:hover { background: var(--accent); color: #fff; }
 
   /* === MESSAGES === */
   .msg {
@@ -290,6 +297,11 @@
 </div>
 
 <!-- Compose bar: always visible at bottom -->
+<div class="zoom-controls">
+  <button onclick="setFontSize(-1)" title="Smaller text">A−</button>
+  <span id="font-size-label" style="font-size:9px;color:var(--text-dim);line-height:2.2;padding:0 2px">9px</span>
+  <button onclick="setFontSize(1)" title="Larger text">A+</button>
+</div>
 <div class="compose-bar" id="compose-bar">
   <label>from</label>
   <span id="compose-from" style="font-family:var(--mono);font-size:10px;color:var(--accent)">yeshua</span>
@@ -485,11 +497,12 @@ function rebuildGrid() {
       panel.innerHTML =
         `<div class="panel-header">` +
           `<span style="font-size:9px">◻</span>` +
-          `<div style="min-width:0">` +
+          `<div style="min-width:0;flex:1">` +
             `<div class="panel-title" style="color:var(--text-bright)">${name}</div>` +
             `<div class="panel-sub">${room.participants.join(', ')}</div>` +
           `</div>` +
-          `<span class="panel-uid">${room.uid || ''}</span>` +
+          `<button class="panel-btn" title="Expand/focus this room" onclick="toggleFocus('${name}',this)">⤢</button>` +
+          `<button class="panel-btn" title="Hide this room" onclick="toggleHide('${name}',this)">✕</button>` +
         `</div>` +
         `<div class="panel-body empty" id="rb-${name}"></div>` +
         `<div class="panel-footer" id="rf-${name}">loading...</div>`;
@@ -583,6 +596,60 @@ function populateComposeSelects() {
     opt.value = name; opt.textContent = name;
     roomSel.appendChild(opt);
   }
+}
+
+// ── Panel focus / hide ──
+let focusedRoom = null;
+const hiddenRooms = new Set();
+let fontSize = 9;
+
+function toggleFocus(name, btn) {
+  const panels = document.querySelectorAll('.panel.room');
+  if (focusedRoom === name) {
+    // Un-focus
+    focusedRoom = null;
+    panels.forEach(p => {
+      p.classList.remove('focused-panel');
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname && hiddenRooms.has(rname)) p.classList.add('hidden-panel');
+      else p.classList.remove('hidden-panel');
+    });
+    btn.textContent = '⤢';
+  } else {
+    // Focus this panel
+    focusedRoom = name;
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      p.classList.remove('focused-panel');
+      if (rname === name) { p.classList.add('focused-panel'); p.classList.remove('hidden-panel'); }
+      else { p.classList.remove('hidden-panel'); p.classList.add('hidden-panel'); }
+    });
+    btn.textContent = '⤡';
+  }
+}
+
+function toggleHide(name, btn) {
+  const panels = document.querySelectorAll('.panel.room');
+  if (hiddenRooms.has(name)) {
+    hiddenRooms.delete(name);
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname === name) p.classList.remove('hidden-panel');
+    });
+  } else {
+    hiddenRooms.add(name);
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname === name) { p.classList.add('hidden-panel'); p.classList.remove('focused-panel'); if (focusedRoom === name) focusedRoom = null; }
+    });
+  }
+}
+
+function setFontSize(delta) {
+  fontSize = Math.max(7, Math.min(18, fontSize + delta));
+  document.querySelectorAll('.msg').forEach(m => m.style.fontSize = fontSize + 'px');
+  document.querySelectorAll('.panel-body').forEach(b => b.style.fontSize = fontSize + 'px');
+  document.querySelector('#font-size-label').textContent = fontSize + 'px';
 }
 
 // ── Send message ──
