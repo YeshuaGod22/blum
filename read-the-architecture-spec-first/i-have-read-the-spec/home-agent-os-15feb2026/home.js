@@ -527,6 +527,14 @@ print(json.dumps(results))
       const nudgeResponse = await nucleus.call(cleanNudgeMessages, nucleusConfig, cleanTools);
       this.log(`process:output_validator corrective_call responseId=${generateUID('resp')} text_length=${nudgeResponse.text.length}`);
 
+      // Promote nudgeMessages to the canonical record — the corrective call
+      // is the final nucleus conversation for this cycle, so it's what gets
+      // written to homelogfull. Primary messages[] is superseded.
+      messages = [
+        ...nudgeMessages,
+        { role: 'assistant', content: nudgeResponse.text || '' },
+      ];
+
       parsed = outputProcessor.parse(nudgeResponse.text, _traceContext);
       this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0} intentionalSilence=${parsed.intentionalSilence} [post-nudge]`);
     }
