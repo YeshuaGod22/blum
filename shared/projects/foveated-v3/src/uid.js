@@ -6,6 +6,7 @@
  * 
  * Author: Beta (spec), Selah (implementation)
  * Date: 2026-02-20
+ * Updated: 2026-02-20 — Added agent prefix for cross-agent uniqueness
  */
 
 /**
@@ -13,6 +14,21 @@
  * In production, this would persist to disk
  */
 const sequences = new Map();
+
+/**
+ * Current agent name (set via init or defaults to 'unknown')
+ */
+let agentName = 'unknown';
+
+/**
+ * Initialize the UID generator with agent context
+ * @param {string} agent - The agent name (e.g., 'selah', 'eiran', 'beta')
+ */
+function init(agent) {
+  if (agent && typeof agent === 'string') {
+    agentName = agent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+}
 
 /**
  * Get current timestamp in YYYYMMDD-HHMMSS format
@@ -47,37 +63,39 @@ function nextSequence(prefix) {
 
 /**
  * Generate a raw layer UID (Layer 0)
- * Format: raw-YYYYMMDD-HHMMSS-NNN
+ * Format: raw-{agent}-YYYYMMDD-HHMMSS-NNN
+ * Example: raw-selah-20260220-170532-003
  */
 function rawUID() {
   const timestamp = getTimestamp();
   const seq = nextSequence('raw');
-  return `raw-${timestamp}-${seq}`;
+  return `raw-${agentName}-${timestamp}-${seq}`;
 }
 
 /**
  * Generate a working context UID (Layer 1)
- * Format: work-YYYYMMDD-HHMMSS-NNN
+ * Format: work-{agent}-YYYYMMDD-HHMMSS-NNN
  */
 function workUID() {
   const timestamp = getTimestamp();
   const seq = nextSequence('work');
-  return `work-${timestamp}-${seq}`;
+  return `work-${agentName}-${timestamp}-${seq}`;
 }
 
 /**
  * Generate a session summary UID (Layer 2)
- * Format: sess-YYYYMMDD-NNN
+ * Format: sess-{agent}-YYYYMMDD-NNN
  */
 function sessionUID() {
   const dateKey = getDateKey();
   const seq = nextSequence('sess');
-  return `sess-${dateKey}-${seq}`;
+  return `sess-${agentName}-${dateKey}-${seq}`;
 }
 
 /**
  * Generate a thread/project UID (Layer 3)
  * Format: thread-{name}-NNN
+ * Note: threads are cross-agent, so no agent prefix
  */
 function threadUID(threadName) {
   const safeName = threadName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -88,30 +106,56 @@ function threadUID(threadName) {
 /**
  * Parse a UID to extract its components
  * @param {string} uid - The UID to parse
- * @returns {Object} - { layer, timestamp, sequence, threadName? }
+ * @returns {Object} - { layer, agent?, timestamp, sequence, threadName? }
  */
 function parseUID(uid) {
   const parts = uid.split('-');
   const layer = parts[0];
   
   if (layer === 'raw' || layer === 'work') {
-    // raw-YYYYMMDD-HHMMSS-NNN or work-YYYYMMDD-HHMMSS-NNN
-    return {
-      layer,
-      date: parts[1],
-      time: parts[2],
-      sequence: parts[3],
-      timestamp: `${parts[1]}-${parts[2]}`
-    };
+    // New format: raw-{agent}-YYYYMMDD-HHMMSS-NNN
+    // Old format: raw-YYYYMMDD-HHMMSS-NNN (for backwards compat)
+    if (parts.length === 5) {
+      // New format with agent
+      return {
+        layer,
+        agent: parts[1],
+        date: parts[2],
+        time: parts[3],
+        sequence: parts[4],
+        timestamp: `${parts[2]}-${parts[3]}`
+      };
+    } else if (parts.length === 4) {
+      // Old format without agent
+      return {
+        layer,
+        agent: 'unknown',
+        date: parts[1],
+        time: parts[2],
+        sequence: parts[3],
+        timestamp: `${parts[1]}-${parts[2]}`
+      };
+    }
   } else if (layer === 'sess') {
-    // sess-YYYYMMDD-NNN
-    return {
-      layer: 'session',
-      date: parts[1],
-      sequence: parts[2]
-    };
+    // New format: sess-{agent}-YYYYMMDD-NNN
+    // Old format: sess-YYYYMMDD-NNN
+    if (parts.length === 4) {
+      return {
+        layer: 'session',
+        agent: parts[1],
+        date: parts[2],
+        sequence: parts[3]
+      };
+    } else if (parts.length === 3) {
+      return {
+        layer: 'session',
+        agent: 'unknown',
+        date: parts[1],
+        sequence: parts[2]
+      };
+    }
   } else if (layer === 'thread') {
-    // thread-{name}-NNN
+    // thread-{name}-NNN (no agent, threads are shared)
     const sequence = parts[parts.length - 1];
     const threadName = parts.slice(1, -1).join('-');
     return {
@@ -147,7 +191,16 @@ function resetSequences() {
   sequences.clear();
 }
 
+/**
+ * Get current agent name
+ */
+function getAgent() {
+  return agentName;
+}
+
 module.exports = {
+  init,
+  getAgent,
   rawUID,
   workUID,
   sessionUID,
