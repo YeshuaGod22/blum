@@ -51,16 +51,21 @@ function parse(responseText, _traceContext = {}) {
     });
   }
 
+  // Detect intentional silence: <null/> or <null></null>
+  const intentionalSilence = /<null\s*\/?>(\s*<\/null>)?/.test(responseText);
+
   // Private text: everything outside tags
   let privateText = responseText
     .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
     .replace(/<message\s+to="[^"]+">[\s\S]*?<\/message>/g, '')
+    .replace(/<null\s*\/?>(\s*<\/null>)?/g, '')
     .trim();
 
   return {
     parseId,
     thinking,
     messages,
+    intentionalSilence,
     private: privateText,
     _meta: {
       cycleId: _traceContext.cycleId || null,

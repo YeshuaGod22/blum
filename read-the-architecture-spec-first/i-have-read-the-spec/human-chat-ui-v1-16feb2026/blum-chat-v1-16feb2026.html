@@ -198,12 +198,12 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .msg .msg-meta {
-    font-family: var(--mono); font-size: 7px;
+    font-family: var(--mono); font-size: 11px;
     display: flex; gap: 2px; align-items: baseline; margin-bottom: 1px;
   }
   .msg .msg-from { font-weight: 600; }
   .msg .msg-arrow { color: var(--text-dim); }
-  .msg .msg-ts { color: var(--text-dim); margin-left: auto; font-size: 7px; }
+  .msg .msg-ts { color: var(--text-dim); margin-left: auto; font-size: 11px; padding-left: 8px; }
   .msg .msg-body { color: var(--text-bright); }
   .msg .msg-quote {
     border-left: 2px solid var(--border-bright); padding: 1px 4px;
@@ -342,7 +342,7 @@ function pColor(name) {
   return `hsl(${Math.abs(h) % 360}, 55%, 60%)`;
 }
 function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-function ts(iso) { return new Date(iso).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }); }
+function ts(iso) { return new Date(iso).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
 
 // ── API ──
 async function api(method, path, body) {
@@ -535,6 +535,10 @@ function renderRoomPanel(roomName, transcript) {
   if (lastId === lastRendered[roomName]) return;
   lastRendered[roomName] = lastId;
 
+  // Capture scroll state BEFORE clearing — innerHTML reset sets scrollTop to 0
+  const wasNearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 100;
+  const savedScrollTop = body.scrollTop;
+
   body.innerHTML = '';
   body.className = 'panel-body' + (transcript.length === 0 ? ' empty' : '');
 
@@ -573,7 +577,13 @@ function renderRoomPanel(roomName, transcript) {
       `<div class="msg-body">${esc(msg.body || '')}</div>`;
     body.appendChild(div);
   }
-  body.scrollTop = body.scrollHeight;
+  // Restore scroll: if user was near bottom, advance to new bottom.
+  // If user was scrolled up reading history, restore their exact position.
+  if (wasNearBottom) {
+    body.scrollTop = body.scrollHeight;
+  } else {
+    body.scrollTop = savedScrollTop;
+  }
 
   const room = roomMeta[roomName];
   if (footer) footer.textContent = `${transcript.length} msg · ${room ? room.participants.join(', ') : ''}`;
