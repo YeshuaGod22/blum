@@ -553,6 +553,10 @@ print(json.dumps(results))
     // Writes to the home's transcript, routes to rooms, routes internal addresses.
     // The router always runs, even with 0 outbound messages,
     // because it records the transcript.
+    //
+    // nucleusMessages: the full conversation as the nucleus saw it — fitted context
+    // plus every assistant turn and tool result from the tool loop. This is the
+    // complete raw record. The router writes it to homelogfull so zoom-in works.
     const routeResults = await router.dispatch(parsed, {
       name: this.config.name,
       homeDir: this.homeDir,
@@ -560,6 +564,7 @@ print(json.dumps(results))
       triggeringRoom: room,
       nucleusResponse: response.text,
       fittedContext: fitted,
+      nucleusMessages: messages,
       _traceContext,
       log: (entry) => this.log(entry),
     });

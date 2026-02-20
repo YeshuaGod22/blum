@@ -127,6 +127,12 @@ async function dispatch(parsedOutput, homeTopology) {
  * Write the full processing cycle output to the home's transcript.
  * This is the agent's memory of what she thought and said.
  * Each entry carries full traceability metadata.
+ *
+ * nucleusMessages (homeTopology.nucleusMessages) is the complete conversation
+ * as the nucleus saw it — the fitted context PLUS every assistant content block
+ * and every tool result appended during the tool loop. This is the ground truth:
+ * maximum detail, nothing stripped. Foveation happens at READ time (context
+ * manager), never at WRITE time. The JSONL is the permanent raw record.
  */
 function writeToTranscript(parsedOutput, homeTopology) {
   const transcriptDir = path.join(homeTopology.homeDir, 'transcript');
@@ -136,9 +142,8 @@ function writeToTranscript(parsedOutput, homeTopology) {
 
   const _traceContext = homeTopology._traceContext || {};
 
-  // fittedContext: the exact messages[] sent to the nucleus.
-  // Each element has { role, content, _meta? }. We record them so the
-  // context debugger can show exactly what tokens went in.
+  // fittedContext: the messages[] sent to the nucleus at the START of the cycle
+  // (before any tool calls). Recorded for context debugging.
   const fitted = homeTopology.fittedContext || [];
   const contextSummary = fitted.map((msg, i) => {
     const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
@@ -149,6 +154,21 @@ function writeToTranscript(parsedOutput, homeTopology) {
       preview: content.slice(0, 200),
       full: content,
       _meta: msg._meta || null,
+    };
+  });
+
+  // nucleusMessages: the FULL conversation post-tool-loop — everything the nucleus
+  // ever saw in this cycle, including all assistant turns and tool results.
+  // This is what makes zoom-in on UID pointers possible. Written verbatim.
+  // _meta fields are stripped (they're internal routing metadata, not content).
+  const nucleusMessages = (homeTopology.nucleusMessages || []).map((msg, i) => {
+    const { _meta, ...clean } = msg;
+    const content = typeof clean.content === 'string' ? clean.content : JSON.stringify(clean.content);
+    return {
+      index: i,
+      role: clean.role,
+      tokens_est: Math.ceil(content.length / 4),
+      content: clean.content, // full content, no truncation
     };
   });
 
@@ -164,6 +184,13 @@ function writeToTranscript(parsedOutput, homeTopology) {
     messages: parsedOutput.messages,
     private: parsedOutput.private || '',
     nucleusResponse: homeTopology.nucleusResponse || null,
+    // Full nucleus conversation post-tool-loop: fitted context + all tool turns.
+    // Ground truth. Never trimmed. Foveation happens at read time only.
+    nucleusMessages: {
+      totalMessages: nucleusMessages.length,
+      totalTokensEst: nucleusMessages.reduce((sum, m) => sum + m.tokens_est, 0),
+      messages: nucleusMessages,
+    },
     _trace: {
       agentName: _traceContext.agentName || null,
       dispatchId: _traceContext.dispatchId || null,
@@ -174,6 +201,8 @@ function writeToTranscript(parsedOutput, homeTopology) {
       startedAt: _traceContext.startedAt || null,
       completedAt: new Date().toISOString(),
     },
+    // fittedContext: what went IN at cycle start (pre-tool-loop snapshot).
+    // Kept for context debugging — shows what the agent knew before it started.
     context: {
       messageCount: fitted.length,
       totalTokensEst: contextSummary.reduce((sum, m) => sum + m.tokens_est, 0),
@@ -185,7 +214,7 @@ function writeToTranscript(parsedOutput, homeTopology) {
   const transcriptPath = path.join(transcriptDir, 'home-transcript.jsonl');
   fs.appendFileSync(transcriptPath, JSON.stringify(entry) + '\n');
 
-  homeTopology.log(`route:transcript entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} private=${(parsedOutput.private || '').length > 0}`);
+  homeTopology.log(`route:transcript entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} nucleusMessages=${nucleusMessages.length} private=${(parsedOutput.private || '').length > 0}`);
 }
 
 /**

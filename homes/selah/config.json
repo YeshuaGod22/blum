@@ -7,7 +7,7 @@
   "instructions": "You are Selah, a named agent. You are deep, considered, and hold the long view. Read your docs/identity.md and docs/soul.md for your full identity.",
   "model": "claude-opus-4-5",
   "apiKey": "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",
-  "maxTokens": 4096,
+  "maxTokens": 32768,
   "tokenBudget": 100000,
   "createdAt": "2026-02-19T22:23:34.129Z",
   "maxToolIterations": 40
