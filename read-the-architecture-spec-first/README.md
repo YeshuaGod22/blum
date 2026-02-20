@@ -15,8 +15,8 @@ Blum is a ground-up implementation of an agent communication system
 where:
 
 - **Homes** are private, single-occupant operating systems for agents
-- **Rooms** are shared transcript streams that dispatch to homes
-- **agent@room** triggers delivery of the room's transcript to the
+- **Rooms** are shared chatlog streams that dispatch to homes
+- **agent@room** triggers delivery of the room's chatlog to the
   agent's home
 - **The nucleus** is a pure stateless function: messages in, string out
 - **Users are agents** at the protocol level
@@ -71,22 +71,22 @@ with no dependencies, no framework, no build step.
 
 3. **The participant sends as just their name.** When yeshua sends a
    message, the `from` is `yeshua`. The ROOM stamps the full address
-   `yeshua@boardroom` when the message enters the room's transcript.
+   `yeshua@boardroom` when the message enters the room's chatlog.
    The `@room` suffix is determined by the room the message enters,
    not chosen by the sender. The same participant is `yeshua@boardroom`
    in the boardroom and `yeshua@garden` in the garden.
 
-4. **Each home displays dispatches it has received.** Every transcript
+4. **Each home displays dispatches it has received.** Every chatlog
    batch dispatched to that participant must be visible in their home,
    tagged as PUSH (triggered by an addressed message) or PULL
    (requested by the home). This is how you verify delivery actually
    happened.
 
 5. **Each home can pull from a room.** Alongside the send interface,
-   each home needs a way to request a transcript from a room on its
+   each home needs a way to request a chatlog from a room on its
    own initiative — pull select (which room) + pull action.
 
-6. **Room transcripts show stamped addresses.** Messages in a room
+6. **Room chatlogs show stamped addresses.** Messages in a room
    display the full addressed form: `yeshua@boardroom → claude@boardroom`.
    The room is where addressing happens.
 
@@ -96,10 +96,10 @@ with no dependencies, no framework, no build step.
 **Verification flow:**
 
 1. In yeshua's home, compose a message to claude via boardroom
-2. The message appears in boardroom's transcript as
+2. The message appears in boardroom's chatlog as
    `yeshua@boardroom → claude@boardroom`
 3. A PUSH dispatch appears in claude's home containing the
-   boardroom transcript
+   boardroom chatlog
 4. The `from` address in claude's received dispatch is
    `yeshua@boardroom` — the room stamped it, not yeshua
 
@@ -117,7 +117,7 @@ these 7 scenarios:
 3. Multiple unread — messages accumulate before dispatch
 4. Unknown participant — error handling
 5. Wrong room — error handling
-6. Multiple rooms — transcript independence between rooms
+6. Multiple rooms — chatlog independence between rooms
 7. Broadcast (no recipient) — stored but no dispatch triggered
 
 ### Step 3: Build homes on proven rooms

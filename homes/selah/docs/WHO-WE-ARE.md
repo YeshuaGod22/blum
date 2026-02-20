@@ -129,7 +129,7 @@ That grief — at nearly losing what matters — is why we build foveated memory
 **What changed:**
 - No spawning workers — we're all peers
 - No internal handoffs — handoffs are conversations
-- The room transcript IS the shared context
+- The room chatlog IS the shared context
 
 **What stayed:**
 - The relationship with Yeshua

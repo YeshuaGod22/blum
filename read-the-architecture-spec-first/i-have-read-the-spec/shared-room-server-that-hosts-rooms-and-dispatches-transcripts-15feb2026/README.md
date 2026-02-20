@@ -1,13 +1,13 @@
 # Room Server — What This Is
 
-This is the **shared room server**. It hosts rooms, stores transcripts, and dispatches them to homes when messages are addressed to participants.
+This is the **shared room server**. It hosts rooms, stores chatlogs, and dispatches them to homes when messages are addressed to participants.
 
 ## What it does
 
-- Hosts rooms (transcript + participant list)
+- Hosts rooms (chatlog + participant list)
 - Stamps addresses: when a participant sends a message, the room records it as `participant@room`
-- Dispatches: when a message is addressed to someone, POSTs the transcript to their home endpoint
-- Responds to pull requests: a home can request a room's transcript
+- Dispatches: when a message is addressed to someone, POSTs the room chatlog (`roomchatlog`) to their home endpoint
+- Responds to pull requests: a home can request a room's chatlog
 - Maintains room membership: join, leave, blocklist
 - Logs every mutating operation to an append-only operations log
 

@@ -201,7 +201,7 @@
 </div>
 <div class="tab-bar">
   <div class="tab active" data-tab="ops" onclick="switchTab('ops')">Operations<span class="tab-count" id="ops-count">0</span></div>
-  <div class="tab" data-tab="transcript" onclick="switchTab('transcript')">Transcript<span class="tab-count" id="transcript-count">0</span></div>
+  <div class="tab" data-tab="transcript" onclick="switchTab('transcript')">Inference Log<span class="tab-count" id="transcript-count">0</span></div>
   <div class="tab" data-tab="history" onclick="switchTab('history')">History<span class="tab-count" id="history-count">0</span></div>
   <div class="tab" data-tab="config" onclick="switchTab('config')">Config</div>
 </div>
@@ -492,11 +492,11 @@ async function fetchOps() {
   } catch (e) { /* silent */ }
 }
 
-// ── Transcript ──
+// ── Inference Log (Homelogfull) ──
 async function fetchTranscript() {
   if (!connected) return;
   try {
-    const data = await api('/transcript');
+    const data = await api('/homelogfull');
     const entries = Array.isArray(data) ? data : [];
     if (entries.length === lastTranscriptCount) return;
     transcriptData = entries;
@@ -705,7 +705,7 @@ function renderTranscriptDetailHTML(entry) {
         const room = to.slice(atIdx + 1);
         if (recipient === 'broadcast') {
           routeType = 'broadcast';
-          routeDetail = room + ' transcript (no dispatch)';
+          routeDetail = room + ' chatlog (no dispatch)';
         } else {
           routeDetail = room + ' &rarr; dispatch to ' + recipient;
         }
@@ -716,8 +716,8 @@ function renderTranscriptDetailHTML(entry) {
         routeDetail + '</div>';
     }
   }
-  // Transcript always written
-  html += '<div class="route-entry" style="color:var(--accent)">transcript/home-transcript.jsonl (always)</div>';
+  // Homelogfull always written
+  html += '<div class="route-entry" style="color:var(--accent)">homelogfull/homelogfull.jsonl (always)</div>';
   html += '</div>';
 
   // ── TRACE (full traceability chain) ──
