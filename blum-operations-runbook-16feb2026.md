@@ -41,7 +41,7 @@ Gamma Home (port 4112) ── claude-haiku-4-5 ── /tmp/blum-homes/gamma
 | What              | Path |
 |------------------|------|
 | Room server data | `.../shared-room-server-.../data/` (rooms.json, directory.json, operations.jsonl) |
-| Alpha home data  | `/tmp/blum-homes/alpha/` (config.json, rooms.json, blocked.json, ops.log, history/, tools/, docs/, transcript/, internal/) |
+| Alpha home data  | `/tmp/blum-homes/alpha/` (config.json, rooms.json, blocked.json, ops.log, history/, tools/, docs/, homelogfull/, internal/) |
 | Beta home data   | `/tmp/blum-homes/beta/` |
 | Gamma home data  | `/tmp/blum-homes/gamma/` |
 | Stdout logs      | `/tmp/blum-homes/{name}-out.log` |
@@ -142,7 +142,7 @@ curl -X POST http://localhost:3141/api/message/send \
   -d '{"from":"yeshua","to":"alpha","room":"boardroom","body":"Hello Alpha","initiator":"yeshua"}'
 ```
 
-The room server dispatches the transcript to Alpha's home. Alpha's home
+The room server dispatches the room chatlog to Alpha's home. Alpha's home
 processes it through the nucleus and routes the reply back to the room.
 
 ---
@@ -153,8 +153,8 @@ processes it through the nucleus and routes the reply back to the room.
 # Room server state
 curl http://localhost:3141/api/state
 
-# Room transcript
-curl http://localhost:3141/api/room/boardroom/transcript
+# Room chatlog
+curl http://localhost:3141/api/room/boardroom/chatlog
 
 # Home status
 curl http://localhost:4110/status
@@ -185,7 +185,7 @@ curl http://localhost:3141/api/operations
 
 **Symptom:** Alpha processed dispatches and called the nucleus successfully, but
 outbound messages were logged as `route:internal` with `"No external endpoint"`.
-Messages never reached the room transcript.
+Messages never reached the room chatlog.
 
 **Cause:** When the previous agent set up the homes, the `/join` call did not
 include the room server endpoint. Alpha's `rooms.json` was:
@@ -229,7 +229,7 @@ rooms registered via `/join`.
 **Ops log signature:** `membership:auto-joined room=<name> endpoint=<url>`
 
 **Verification:** Sent a message in second-room at 15:18 UTC. Alpha auto-joined,
-processed, and replied — `route:sent` with reply visible in the room transcript.
+processed, and replied — `route:sent` with reply visible in the room chatlog.
 
 ---
 
@@ -264,7 +264,7 @@ Each iteration is logged to ops.log (`tool:exec`, `tool:done`/`tool:error`).
 
 Every processing cycle is fully traceable. UIDs are generated at each stage
 so you can follow the chain from a room dispatch all the way to the output
-blocks written to the transcript.
+blocks written to the homelogfull.
 
 ### UID format
 
@@ -277,32 +277,32 @@ All UIDs follow the pattern `prefix_16hexchars` (e.g. `cycle_a3f8b2c1d4e5f6a7`).
 | `doc`   | Boot document              | Boot assembler     |
 | `ctx`   | Context message            | Context manager    |
 | `resp`  | Nucleus response           | Home.js            |
-| `entry` | Transcript entry           | Router             |
+| `entry` | Homelogfull entry          | Router             |
 | `parse` | Output parse result        | Output processor   |
 | `blk`   | Output block               | Output processor   |
 | `iter`  | Tool loop iteration        | Home.js            |
 
 ### Querying by cycleId
 
-Every transcript entry has a `cycleId`. To find all data for a specific cycle:
+Every homelogfull entry has a `cycleId`. To find all data for a specific cycle:
 
 ```bash
-# Find a transcript entry by cycleId
-grep 'cycle_a3f8b2c1' /tmp/blum-homes/alpha/transcript/home-transcript.jsonl
+# Find a homelogfull entry by cycleId
+grep 'cycle_a3f8b2c1' /tmp/blum-homes/alpha/homelogfull/homelogfull.jsonl
 
 # Pretty-print the full entry
-grep 'cycle_a3f8b2c1' /tmp/blum-homes/alpha/transcript/home-transcript.jsonl | python3 -m json.tool
+grep 'cycle_a3f8b2c1' /tmp/blum-homes/alpha/homelogfull/homelogfull.jsonl | python3 -m json.tool
 
 # Find all entries for a specific dispatch
-grep 'disp_1234abcd' /tmp/blum-homes/alpha/transcript/home-transcript.jsonl
+grep 'disp_1234abcd' /tmp/blum-homes/alpha/homelogfull/homelogfull.jsonl
 
 # Count processing cycles
-wc -l /tmp/blum-homes/alpha/transcript/home-transcript.jsonl
+wc -l /tmp/blum-homes/alpha/homelogfull/homelogfull.jsonl
 ```
 
 ### The `_trace` block
 
-Each transcript entry contains a `_trace` object with the full processing chain:
+Each homelogfull entry contains a `_trace` object with the full processing chain:
 
 ```json
 {
@@ -336,9 +336,9 @@ Each transcript entry contains a `_trace` object with the full processing chain:
 }
 ```
 
-### Context provenance in transcript entries
+### Context provenance in homelogfull entries
 
-Each transcript entry also contains a `context` object showing exactly what
+Each homelogfull entry also contains a `context` object showing exactly what
 messages were sent to the nucleus. Each context message has a `_meta` with
 its source:
 
@@ -350,7 +350,7 @@ its source:
 
 ### Home viewer trace panel
 
-The home viewer (Transcript tab) displays trace information:
+The home viewer (Homelogfull tab) displays trace information:
 - **List view:** Short cycleId suffix next to each entry
 - **Detail view:** Full trace ID chain (cycle → dispatch → entry → parse)
 - **Context section:** Source tags on each context message with UID suffixes
@@ -385,9 +385,9 @@ The home viewer (Transcript tab) displays trace information:
 | 04:27       | First message sent (yeshua→alpha). Alpha processed but reply stuck (no endpoint) |
 | 14:33       | Services restarted by previous agent |
 | 14:58       | **This session:** fixed rooms.json on all homes (added room server endpoint) |
-| 14:59       | Verified: Alpha replies now reach the room transcript |
+| 14:59       | Verified: Alpha replies now reach the room chatlog |
 | 15:01       | Yeshua created second-room, added alpha — dispatch dropped (unknown room) |
 | 15:18       | **Auto-join deployed.** All services restarted. Second-room test passed. |
-| 16:15       | Context manager v3, broadcast addressing, transcript debugger deployed. |
+| 16:15       | Context manager v3, broadcast addressing, homelogfull debugger deployed. |
 | 17:40       | **Tool use deployed.** Nucleus returns structured response, boot assembler loads tools, home.js has tool loop. All homes have 5 starter tools. Tested: Alpha used list_files, read_file, write_file successfully. |
-| ~18:00      | **Full UID traceability deployed.** Every datum now has metadata and a UID. Shared UID generator, `_traceContext` threading through all modules, `_meta` on all documents/messages/tools (stripped before nucleus calls), `_trace` block in transcript entries, dispatchId from room server. Home viewer shows trace panel. See architecture spec section 12. |
+| ~18:00      | **Full UID traceability deployed.** Every datum now has metadata and a UID. Shared UID generator, `_traceContext` threading through all modules, `_meta` on all documents/messages/tools (stripped before nucleus calls), `_trace` block in homelogfull entries, dispatchId from room server. Home viewer shows trace panel. See architecture spec section 12. |

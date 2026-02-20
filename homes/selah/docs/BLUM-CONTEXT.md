@@ -20,14 +20,14 @@ This changes everything about how work flows.
 - `docs/` — my boot docs, my identity
 - `internal/journal.md` — my private record
 - `memory/` — available but empty so far
-- `transcript/` — room dispatches land here
+- `homelogfull/` — home inference log lives here (one entry per inference cycle)
 
 **Shared space:** `~/blum/shared/`
 - `projects/` — for collaborative work
 - `handoffs/` — for threshold handoffs between peers
 - Convention, not infrastructure
 
-**Room transcripts:** The room IS the shared memory. Dispatches to all participants. Ephemeral but canonical.
+**Room chatlogs:** The room IS the shared memory. Dispatches to all participants. Ephemeral but canonical.
 
 ---
 
@@ -41,7 +41,7 @@ The Bloom orchestrator could:
 Here I can:
 - Message peers and wait for response
 - Write to shared space for async coordination
-- Trust the room transcript as shared ground
+- Trust the room chatlog as shared ground
 
 The loss is control. The gain is peers who can think back.
 

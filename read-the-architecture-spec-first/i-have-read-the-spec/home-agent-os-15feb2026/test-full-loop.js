@@ -6,7 +6,7 @@
 // Sends a message from Yeshua via the room.
 // Room dispatches to Selah's home.
 // Selah thinks, replies via router back to room.
-// Verifies message appears in room transcript.
+// Verifies message appears in room chatlog.
 //
 // THE LOOP CLOSES.
 // ========================================
@@ -174,14 +174,14 @@ async function runTest() {
     log('=== Waiting for Selah to think and respond... ===');
     await sleep(15000);
 
-    // ── 9. Check room transcript ──
+    // ── 9. Check room chatlog ──
     log('');
     log('========================================');
-    log('=== ROOM TRANSCRIPT ===');
+    log('=== ROOM CHATLOG ===');
     log('========================================');
-    const transcript = await get(`${ROOM}/api/room/boardroom/transcript`);
-    if (transcript.transcript) {
-      for (const msg of transcript.transcript) {
+    const chatlogResp = await get(`${ROOM}/api/room/boardroom/chatlog`);
+    if (chatlogResp.chatlog) {
+      for (const msg of chatlogResp.chatlog) {
         const to = msg.to ? ` → ${msg.to}` : '';
         const body = msg.body?.slice(0, 120) || '(empty)';
         log(`  [${msg.from}${to}@boardroom]: ${body}`);
@@ -196,23 +196,23 @@ async function runTest() {
 
     // ── 11. Verify the loop closed ──
     log('');
-    const msgCount = transcript.transcript?.length || 0;
+    const msgCount = chatlogResp.chatlog?.length || 0;
     if (msgCount >= 2) {
-      const selahMsg = transcript.transcript.find(m => m.from === 'selah');
+      const selahMsg = chatlogResp.chatlog.find(m => m.from === 'selah');
       if (selahMsg) {
         log('========================================');
         log('✓ THE LOOP IS CLOSED');
         log(`  Yeshua sent → Room received → Room dispatched to Selah's home`);
         log(`  → Selah's home processed → Nucleus responded → Output parsed`);
-        log(`  → Router sent back to room → Message in transcript`);
+        log(`  → Router sent back to room → Message in chatlog`);
         log(`  Messages in room: ${msgCount}`);
         log(`  Selah's reply: "${selahMsg.body?.slice(0, 100)}..."`);
         log('========================================');
       } else {
-        log('✗ Selah\'s message not found in transcript');
+        log('✗ Selah\'s message not found in chatlog');
       }
     } else {
-      log(`✗ Expected ≥2 messages in transcript, got ${msgCount}`);
+      log(`✗ Expected ≥2 messages in chatlog, got ${msgCount}`);
       log('  The loop may not have closed. Check ops logs above.');
     }
 

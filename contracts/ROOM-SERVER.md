@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The room server is a shared, multi-tenant transcript store with dispatch. It holds rooms (named message streams with participant lists) and a directory (name → endpoint registry). When a message arrives addressed to a participant, the room server POSTs the transcript to that participant's registered home endpoint.
+The room server is a shared, multi-tenant chatlog store with dispatch. It holds rooms (named message streams with participant lists) and a directory (name → endpoint registry). When a message arrives addressed to a participant, the room server POSTs the room chatlog to that participant's registered home endpoint.
 
 It is **infrastructure**. It does not think. It does not interpret. It routes.
 
@@ -19,7 +19,7 @@ It is **infrastructure**. It does not think. It does not interpret. It routes.
 | GET | `/api/state` | Full state: `{ directory, rooms }` |
 | GET | `/api/directory` | All registered participants |
 | GET | `/api/rooms` | All rooms |
-| GET | `/api/room/:name/transcript` | `{ room, transcript: [...] }` |
+| GET | `/api/room/:name/chatlog` | `{ room, chatlog: [...] }` |
 | GET | `/api/operations` | Operations log (supports `?since=<iso>`) |
 
 ### POST endpoints — Directory
@@ -51,7 +51,7 @@ It is **infrastructure**. It does not think. It does not interpret. It routes.
 | `/api/message/withdraw` | `{ msgId, room, initiator, reason }` | Retract a message |
 | `/api/message/pin` | `{ msgId, room, initiator }` | Pin a message |
 | `/api/message/unpin` | `{ msgId, room, initiator }` | Unpin |
-| `/api/message/pull` | `{ participant, room }` | Home pulls transcript manually |
+| `/api/room/pull` | `{ participant, room }` | Home pulls room chatlog manually |
 
 ---
 
@@ -60,15 +60,15 @@ It is **infrastructure**. It does not think. It does not interpret. It routes.
 - **Never invoke an LLM.** No inference, no summarisation, no interpretation.
 - **Never store agent state.** No history files, no per-agent memory. That lives in the home.
 - **Never process message content.** It stores the body opaquely and dispatches it. What it means is not its concern.
-- **Never contact homes proactively** except to dispatch transcripts when a message is sent.
+- **Never contact homes proactively** except to dispatch room chatlogs when a message is sent.
 
 ---
 
 ## Dispatch Mechanism
 
 When a message is sent to `agent@room`, the room server:
-1. Appends the message to the room transcript
+1. Appends the message to the room chatlog
 2. Looks up `agent` in the directory to get their home endpoint
-3. POSTs the transcript to `{endpoint}/dispatch`
+3. POSTs the room chatlog to `{endpoint}/dispatch` (field: `roomchatlog`)
 
 The home handles what happens next.

@@ -5,7 +5,7 @@
 // Rooms + Directory only.
 // No home state. Homes are separate processes.
 // When a message is addressed to someone,
-// this server POSTs the transcript to their
+// this server POSTs the room chatlog to their
 // home endpoint (looked up in the directory).
 // ========================================
 
@@ -274,7 +274,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
     msgId: msg.id, from: fromName, to: toName || null
   });
 
-  // DISPATCH — push transcript to recipient's home endpoint
+  // DISPATCH — push room chatlog to recipient's home endpoint
   if (msg.to) {
     dispatchToHome(msg.to, roomName);
   }
@@ -335,7 +335,7 @@ async function dispatchToHome(agentName, roomName) {
     type: 'push',
     room: roomName,
     roomUID: room.uid,
-    transcript: room.transcript,
+    roomchatlog: room.transcript,
     participants: room.participants,
     serverEndpoint: `http://localhost:${PORT}`,
     ts: new Date().toISOString()
@@ -398,12 +398,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/directory') return respond(res, 200, directory);
     if (p === '/api/rooms') return respond(res, 200, rooms);
 
-    // Single room transcript
-    const roomMatch = p.match(/^\/api\/room\/([^/]+)\/transcript$/);
+    // Single room chatlog
+    const roomMatch = p.match(/^\/api\/room\/([^/]+)\/chatlog$/);
     if (roomMatch) {
       const name = roomMatch[1];
       if (!rooms[name]) return respond(res, 404, { error: `Unknown room: ${name}` });
-      return respond(res, 200, { room: name, transcript: rooms[name].transcript });
+      return respond(res, 200, { room: name, chatlog: rooms[name].transcript });
     }
 
     // Operations log
@@ -447,7 +447,7 @@ const server = http.createServer(async (req, res) => {
       '/api/message/pin': () => pinMessage(body.msgId, body.room, body.initiator),
       '/api/message/unpin': () => unpinMessage(body.msgId, body.room, body.initiator),
 
-      // Pull (home requests transcript)
+      // Pull (home requests room chatlog)
       '/api/room/pull': () => {
         const agent = body.participant;
         const roomName = body.room;
@@ -456,7 +456,7 @@ const server = http.createServer(async (req, res) => {
         if (!rooms[roomName].participants.includes(agent)) return { error: `${agent} not in ${roomName}` };
         const dispatchId = generateUID('disp');
         logOp('dispatch.pull', body.initiator || agent, roomName, { participant: agent, dispatchId });
-        return { success: true, dispatchId, room: roomName, transcript: rooms[roomName].transcript };
+        return { success: true, dispatchId, room: roomName, roomchatlog: rooms[roomName].transcript };
       },
     };
 

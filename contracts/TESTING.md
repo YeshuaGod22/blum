@@ -48,7 +48,7 @@ Eight tests that catch boundary violations before they reach production.
 
 **What it tests:** Rule 3 — room server stores message bodies verbatim without processing.
 
-**Method:** Send a message with a known body string to the room server. Retrieve the transcript via `GET /api/room/:name/transcript`. Assert the `body` field is byte-for-byte identical to what was sent.
+**Method:** Send a message with a known body string to the room server. Retrieve the chatlog via `GET /api/room/:name/chatlog`. Assert the `body` field is byte-for-byte identical to what was sent.
 
 **Violation signal:** Body is summarised, reformatted, or altered in any way.
 

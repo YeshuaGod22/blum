@@ -29,21 +29,21 @@ The home does NOT own rooms. It participates in them.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/dispatch` | Receive a transcript dispatch from the room server |
+| POST | `/dispatch` | Receive a room chatlog dispatch from the room server |
 | GET | `/status` | Health check: `{ name, uid, port, processing, queueLength }` |
 | POST | `/join` | Join a room: `{ room, initiator }` |
 | POST | `/leave` | Leave a room: `{ room, reason }` |
 | POST | `/block` | Block a room or participant: `{ target, type }` |
 | GET | `/ops` | Recent ops log entries: `?n=50` |
 | GET | `/config` | Current config (read-only view) |
-| GET | `/transcript` | Current in-memory transcript for a room: `?room=name` |
+| GET | `/homelogfull` | Home inference log (JSONL → array): all prior inference cycles |
 | GET | `/history/:room` | Persisted history for a room |
 
 ---
 
 ## Message Flow (Inbound)
 
-1. Room server POSTs to `/dispatch` with the room transcript
+1. Room server POSTs to `/dispatch` with the room chatlog (field: `roomchatlog`)
 2. Home queues the dispatch (serial processing — one at a time)
 3. Home runs its processing cycle: boot assembler → context manager → nucleus → output processor → router
 4. Output processor extracts `<message to="...">` tags
@@ -66,7 +66,7 @@ The home does NOT own rooms. It participates in them.
 The home wires together modules. Current defaults:
 
 - `boot-assembler` — builds the system prompt
-- `input-processor` — normalises dispatched transcripts into message format
+- `input-processor` — normalises dispatched room chatlogs into message format
 - `context-manager` — rolling window / token budget gating
 - `output-processor` — extracts `<thinking>` and `<message>` XML tags
 - `router` — dispatches outbound messages to the room server

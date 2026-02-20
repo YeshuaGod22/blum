@@ -4,28 +4,28 @@
 // build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
 //
 // FIXES v1: agents were getting raw room history (shared feed, all participants)
-// as their "memory". They should get their own home transcript — the cycles
+// as their "memory". They should get their own homelogfull — the cycles
 // they ran, what triggered each response, what they said. That's personal memory.
 //
 // Architecture:
 //   [boot docs]            — identity, never trimmed (from boot assembler)
 //   [room context]         — where we are, who's here, reply address
-//   [home transcript]      — agent's OWN prior cycles, foveated:
+//   [homelogfull]          — agent's OWN prior cycles, foveated:
 //                              • outbound messages → QUOTED (full fidelity)
 //                              • tool calls → SYNTHESIZED (compact trace digest)
 //                              • thinking → OMITTED
 //                            Oldest cycles trimmed first when over budget.
 //   [live room messages]   — recent messages from the triggering dispatch that are
-//                            NOT yet in the home transcript (what just happened).
+//                            NOT yet in the homelogfull (what just happened).
 //                            Newest N messages, within remaining budget.
 //
-// Foveation is applied during home transcript processing. Tool-heavy cycles
+// Foveation is applied during homelogfull processing. Tool-heavy cycles
 // are compressed to a one-line trace digest rather than raw output dumps.
 // Conversation (what the agent said, what triggered it) is always quoted.
 //
 // The key distinction:
-//   room history    = shared feed (everyone's messages, raw)   ← v1 bug
-//   home transcript = agent's own cycles, foveated             ← correct
+//   room chatlog    = shared feed (everyone's messages, raw)   ← v1 bug
+//   homelogfull     = agent's own cycles, foveated             ← correct
 //
 // Contract: build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
 // ========================================
@@ -61,14 +61,14 @@ function trimOldest(messages, budget) {
 }
 
 /**
- * Synthesize a compact tool trace digest for a home transcript cycle.
+ * Synthesize a compact tool trace digest for a homelogfull cycle.
  *
- * The home transcript's _trace has tool names, statuses, and result lengths
+ * The homelogfull's _trace has tool names, statuses, and result lengths
  * but not the raw inputs/outputs (those were in the nucleus conversation).
  * We synthesize a one-line-per-tool summary from the metadata we have.
  *
  * Each digest line gets a UID pointer so the agent can say "show me raw-..."
- * and zoom in via a tool call to the full home-transcript.jsonl entry.
+ * and zoom in via a tool call to the full homelogfull.jsonl entry.
  *
  * Format: [uid] N iterations — tool1(ok, 1234 chars), tool2(error: msg), ...
  */
@@ -105,9 +105,9 @@ function synthesizeToolTrace(entry) {
 }
 
 /**
- * Load and format the agent's home transcript as foveated user/assistant pairs.
+ * Load and format the agent's homelogfull as foveated user/assistant pairs.
  *
- * Each entry in home-transcript.jsonl is one full inference cycle. We apply
+ * Each entry in homelogfull.jsonl is one full inference cycle. We apply
  * foveation per the Foveated Context V3 spec:
  *
  *   thinking blocks  → OMIT entirely
@@ -125,12 +125,12 @@ function synthesizeToolTrace(entry) {
  * Only includes cycles from the triggering room (primary context).
  * Oldest cycles are trimmed by the caller when over token budget.
  */
-function loadHomeTranscript(home, room, _traceContext = {}) {
+function loadHomelogFull(home, room, _traceContext = {}) {
   const cycleId = _traceContext.cycleId || null;
-  const transcriptPath = path.join(home.homeDir, 'transcript', 'home-transcript.jsonl');
-  if (!fs.existsSync(transcriptPath)) return [];
+  const homelogPath = path.join(home.homeDir, 'homelogfull', 'homelogfull.jsonl');
+  if (!fs.existsSync(homelogPath)) return [];
 
-  const lines = fs.readFileSync(transcriptPath, 'utf-8').trim().split('\n').filter(Boolean);
+  const lines = fs.readFileSync(homelogPath, 'utf-8').trim().split('\n').filter(Boolean);
   const messages = [];
 
   for (const line of lines) {
@@ -162,7 +162,7 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
         content: triggerText,
         _meta: {
           ctxId: generateUID('ctx'),
-          source: `home-transcript:${entry.cycleId}:trigger`,
+          source: `homelogfull:${entry.cycleId}:trigger`,
           foveation: 'QUOTE',
           cycleId,
           originCycleId: entry.cycleId,
@@ -196,7 +196,7 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
         content: assistantParts.join('\n\n'),
         _meta: {
           ctxId: generateUID('ctx'),
-          source: `home-transcript:${entry.cycleId}:output`,
+          source: `homelogfull:${entry.cycleId}:output`,
           foveation: toolTrace ? 'SYNTHESIZE+QUOTE' : 'QUOTE',
           cycleId,
           originCycleId: entry.cycleId,
@@ -215,17 +215,17 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
  * last inference cycle for this room.
  *
  * The room server sends the FULL room chatlog on every dispatch. We use the
- * home transcript to find when the agent last ran for this room, then include
+ * homelogfull to find when the agent last ran for this room, then include
  * every message that arrived after that timestamp. This ensures nothing is
  * silently dropped — if 50 messages arrived while the agent was busy, all 50
  * are in context.
  *
  * Budget-gating: if the live messages exceed the available budget, we trim
  * from the oldest end (keeping the most recent messages, which include the
- * trigger). The home transcript memory section gets its budget first; live
+ * trigger). The homelogfull memory section gets its budget first; live
  * context fills remaining space.
  *
- * The cut point is the timestamp of the last home transcript entry for this
+ * The cut point is the timestamp of the last homelogfull entry for this
  * room. Messages with ts > lastCycleTs are "new since last input". If there
  * are no prior cycles (first boot), all messages are included.
  */
@@ -235,15 +235,15 @@ function loadLiveContext(home, dispatch, _traceContext = {}) {
   const myName = home.config.name;
 
   // Full chatlog from the dispatch (room server sends everything every time)
-  const incoming = dispatch.transcript || dispatch.messages || [];
+  const incoming = dispatch.roomchatlog || dispatch.messages || [];
   if (!incoming.length) return [];
 
   // Find the timestamp of the agent's last inference cycle for this room
-  // by reading the last matching entry in home-transcript.jsonl.
+  // by reading the last matching entry in homelogfull.jsonl.
   let lastCycleTs = null;
-  const transcriptPath = require('path').join(home.homeDir, 'transcript', 'home-transcript.jsonl');
-  if (require('fs').existsSync(transcriptPath)) {
-    const lines = require('fs').readFileSync(transcriptPath, 'utf-8').trim().split('\n').filter(Boolean);
+  const homelogPath = require('path').join(home.homeDir, 'homelogfull', 'homelogfull.jsonl');
+  if (require('fs').existsSync(homelogPath)) {
+    const lines = require('fs').readFileSync(homelogPath, 'utf-8').trim().split('\n').filter(Boolean);
     // Walk backwards to find the last cycle for this room
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
@@ -317,7 +317,7 @@ function build(home, dispatch, bootDocuments, tokenBudget, _traceContext = {}) {
   }
 
   // ── 2. Room context — where we are right now ──
-  const incoming = dispatch.transcript || dispatch.messages || [];
+  const incoming = dispatch.roomchatlog || dispatch.messages || [];
   const myName = home.config.name;
   const triggerMsg = [...incoming].reverse().find(
     m => m.to === myName && m.from !== myName
@@ -355,10 +355,10 @@ function build(home, dispatch, bootDocuments, tokenBudget, _traceContext = {}) {
     return [...bootDocuments, roomContextMsg];
   }
 
-  // ── 3. Home transcript — personal memory ──
+  // ── 3. Homelogfull — personal memory ──
   // The agent's own prior cycles: what triggered each, what it said.
   // This is memory. Oldest trimmed first if over budget.
-  const homeTranscriptMessages = loadHomeTranscript(home, room, _traceContext);
+  const homeTranscriptMessages = loadHomelogFull(home, room, _traceContext);
 
   // ── 4. Live room context — what just arrived ──
   // Recent messages from this dispatch. The trigger + surrounding room traffic.
@@ -371,7 +371,7 @@ function build(home, dispatch, bootDocuments, tokenBudget, _traceContext = {}) {
   const liveTokens = estimateMessagesTokens(liveMessages);
   const liveActual = Math.min(liveTokens, LIVE_RESERVE);
 
-  // Fit home transcript into memory budget
+  // Fit homelogfull into memory budget
   const fittedMemory = trimOldest([...homeTranscriptMessages], MEMORY_BUDGET);
   // Fit live context (trim oldest if over reserve; in practice rarely needed)
   const fittedLive = trimOldest([...liveMessages], historyBudget - estimateMessagesTokens(fittedMemory));
