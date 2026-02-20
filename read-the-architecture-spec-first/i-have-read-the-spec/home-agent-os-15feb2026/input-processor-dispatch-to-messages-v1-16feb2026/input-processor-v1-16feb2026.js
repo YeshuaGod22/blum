@@ -3,11 +3,11 @@
 //
 // process(dispatch, occupantName) → [{role, content}]
 //
-// Converts a room dispatch (transcript batch)
+// Converts a room dispatch (room chatlog batch)
 // into a message array the nucleus can consume.
 //
 // Handles room server dispatch format:
-// { type: 'push', room, roomUID, transcript: [{from, body, ts, ...}] }
+// { type: 'push', room, roomUID, roomchatlog: [{from, body, ts, ...}] }
 // ========================================
 
 /**
@@ -15,14 +15,14 @@
  *
  * @param {object} dispatch - The dispatch from a room server
  * @param {string} dispatch.room - Room name
- * @param {Array} dispatch.transcript - Transcript entries from room server
+ * @param {Array} dispatch.roomchatlog - Room chatlog entries from room server
  *   OR dispatch.messages - Alternative format
  * @param {string} occupantName - This home's occupant name
  * @returns {Array<{role: string, content: string}>}
  */
 function process(dispatch, occupantName) {
-  // Accept both 'transcript' (room server format) and 'messages' (generic format)
-  const entries = dispatch.transcript || dispatch.messages;
+  // Accept both 'roomchatlog' (room server format) and 'messages' (generic format)
+  const entries = dispatch.roomchatlog || dispatch.messages;
   if (!entries || !Array.isArray(entries)) {
     return [];
   }

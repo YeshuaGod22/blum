@@ -7,11 +7,11 @@
 // The router knows the home's internal topology.
 //
 // Three responsibilities (from spec section 5):
-// 1. Write output to the home's transcript (the record of everything)
+// 1. Write output to the home's homelogfull (the record of everything)
 // 2. Route addressed messages to external rooms
 // 3. Route internal addresses (journal, memory, etc.) to home systems
 //
-// The home's transcript is the most vital component.
+// The home's homelogfull is the most vital component.
 // Everything the nucleus produces is recorded here:
 // thinking, private text, outbound messages — the full record.
 // Each entry carries full traceability metadata (_trace, UIDs).
@@ -46,10 +46,10 @@ async function dispatch(parsedOutput, homeTopology) {
   const results = [];
   const _traceContext = homeTopology._traceContext || {};
 
-  // ── 1. Write to the home's transcript ──
-  // The transcript is the home's record of everything that happened.
+  // ── 1. Write to the home's homelogfull ──
+  // The homelogfull is the home's record of everything that happened.
   // Thinking, private text, messages — all recorded here.
-  writeToTranscript(parsedOutput, homeTopology);
+  writeToHomelogFull(parsedOutput, homeTopology);
 
   // ── 2. Route each addressed message ──
   for (const msg of parsedOutput.messages) {
@@ -78,7 +78,7 @@ async function dispatch(parsedOutput, homeTopology) {
     }
 
     // POST to room server's message API
-    // "broadcast" means: post to the transcript, dispatch nobody.
+    // "broadcast" means: post to the room chatlog, dispatch nobody.
     const isBroadcast = targetRecipient === 'broadcast';
 
     try {
@@ -124,8 +124,8 @@ async function dispatch(parsedOutput, homeTopology) {
 }
 
 /**
- * Write the full processing cycle output to the home's transcript.
- * This is the agent's memory of what she thought and said.
+ * Write the full processing cycle output to the home's homelogfull.
+ * This is the agent's inference log: what she received, thought, and said.
  * Each entry carries full traceability metadata.
  *
  * nucleusMessages (homeTopology.nucleusMessages) is the complete conversation
@@ -134,10 +134,10 @@ async function dispatch(parsedOutput, homeTopology) {
  * maximum detail, nothing stripped. Foveation happens at READ time (context
  * manager), never at WRITE time. The JSONL is the permanent raw record.
  */
-function writeToTranscript(parsedOutput, homeTopology) {
-  const transcriptDir = path.join(homeTopology.homeDir, 'transcript');
-  if (!fs.existsSync(transcriptDir)) {
-    fs.mkdirSync(transcriptDir, { recursive: true });
+function writeToHomelogFull(parsedOutput, homeTopology) {
+  const homelogDir = path.join(homeTopology.homeDir, 'homelogfull');
+  if (!fs.existsSync(homelogDir)) {
+    fs.mkdirSync(homelogDir, { recursive: true });
   }
 
   const _traceContext = homeTopology._traceContext || {};
@@ -210,11 +210,11 @@ function writeToTranscript(parsedOutput, homeTopology) {
     },
   };
 
-  // Append to the transcript log (one JSON object per line, JSONL format)
-  const transcriptPath = path.join(transcriptDir, 'home-transcript.jsonl');
-  fs.appendFileSync(transcriptPath, JSON.stringify(entry) + '\n');
+  // Append to the homelogfull log (one JSON object per line, JSONL format)
+  const homelogPath = path.join(homelogDir, 'homelogfull.jsonl');
+  fs.appendFileSync(homelogPath, JSON.stringify(entry) + '\n');
 
-  homeTopology.log(`route:transcript entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} nucleusMessages=${nucleusMessages.length} private=${(parsedOutput.private || '').length > 0}`);
+  homeTopology.log(`route:homelogfull entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} nucleusMessages=${nucleusMessages.length} private=${(parsedOutput.private || '').length > 0}`);
 }
 
 /**

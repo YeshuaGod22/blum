@@ -16,7 +16,7 @@
 //   doc    — boot documents         (boot assembler)
 //   ctx    — context messages       (context manager)
 //   resp   — nucleus responses      (home.js)
-//   entry  — transcript entries     (router)
+//   entry  — homelogfull entries    (router)
 //   parse  — output parse results   (output processor)
 //   blk    — output blocks          (output processor)
 //   iter   — tool loop iterations   (home.js)

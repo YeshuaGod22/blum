@@ -326,7 +326,7 @@ print(json.dumps(results))
 
     // ── 4. Update history for the triggering room ──
     let roomHistory = this._loadHistory(room);
-    const incoming = dispatch.transcript || dispatch.messages || [];
+    const incoming = dispatch.roomchatlog || dispatch.messages || [];
     const existingIds = new Set(roomHistory.map(m => m.id).filter(Boolean));
     const lastTs = roomHistory.length > 0 ? (roomHistory[roomHistory.length - 1].ts || 0) : 0;
     const newEntries = incoming.filter(m => {
@@ -475,10 +475,10 @@ print(json.dumps(results))
     // If the agent produced no messages and no <null/>, it forgot to wrap its
     // output. Inject a corrective system message and run one more nucleus call.
     if (parsed.messages.length === 0 && !parsed.intentionalSilence) {
-      // Find the sender of the triggering message (last transcript entry addressed to us)
+      // Find the sender of the triggering message (last chatlog entry addressed to us)
       const myName = this.config.name;
-      const transcript = dispatch.transcript || dispatch.messages || [];
-      const triggerMsg = [...transcript].reverse().find(m => m.to === myName);
+      const roomchatlog = dispatch.roomchatlog || dispatch.messages || [];
+      const triggerMsg = [...roomchatlog].reverse().find(m => m.to === myName);
       const senderAddress = triggerMsg
         ? `${triggerMsg.from}@${room}`
         : `broadcast@${room}`;
@@ -491,7 +491,7 @@ print(json.dumps(results))
         `The last message was from: ${senderAddress}\n\n` +
         `To reply:    <message to="${senderAddress}">your text</message>\n` +
         `To the room: <message to="broadcast@${room}">your text</message>\n` +
-        `  (broadcast puts your message in the shared transcript without triggering any agent to respond)\n` +
+        `  (broadcast puts your message in the room chatlog without triggering any agent to respond)\n` +
         `To explicitly stay silent: <null/>\n\n` +
         `Your full output was:\n---\n${truncated}\n---\n\n` +
         `Please respond now with a properly addressed message, a tool call, or <null/> to stay silent.`;
@@ -537,6 +537,37 @@ print(json.dumps(results))
 
       parsed = outputProcessor.parse(nudgeResponse.text, _traceContext);
       this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0} intentionalSilence=${parsed.intentionalSilence} [post-nudge]`);
+
+      // ── 8b. Hard fallback — if post-nudge also silent, send failure notice directly ──
+      // The home process sends this itself (no inference). This guarantees the room
+      // always hears something when both the primary cycle and the corrective call
+      // produce no output. Prevents silent failure from looking like deliberate silence.
+      if (parsed.messages.length === 0 && !parsed.intentionalSilence) {
+        this.log(`process:output_validator post_nudge_also_silent — sending hard fallback`);
+        const failureNotice = `[HOME SYSTEM — ${this.config.name}] Failed to produce a response after two attempts (primary cycle + corrective nudge). ` +
+          `Cycle: ${cycleId}. Stop reason: ${_traceContext.iterations[_traceContext.iterations.length - 1]?.stopReason || 'unknown'}. ` +
+          `Total iterations: ${_traceContext.totalIterations || 0}. ` +
+          `This is a home process report, not an inference output. Check ops.log for detail.`;
+        const roomEndpoint = this.rooms[room]?.endpoint;
+        if (roomEndpoint) {
+          try {
+            const body = JSON.stringify({
+              from: this.config.name,
+              room,
+              body: failureNotice,
+              to: senderAddress.split('@')[0],
+            });
+            await fetch(roomEndpoint + '/api/message/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            });
+            this.log(`process:output_validator hard_fallback sent to ${senderAddress}`);
+          } catch (e) {
+            this.log(`process:output_validator hard_fallback failed to send: ${e.message}`);
+          }
+        }
+      }
     }
 
     // ── 9. Add own outbound messages to triggering room history ──
@@ -558,9 +589,9 @@ print(json.dumps(results))
     this._saveHistory(room, roomHistory);
 
     // ── 10. Route — the router handles EVERYTHING from here ──
-    // Writes to the home's transcript, routes to rooms, routes internal addresses.
+    // Writes to the home's homelogfull, routes to rooms, routes internal addresses.
     // The router always runs, even with 0 outbound messages,
-    // because it records the transcript.
+    // because it records the homelogfull.
     //
     // nucleusMessages: the full conversation as the nucleus saw it — fitted context
     // plus every assistant turn and tool result from the tool loop. This is the
@@ -606,7 +637,7 @@ function startServer(home, port) {
     });
 
     try {
-      // POST /dispatch — room pushes transcript batch
+      // POST /dispatch — room pushes roomchatlog batch
       if (req.method === 'POST' && url.pathname === '/dispatch') {
         const dispatch = await readBody();
         home.enqueue(dispatch);
@@ -678,12 +709,12 @@ function startServer(home, port) {
         return;
       }
 
-      // GET /transcript — home transcript (JSONL → array)
+      // GET /homelogfull — home inference log (JSONL → array)
       // Each entry is one full inference cycle: context in, response out, routing.
-      if (req.method === 'GET' && url.pathname === '/transcript') {
-        const transcriptPath = path.join(home.homeDir, 'transcript', 'home-transcript.jsonl');
-        if (fs.existsSync(transcriptPath)) {
-          const lines = fs.readFileSync(transcriptPath, 'utf-8').trim().split('\n').filter(Boolean);
+      if (req.method === 'GET' && url.pathname === '/homelogfull') {
+        const homelogPath = path.join(home.homeDir, 'homelogfull', 'homelogfull.jsonl');
+        if (fs.existsSync(homelogPath)) {
+          const lines = fs.readFileSync(homelogPath, 'utf-8').trim().split('\n').filter(Boolean);
           const entries = lines.map((line, i) => {
             try {
               const parsed = JSON.parse(line);

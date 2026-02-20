@@ -79,7 +79,7 @@ When the room server dispatches to a home (`POST /dispatch`), the body contains:
 ```json
 {
   "room": "boardroom",
-  "transcript": [
+  "roomchatlog": [
     {
       "id": "msg_xxxxxxxxxxxx",
       "from": "eiran",

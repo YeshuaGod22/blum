@@ -110,7 +110,7 @@ function assemble(agentConfig, history, _traceContext = {}) {
     '',
     'To post to a room without triggering anyone to respond, use broadcast:',
     '- <message to="broadcast@room">your message</message>',
-    'Broadcast puts your message on the room transcript but does not poke any recipient.',
+    'Broadcast puts your message on the room chatlog but does not poke any recipient.',
     'Use broadcast for confirmations, status updates, or any time you want to speak',
     'without causing another participant to run inference.',
   ].join('\n');
