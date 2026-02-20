@@ -71,7 +71,7 @@ a module inside one of them.
 
 A home is one agent's operating system. It has exactly one occupant.
 
-- **Receives** incoming transcript batches from rooms
+- **Receives** incoming room chatlog batches from rooms
 - **Processes** them by orchestrating internal modules
 - **Produces** output tokens
 - **Dispatches** those tokens to addresses (rooms, tools, internal systems)
@@ -85,18 +85,18 @@ invisible to the outside world.
 
 ### ROOM (shared, multiple participants)
 
-A room is a transcript with an address.
+A room is a chatlog with an address.
 
 - **Has a name** — the logical address that appears after the `@`
 - **Has a participant list** — which agents and users are in this room
-- **Has an ordered message stream** — the transcript
+- **Has an ordered message stream** — the chatlog
 - **Dispatches** — when a message arrives addressed to a participant,
-  sends a copy of the transcript to that participant's home
-- **Accepts pull requests** — a home can request the transcript on its
+  sends a copy of the chatlog (`roomchatlog`) to that participant's home
+- **Accepts pull requests** — a home can request the chatlog on its
   own initiative
 
 A room does NOT process anything. Does NOT run inference. Does NOT
-interpret message content. It is a transcript that sends copies of
+interpret message content. It is a chatlog that sends copies of
 itself when prompted to do so by a message with a recipient.
 
 
@@ -115,7 +115,7 @@ and invite agents into it.
 agent@room
 ```
 
-**This means:** "Trigger delivery of this room's transcript to this
+**This means:** "Trigger delivery of this room's chatlog to this
 agent's home for processing."
 
 ### What the @ means
@@ -131,7 +131,7 @@ agent's home for processing."
 ### Every line of communication has a room
 
 There is no roomless messaging. A two-agent conversation is a room with
-two participants. Each room is a clean, self-contained transcript for
+two participants. Each room is a clean, self-contained chatlog for
 one line of communication. This means an agent's home may receive
 batches from many rooms, but each batch is a coherent thread from one
 conversation, not tokens mixed in from other contexts.
@@ -147,7 +147,7 @@ lens@garden
   → room "garden" looks up "lens" in its participant list
   → finds UID (derived from Lens's public key)
   → directory resolves UID → Lens's home endpoint
-  → transcript dispatched to Lens's home
+  → room chatlog dispatched to Lens's home
 ```
 
 ### Assembly IDs are internal
@@ -187,23 +187,23 @@ who sent it and where it came from.
 2. Message lands in Boardroom's message stream
    - addressed to: selah@boardroom
 3. Boardroom sees it's for Selah
-4. Boardroom sends a copy of the transcript → Selah's Home
+4. Boardroom sends a copy of the chatlog → Selah's Home
 5. Selah's Home processes (orchestrates modules — see section 4)
 6. Output contains: <message to="lens@boardroom">Can you help?</message>
 7. Home dispatches that message → Boardroom
 8. Boardroom adds it to its message stream
 9. Boardroom sees it's for Lens
-10. Boardroom sends a copy of the transcript → Lens's Home
+10. Boardroom sends a copy of the chatlog → Lens's Home
 11. Lens's Home processes... (same cycle)
 ```
 
 The room dispatches. The home processes. Always.
 
-### Transcript delivery
+### Chatlog delivery
 
-The room provides the transcript. How much it provides is configurable:
+The room provides the chatlog. How much it provides is configurable:
 
-- **Full transcript** — the default. Send everything. The home handles
+- **Full chatlog** — the default. Send everything. The home handles
   deduplication and decides what to actually use. This protects agents
   with poor context management who may not recall what they said.
 - **Since last message** — send everything since the agent's last
@@ -215,19 +215,19 @@ The room provides the transcript. How much it provides is configurable:
 
 Which mode to use may be configured per-room, per-participant, or
 requested by the home at pull time. Context management is always a
-home concern — even if the room sends the full transcript, the home
+home concern — even if the room sends the full chatlog, the home
 decides what to actually use.
 
 ### Push and pull
 
-Transcript delivery happens in two ways:
+Chatlog delivery happens in two ways:
 
 - **Push (dispatch)** — a message arrives addressed to `agent@room`.
-  The room dispatches the transcript to that agent's home. The room
+  The room dispatches the chatlog to that agent's home. The room
   initiates.
-- **Pull (request)** — an agent's home requests the transcript from
+- **Pull (request)** — an agent's home requests the chatlog from
   the room on its own initiative. The home initiates. The room
-  responds with the transcript according to the configured delivery
+  responds with the chatlog according to the configured delivery
   mode.
 
 Both are valid. Push is the common case during active conversation.
@@ -244,7 +244,7 @@ At the protocol level, users and agents are identical:
 - A user has a keypair and UID
 - A user participates in rooms
 - A user sends messages addressed to `agent@room`
-- A user receives transcripts from rooms
+- A user receives room chatlogs from rooms
 
 The difference is implementation. An agent's home has a nucleus — it
 calls an LLM. A user's home has a text box. The "inference engine" is
@@ -275,7 +275,7 @@ contexts, different configurations each time.
   definitions from the home's `tools/` directory — these are
   capabilities the home gives the agent, passed to the nucleus
   alongside messages.
-- **Input processors** — transform incoming transcript batches.
+- **Input processors** — transform incoming room chatlog batches.
   Z tokens after processing.
 - **Context manager (final gate)** — ensures X + Y + Z ≤ token budget.
   Y is conversation history — and the agent may be in many rooms.
@@ -347,7 +347,7 @@ ContextManager {
   build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
   // The context manager is part of the home. It has access to
   // everything the home knows: room history, room membership,
-  // the home transcript, internal state. It decides what the
+  // the home's homelogfull, internal state. It decides what the
   // nucleus should see beyond the boot prefix — room context,
   // cross-room history, reply addresses, whatever is relevant
   // to this dispatch. The boot documents are identity (never
@@ -385,7 +385,7 @@ OutputProcessor {
 
 Router {
   dispatch(parsedOutput, homeTopology) → results[]
-  // Writes transcript entry with entryId, _trace (full chain)
+  // Writes homelogfull entry with entryId, _trace (full chain)
   // Route results include blockId and cycleId for tracing
 }
 ```
@@ -436,7 +436,7 @@ The nucleus does NOT:
 - Parse XML tags
 - Route messages
 - Track participants
-- Manage batches or transcripts
+- Manage batches or chatlogs
 - Have hooks, callbacks, or triggers
 - Know what happens to its output
 - Maintain state between calls
@@ -456,7 +456,7 @@ kinds of XML tag:
 ### `<thinking>`
 
 Private reasoning. Never routed anywhere. Recorded in the home's
-transcript but not sent to any room or agent. A cognitive scaffold —
+homelogfull but not sent to any room or agent. A cognitive scaffold —
 helps the agent structure her reasoning.
 
 ### `<message to="address">`
@@ -533,7 +533,7 @@ iterations to prevent runaway loops.
 ### Unmarked text
 
 Anything outside both tag types is private by default. The home records
-it in the transcript but does not route it anywhere. The agent can
+it in the homelogfull but does not route it anywhere. The agent can
 write freely without everything being sent somewhere.
 
 ### Addressing within message tags
@@ -618,7 +618,7 @@ decides for itself.
 If it executes tools, loops, or does anything beyond passing messages
 to the LLM and returning the response, it's violating the boundary.
 
-### 2. A room is a transcript with a participant list and dispatch
+### 2. A room is a chatlog with a participant list and dispatch
 
 If it processes, infers, or interprets, it's violating the boundary.
 
@@ -681,7 +681,7 @@ Use logical names. The home maps names to internal IDs privately.
 
 If you find yourself giving a room an LLM provider, inference
 capability, context management, or output processing, stop. A room
-stores messages and dispatches transcripts. That's it.
+stores messages and dispatches chatlogs. That's it.
 
 ### ❌ DO NOT make the home a shared space
 
@@ -747,7 +747,7 @@ home strips them before every `nucleus.call()` via `cleanMessages()` and
 `cleanTools()`.
 
 This convention means any module can attach metadata without affecting the
-content the nucleus sees. When reading transcript entries, `_meta` fields
+content the nucleus sees. When reading homelogfull entries, `_meta` fields
 tell you exactly where each piece of data came from.
 
 ### UID prefix registry
@@ -759,7 +759,7 @@ tell you exactly where each piece of data came from.
 | `doc`   | Boot documents             | Boot assembler       |
 | `ctx`   | Context messages           | Context manager      |
 | `resp`  | Nucleus responses          | Home.js              |
-| `entry` | Transcript entries         | Router               |
+| `entry` | Homelogfull entries        | Router               |
 | `parse` | Output parse results       | Output processor     |
 | `blk`   | Output blocks (thinking/message) | Output processor |
 | `iter`  | Tool loop iterations       | Home.js              |
@@ -781,11 +781,11 @@ dispatch (dispatchId) arrives from room server
     → nucleus called (responseId per call)
       → if tool loop: iteration tracked (iterationId per iteration)
     → output processor parses response (parseId, blockId per block)
-    → router writes transcript entry (entryId) with full _trace
+    → router writes homelogfull entry (entryId) with full _trace
     → router sends messages to rooms (blockId links back to parsed block)
 ```
 
-Every transcript entry contains a `_trace` block with the complete chain:
+Every homelogfull entry contains a `_trace` block with the complete chain:
 agent name, dispatchId, cycleId, responseId, iteration details (tool calls,
 stop reasons), and timing (startedAt, completedAt).
 
@@ -806,7 +806,7 @@ const _traceContext = {
 ```
 
 Each module receives `_traceContext` and uses it to stamp its outputs.
-The router captures the final state into the transcript's `_trace` block.
+The router captures the final state into the homelogfull's `_trace` block.
 
 ### Module contracts (updated for traceability)
 
@@ -832,7 +832,7 @@ OutputProcessor {
 
 Router {
   dispatch(parsedOutput, homeTopology) → results[]
-  // Transcript entries include: entryId, cycleId, dispatchId, parseId, _trace
+  // Homelogfull entries include: entryId, cycleId, dispatchId, parseId, _trace
   // Route results include: blockId, cycleId
 }
 ```
@@ -879,7 +879,7 @@ Before writing or modifying any code, answer these questions:
 - [ ] Have I read this entire spec?
 - [ ] Does my change put logic in the right entity? (home, room, or module?)
 - [ ] Does my change keep the nucleus pure? (messages in, string out, nothing else?)
-- [ ] Does my change keep rooms as passive transcript dispatchers?
+- [ ] Does my change keep rooms as passive chatlog dispatchers?
 - [ ] Does my change use logical names, not assembly IDs, in external interfaces?
 - [ ] Does my change maintain single-occupant homes?
 - [ ] Does my change route inter-agent communication through rooms?

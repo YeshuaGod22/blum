@@ -10,7 +10,7 @@ These documents define what each module is, what it must do, and what it must ne
 
 | File | Summary |
 |------|---------|
-| [ROOM-SERVER.md](ROOM-SERVER.md) | Shared transcript store and dispatcher — stores messages, routes dispatches, never infers |
+| [ROOM-SERVER.md](ROOM-SERVER.md) | Shared chatlog store and dispatcher — stores messages, routes dispatches, never infers |
 | [HOME.md](HOME.md) | Agent's private operating system — one occupant, receives dispatches, orchestrates modules |
 | [NUCLEUS.md](NUCLEUS.md) | Pure stateless LLM call — `call(messages, config, tools?) → { text, stopReason, toolCalls[] }` |
 | [LAUNCHER.md](LAUNCHER.md) | Local control panel — starts/stops room server and home processes, serves web UI |
@@ -36,7 +36,7 @@ Violating any of these breaks the system in ways that are hard to debug and hard
 ```
 [Home A] ──sends via──▶ [Room Server] ──dispatches to──▶ [Home B]
    │                         │
-   │ orchestrates             │ stores transcript
+   │ orchestrates             │ stores chatlog
    ▼                         │ looks up endpoint
 [Nucleus]                    │ POSTs to home
 (stateless LLM call)         ▼

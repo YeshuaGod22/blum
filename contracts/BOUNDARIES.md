@@ -9,15 +9,15 @@
 
 **Homes communicate only through rooms.**
 
-When an agent's output contains `<message to="lens@boardroom">`, the home sends that message to the **room server**, which dispatches the transcript to Lens's home. The home never opens a connection to another home.
+When an agent's output contains `<message to="lens@boardroom">`, the home sends that message to the **room server**, which dispatches the room chatlog to Lens's home. The home never opens a connection to another home.
 
 ### Why It Exists
 
-Rooms are the audit trail. Every message that passes through a room is logged, timestamped, and attributed. If homes talked directly, there would be no transcript, no traceability, no way to replay or debug what happened. The room is also the coordination point — it serialises concurrent messages and manages participant state.
+Rooms are the audit trail. Every message that passes through a room is logged, timestamped, and attributed. If homes talked directly, there would be no chatlog, no traceability, no way to replay or debug what happened. The room is also the coordination point — it serialises concurrent messages and manages participant state.
 
 ### What Breaks If Violated
 
-- **No transcript.** The communication becomes invisible and untraceable.
+- **No chatlog.** The communication becomes invisible and untraceable.
 - **No participant state.** Block lists, membership, pinned messages — all meaningless.
 - **Tight coupling.** Home A now needs to know Home B's port and address. Any topology change breaks everything.
 - **Race conditions.** Two homes contacting each other simultaneously without a serialising intermediary is a concurrency nightmare.
@@ -58,13 +58,13 @@ Statefulness in the nucleus would make it impossible to share across homes, swap
 
 ## Rule 3: Room Server Never Invokes LLMs
 
-**The room server stores messages and dispatches transcripts. It does not think.**
+**The room server stores messages and dispatches chatlogs. It does not think.**
 
-The room server has no `model`, no `apiKey`, no inference capability. Its only intelligence is routing: look up the recipient's endpoint in the directory, POST the transcript.
+The room server has no `model`, no `apiKey`, no inference capability. Its only intelligence is routing: look up the recipient's endpoint in the directory, POST the room chatlog.
 
 ### Why It Exists
 
-A room server that infers or interprets becomes a single point of failure and a hidden intelligence layer. Its behaviour becomes unpredictable, its costs unbounded, and its responsibility unclear. The room must be transparent — what goes in comes out unchanged. This is what makes transcripts trustworthy.
+A room server that infers or interprets becomes a single point of failure and a hidden intelligence layer. Its behaviour becomes unpredictable, its costs unbounded, and its responsibility unclear. The room must be transparent — what goes in comes out unchanged. This is what makes chatlogs trustworthy.
 
 ### What Breaks If Violated
 
@@ -87,7 +87,7 @@ These rules were written in blood. Blum's predecessor **Bloom** violated all thr
 
 - **Bloom put rooms inside homes** — every agent managed its own room state. When two agents shared a room, their state diverged. No single source of truth.
 - **Bloom's nucleus had a tool loop** — the LLM would loop internally, making context management impossible and token costs unpredictable.
-- **Bloom had direct agent-to-agent calls** — cascading failures when any agent went down; no transcript of what was said; impossible to replay conversations.
+- **Bloom had direct agent-to-agent calls** — cascading failures when any agent went down; no chatlog of what was said; impossible to replay conversations.
 
 Blum's architecture is a direct response to these failures. Every boundary exists because violating it caused real problems.
 
@@ -97,6 +97,6 @@ Blum's architecture is a direct response to these failures. Every boundary exist
 
 | Rule | Violation Signal | Consequence |
 |------|-----------------|-------------|
-| Homes via rooms only | Home-to-home HTTP call | No transcript, tight coupling |
+| Homes via rooms only | Home-to-home HTTP call | No chatlog, tight coupling |
 | Nucleus stateless | State in nucleus, loop in nucleus | Cross-home contamination, broken tool control |
 | Room never infers | LLM call in room server | Hidden processing, unbounded cost |

@@ -202,7 +202,7 @@ through to the internal/no-endpoint path.
 
 **Verification:** Sent a test message at 14:59 UTC. Alpha's ops log shows
 `route:sent` (not `route:internal`) and the reply appeared in the boardroom
-transcript.
+chatlog.
 
 ### 3. Homes drop dispatches for rooms they weren't told about (auto-join)
 

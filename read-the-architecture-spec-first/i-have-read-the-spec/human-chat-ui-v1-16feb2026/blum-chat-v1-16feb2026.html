@@ -320,14 +320,14 @@
 // Pure window into the room server.
 // The room server owns all data.
 // This UI reads and writes through the API.
-// Each room has its own transcript.
+// Each room has its own chatlog.
 // ========================================
 
 let server = null;
 let me = 'yeshua';
 let connected = false;
 let directory = {};   // from server
-let roomMeta = {};    // { name: { uid, participants } } — NO transcripts
+let roomMeta = {};    // { name: { uid, participants } } — NO chatlogs cached
 let homeConfigs = {}; // { name: { model, maxTokens, ... } } — fetched from home /config
 let pollTimer = null;
 let lastConfigFetch = 0; // throttle config fetches to every 30s
@@ -359,7 +359,7 @@ async function doConnect() {
   try {
     const data = await api('GET', '/api/state');
     directory = data.directory || {};
-    // Extract structure only — no transcripts cached
+    // Extract structure only — no chatlogs cached
     roomMeta = {};
     for (const [name, room] of Object.entries(data.rooms || {})) {
       roomMeta[name] = {
@@ -469,7 +469,7 @@ function renderRoomDir() {
 }
 
 // ── Grid: one panel per room ──
-// Each room panel fetches its OWN transcript independently.
+// Each room panel fetches its OWN chatlog independently.
 // The panel is a window. The room server is the truth.
 
 const lastRendered = {};  // { roomName: lastMsgId } — for change detection
@@ -511,16 +511,16 @@ function rebuildGrid() {
     }
     grid.appendChild(rowDiv);
   }
-  // Fetch each room's transcript immediately
+  // Fetch each room's chatlog immediately
   for (const name of roomNames) fetchRoomTranscript(name);
 }
 
-// ── Per-room transcript fetch ──
+// ── Per-room chatlog fetch ──
 async function fetchRoomTranscript(roomName) {
   if (!connected) return;
   try {
-    const data = await api('GET', `/api/room/${roomName}/transcript`);
-    const transcript = data.transcript || [];
+    const data = await api('GET', `/api/room/${roomName}/chatlog`);
+    const transcript = data.chatlog || [];
     renderRoomPanel(roomName, transcript);
   } catch (e) { /* silent */ }
 }
@@ -711,7 +711,7 @@ function openHome(name) {
   window.open(viewerUrl.href, '_blank');
 }
 
-// ── Polling: fetch EACH room's transcript independently ──
+// ── Polling: fetch EACH room's chatlog independently ──
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
@@ -743,7 +743,7 @@ function startPolling() {
     if (Date.now() - lastConfigFetch > 30000) {
       fetchHomeConfigs().then(() => renderDirectory());
     }
-    // Fetch each room's transcript
+    // Fetch each room's chatlog
     for (const name of Object.keys(roomMeta)) {
       fetchRoomTranscript(name);
     }
