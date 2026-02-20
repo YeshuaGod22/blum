@@ -211,30 +211,71 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
 }
 
 /**
- * Load recent live messages from the room dispatch — messages that arrived
- * in this dispatch and are NOT yet in the home transcript.
+ * Load live messages from the room dispatch — everything since the agent's
+ * last inference cycle for this room.
  *
- * This is the "what just happened" context: the message that triggered this cycle
- * plus any recent room traffic that preceded it.
+ * The room server sends the FULL room chatlog on every dispatch. We use the
+ * home transcript to find when the agent last ran for this room, then include
+ * every message that arrived after that timestamp. This ensures nothing is
+ * silently dropped — if 50 messages arrived while the agent was busy, all 50
+ * are in context.
  *
- * We use the raw dispatch transcript (not the stored room history file, which
- * is the full shared feed and grows unboundedly).
+ * Budget-gating: if the live messages exceed the available budget, we trim
+ * from the oldest end (keeping the most recent messages, which include the
+ * trigger). The home transcript memory section gets its budget first; live
+ * context fills remaining space.
+ *
+ * The cut point is the timestamp of the last home transcript entry for this
+ * room. Messages with ts > lastCycleTs are "new since last input". If there
+ * are no prior cycles (first boot), all messages are included.
  */
 function loadLiveContext(home, dispatch, _traceContext = {}) {
   const cycleId = _traceContext.cycleId || null;
   const room = dispatch.room;
   const myName = home.config.name;
 
-  // Use the dispatch transcript (what the room server just pushed)
+  // Full chatlog from the dispatch (room server sends everything every time)
   const incoming = dispatch.transcript || dispatch.messages || [];
   if (!incoming.length) return [];
 
-  // Take the most recent N messages — enough to understand what just happened
-  // without flooding context with old room traffic
-  const LIVE_WINDOW = 20;
-  const recent = incoming.slice(-LIVE_WINDOW);
+  // Find the timestamp of the agent's last inference cycle for this room
+  // by reading the last matching entry in home-transcript.jsonl.
+  let lastCycleTs = null;
+  const transcriptPath = require('path').join(home.homeDir, 'transcript', 'home-transcript.jsonl');
+  if (require('fs').existsSync(transcriptPath)) {
+    const lines = require('fs').readFileSync(transcriptPath, 'utf-8').trim().split('\n').filter(Boolean);
+    // Walk backwards to find the last cycle for this room
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        if (entry.room === room && entry.ts) {
+          lastCycleTs = new Date(entry.ts).getTime();
+          break;
+        }
+      } catch { continue; }
+    }
+  }
 
-  return recent.map(entry => {
+  // Include everything after the last cycle timestamp.
+  // If no prior cycle exists, include everything (first boot for this room).
+  const newMessages = lastCycleTs
+    ? incoming.filter(m => {
+        const msgTs = m.ts ? new Date(m.ts).getTime() : 0;
+        return msgTs > lastCycleTs;
+      })
+    : incoming;
+
+  // Always include at least the triggering message (the one addressed to us),
+  // even if it somehow predates lastCycleTs (e.g. clock skew).
+  const triggerMsg = [...incoming].reverse().find(
+    m => m.to === myName && m.from !== myName
+  );
+  const newIds = new Set(newMessages.map(m => m.id).filter(Boolean));
+  if (triggerMsg && triggerMsg.id && !newIds.has(triggerMsg.id)) {
+    newMessages.push(triggerMsg);
+  }
+
+  return newMessages.map(entry => {
     const from = entry.from || 'unknown';
     const body = entry.body || entry.content || '';
     const isOwn = from.toLowerCase() === myName.toLowerCase();
