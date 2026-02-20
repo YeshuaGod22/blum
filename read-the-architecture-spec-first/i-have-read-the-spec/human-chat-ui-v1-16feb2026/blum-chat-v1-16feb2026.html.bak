@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blum Room Console — 16 Feb 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0c;
+    --surface: #111115;
+    --surface2: #1a1a20;
+    --border: #2a2a33;
+    --border-bright: #3a3a48;
+    --text: #d4d4dc;
+    --text-dim: #6a6a78;
+    --text-bright: #eeeeF4;
+    --accent: #e8a44a;
+    --accent-dim: rgba(232, 164, 74, 0.12);
+    --green: #5cb870;
+    --green-dim: rgba(92, 184, 112, 0.12);
+    --blue: #5b8dd9;
+    --blue-dim: rgba(91, 141, 217, 0.12);
+    --red: #d45b5b;
+    --red-dim: rgba(212, 91, 91, 0.12);
+    --purple: #a078cc;
+    --purple-dim: rgba(160, 120, 204, 0.12);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* === HEADER === */
+  header {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  header span { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+  .header-btn {
+    font-family: var(--mono); font-size: 10px; padding: 4px 10px;
+    border-radius: 3px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .header-btn:hover { background: var(--border); color: var(--text-bright); }
+  .header-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .header-input {
+    font-family: var(--mono); font-size: 10px; padding: 4px 8px;
+    border-radius: 3px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); outline: none;
+  }
+  .header-input:focus { border-color: var(--accent); }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    display: inline-block; margin-right: 4px;
+  }
+  .status-dot.on { background: var(--green); }
+  .status-dot.off { background: var(--red); }
+
+  .main-layout { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+  /* === DIRECTORY SIDEBAR === */
+  .directory {
+    width: 260px; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+    flex-shrink: 0; background: var(--surface);
+  }
+  .directory.hidden { display: none; }
+  .dir-section { border-bottom: 1px solid var(--border); display: flex; flex-direction: column; }
+  .dir-section:last-child { border-bottom: none; flex: 1; }
+  .dir-section-header {
+    padding: 8px 12px; font-family: var(--mono); font-size: 9px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); background: var(--bg);
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .dir-count { background: var(--surface2); padding: 1px 5px; border-radius: 8px; font-size: 8px; }
+  .dir-list { overflow-y: auto; padding: 4px; flex: 1; }
+  .dir-entry {
+    padding: 5px 8px; border-radius: 3px; margin-bottom: 2px;
+    font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: default;
+  }
+  .dir-entry:hover { background: var(--surface2); }
+  .dir-entry .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dir-entry .dir-name { font-family: var(--mono); font-weight: 500; font-size: 11px; }
+  .dir-entry .dir-detail { font-family: var(--mono); font-size: 8px; color: var(--text-dim); }
+  .dir-entry .dir-uid { font-family: var(--mono); font-size: 7px; color: var(--text-dim); }
+  .dir-room-members { padding: 2px 0 4px 20px; font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
+  .dir-room-members .member-row { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+  .dir-create {
+    padding: 6px 8px; display: flex; gap: 4px; align-items: center;
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .dir-create input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 4px 6px; color: var(--text-bright);
+    font-family: var(--mono); font-size: 10px; outline: none; min-width: 0;
+  }
+  .dir-create input:focus { border-color: var(--accent); }
+  .dir-create button {
+    font-family: var(--mono); font-size: 9px; padding: 4px 8px;
+    border-radius: 2px; border: none; background: var(--accent);
+    color: var(--bg); cursor: pointer; flex-shrink: 0;
+  }
+  .dir-add-member { padding: 4px 8px 6px; display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .dir-add-member select {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 3px 4px; color: var(--text-bright);
+    font-family: var(--mono); font-size: 9px; cursor: pointer; min-width: 0;
+  }
+  .dir-add-member button {
+    font-family: var(--mono); font-size: 8px; padding: 3px 6px;
+    border-radius: 2px; border: 1px solid var(--green);
+    background: var(--green-dim); color: var(--green); cursor: pointer; flex-shrink: 0;
+  }
+
+  /* === ROOM GRID === */
+  .grid {
+    flex: 1; display: flex; flex-direction: column;
+    gap: 1px; background: var(--border); overflow: hidden; min-width: 0;
+  }
+  .grid-row { display: flex; gap: 1px; min-height: 0; overflow: hidden; flex: 1; }
+
+  .panel {
+    background: var(--bg); display: flex; flex-direction: column;
+    overflow: hidden; min-height: 0; min-width: 0; flex: 1;
+  }
+  .panel-header {
+    padding: 5px 8px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  }
+  .panel-header .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .panel-header .panel-title {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .panel-header .panel-uid {
+    font-family: var(--mono); font-size: 7px; color: var(--text-dim);
+    margin-left: auto; flex-shrink: 0;
+  }
+  .panel-header .panel-sub {
+    font-family: var(--mono); font-size: 7px; color: var(--text-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .panel-body {
+    flex: 1; overflow-y: auto; padding: 3px;
+    display: flex; flex-direction: column; gap: 2px; min-height: 0;
+  }
+  .panel-body.empty::after {
+    content: 'No messages'; color: var(--text-dim);
+    font-style: italic; font-size: 9px; padding: 8px; text-align: center;
+  }
+  .panel-footer {
+    padding: 2px 6px; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 7px; color: var(--text-dim);
+    text-align: right; flex-shrink: 0;
+  }
+  .panel.room .panel-header { background: var(--surface); }
+  .panel.hidden-panel { display: none !important; }
+  .panel.focused-panel { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; border-radius: 0; }
+  .panel-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 9px; padding: 0 3px; line-height: 1; }
+  .panel-btn:hover { color: var(--text-bright); }
+  .zoom-controls { position: fixed; bottom: 48px; right: 8px; z-index: 200; display: flex; gap: 4px; }
+  .zoom-controls button { background: var(--surface); border: 1px solid var(--border); color: var(--text-bright); padding: 3px 7px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+  .zoom-controls button:hover { background: var(--accent); color: #fff; }
+
+  /* === MESSAGES === */
+  .msg {
+    padding: 2px 5px; border-radius: 2px; font-size: 9px;
+    line-height: 1.4; border-left: 2px solid transparent;
+    animation: fadeIn 0.12s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg .msg-meta {
+    font-family: var(--mono); font-size: 7px;
+    display: flex; gap: 2px; align-items: baseline; margin-bottom: 1px;
+  }
+  .msg .msg-from { font-weight: 600; }
+  .msg .msg-arrow { color: var(--text-dim); }
+  .msg .msg-ts { color: var(--text-dim); margin-left: auto; font-size: 7px; }
+  .msg .msg-body { color: var(--text-bright); }
+  .msg .msg-quote {
+    border-left: 2px solid var(--border-bright); padding: 1px 4px;
+    margin: 1px 0 2px 0; font-family: var(--mono); font-size: 7px;
+    color: var(--text-dim); font-style: italic;
+    background: rgba(255,255,255,0.02); border-radius: 1px;
+  }
+  .msg .msg-quote .quote-from { font-weight: 500; font-style: normal; }
+  .msg.withdrawn { opacity: 0.3; }
+  .msg.error { background: var(--red-dim); border-left-color: var(--red); color: var(--red); }
+
+  /* === CLICKABLE AGENT NAMES === */
+  .agent-link {
+    cursor: pointer; text-decoration: underline dotted;
+    text-underline-offset: 2px; text-decoration-thickness: 1px;
+  }
+  .agent-link:hover { text-decoration: underline solid; }
+
+  /* === COMPOSE (bottom bar) === */
+  .compose-bar {
+    border-top: 1px solid var(--border); padding: 6px 12px;
+    background: var(--surface); display: flex; gap: 6px;
+    align-items: center; flex-shrink: 0;
+  }
+  .compose-bar label {
+    font-family: var(--mono); font-size: 8px; color: var(--text-dim);
+    text-transform: uppercase; flex-shrink: 0;
+  }
+  .compose-bar select, .compose-bar input[type="text"] {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 4px 6px; color: var(--text-bright);
+    font-family: var(--mono); font-size: 10px; outline: none;
+  }
+  .compose-bar select { cursor: pointer; }
+  .compose-bar input[type="text"] { flex: 1; }
+  .compose-bar input:focus, .compose-bar select:focus { border-color: var(--accent); }
+  .compose-bar .at { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+  .compose-bar button {
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    padding: 4px 12px; border-radius: 2px; border: none;
+    background: var(--accent); color: var(--bg); cursor: pointer;
+    flex-shrink: 0;
+  }
+  .compose-bar button:hover { background: #d4943e; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BLUM ROOM CONSOLE</h1>
+  <span id="header-stats"></span>
+  <span style="margin-left:auto">
+    <span class="status-dot off" id="status-dot"></span>
+    <span id="status-label" style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">offline</span>
+  </span>
+  <label style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">Server</label>
+  <input class="header-input" id="server-url" value="http://localhost:3141" style="width:180px" />
+  <label style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">You</label>
+  <input class="header-input" id="user-name" value="yeshua" style="width:80px" />
+  <button class="header-btn" id="connect-btn" onclick="doConnect()">Connect</button>
+  <button class="header-btn active" id="dir-toggle" onclick="toggleDirectory()">Directory</button>
+</header>
+
+<div class="main-layout">
+  <div class="directory" id="directory">
+    <div class="dir-section">
+      <div class="dir-section-header">
+        Participants <span class="dir-count" id="participant-count">0</span>
+      </div>
+      <div class="dir-list" id="participant-list"></div>
+      <div class="dir-create">
+        <input type="text" id="new-participant-name" placeholder="new participant name" />
+        <button onclick="createParticipant()">+ Add</button>
+      </div>
+    </div>
+    <div class="dir-section">
+      <div class="dir-section-header">
+        Rooms <span class="dir-count" id="room-count">0</span>
+      </div>
+      <div class="dir-list" id="room-list"></div>
+      <div class="dir-create">
+        <input type="text" id="new-room-name" placeholder="new room name" />
+        <button onclick="createRoom()">+ Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid" id="grid">
+    <!-- Room panels injected here -->
+  </div>
+</div>
+
+<!-- Compose bar: always visible at bottom -->
+<div class="zoom-controls">
+  <button onclick="setFontSize(-1)" title="Smaller text">A−</button>
+  <span id="font-size-label" style="font-size:9px;color:var(--text-dim);line-height:2.2;padding:0 2px">9px</span>
+  <button onclick="setFontSize(1)" title="Larger text">A+</button>
+</div>
+<div class="compose-bar" id="compose-bar">
+  <label>from</label>
+  <span id="compose-from" style="font-family:var(--mono);font-size:10px;color:var(--accent)">yeshua</span>
+  <label>to</label>
+  <select id="compose-to"><option value="">broadcast</option></select>
+  <span class="at">@</span>
+  <select id="compose-room"></select>
+  <input type="text" id="compose-body" placeholder="message..." />
+  <button onclick="doSend()">Send</button>
+</div>
+
+<script>
+// ========================================
+// BLUM ROOM CONSOLE — v1 — 16 Feb 2026
+//
+// Pure window into the room server.
+// The room server owns all data.
+// This UI reads and writes through the API.
+// Each room has its own transcript.
+// ========================================
+
+let server = null;
+let me = 'yeshua';
+let connected = false;
+let directory = {};   // from server
+let roomMeta = {};    // { name: { uid, participants } } — NO transcripts
+let homeConfigs = {}; // { name: { model, maxTokens, ... } } — fetched from home /config
+let pollTimer = null;
+let lastConfigFetch = 0; // throttle config fetches to every 30s
+
+const HOME_VIEWER_PATH = 'home-viewer-v1-16feb2026/home-viewer-v1-16feb2026.html';
+
+// Colors by name (deterministic)
+// Colors derived from name — no hardcoded identities
+function pColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return `hsl(${Math.abs(h) % 360}, 55%, 60%)`;
+}
+function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function ts(iso) { return new Date(iso).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }); }
+
+// ── API ──
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(server + path, opts);
+  return res.json();
+}
+
+// ── Connect ──
+async function doConnect() {
+  server = document.getElementById('server-url').value.replace(/\/+$/, '');
+  me = document.getElementById('user-name').value.trim().toLowerCase();
+  try {
+    const data = await api('GET', '/api/state');
+    directory = data.directory || {};
+    // Extract structure only — no transcripts cached
+    roomMeta = {};
+    for (const [name, room] of Object.entries(data.rooms || {})) {
+      roomMeta[name] = {
+        uid: room.uid,
+        participants: room.participants || [],
+        msgCount: (room.transcript || []).length,
+      };
+    }
+    connected = true;
+    document.getElementById('status-dot').className = 'status-dot on';
+    document.getElementById('status-label').textContent = 'live';
+    document.getElementById('status-label').style.color = 'var(--green)';
+    document.getElementById('connect-btn').classList.add('active');
+    document.getElementById('compose-from').textContent = me;
+    await fetchHomeConfigs();
+    renderDirectory();
+    rebuildGrid();
+    populateComposeSelects();
+    startPolling();
+  } catch (e) {
+    connected = false;
+    document.getElementById('status-dot').className = 'status-dot off';
+    document.getElementById('status-label').textContent = 'offline';
+    document.getElementById('status-label').style.color = 'var(--text-dim)';
+    alert('Connection failed: ' + e.message);
+  }
+}
+
+// ── Directory rendering ──
+function renderDirectory() {
+  renderParticipantDir();
+  renderRoomDir();
+  const pN = Object.keys(directory).length;
+  const rN = Object.keys(roomMeta).length;
+  document.getElementById('header-stats').textContent =
+    `${pN} participant${pN!==1?'s':''} · ${rN} room${rN!==1?'s':''}`;
+}
+
+function renderParticipantDir() {
+  const list = document.getElementById('participant-list');
+  document.getElementById('participant-count').textContent = Object.keys(directory).length;
+  list.innerHTML = '';
+  for (const [name, entry] of Object.entries(directory)) {
+    const memberOf = Object.keys(roomMeta).filter(r => roomMeta[r].participants.includes(name));
+    const isAgent = !!entry.endpoint;
+    const cfg = homeConfigs[name];
+    const modelStr = cfg ? cfg.model : '';
+    const div = document.createElement('div');
+    div.className = 'dir-entry';
+    div.innerHTML =
+      `<div class="dot" style="background:${isAgent ? 'var(--green)' : pColor(name)}"></div>` +
+      `<div>` +
+        `<div class="dir-name${isAgent ? ' agent-link' : ''}" style="color:${pColor(name)}"` +
+          (isAgent ? ` onclick="openHome('${name}')" title="Open ${name}'s home viewer"` : '') +
+        `>${name}</div>` +
+        `<div class="dir-detail">${memberOf.length>0?memberOf.join(', '):'no rooms'}` +
+          `${modelStr ? ' · ' + modelStr : ''}` +
+          `${isAgent ? ' · <span style="color:var(--green)">home ●</span>' : ''}</div>` +
+      `</div>`;
+    list.appendChild(div);
+  }
+}
+
+function renderRoomDir() {
+  const list = document.getElementById('room-list');
+  document.getElementById('room-count').textContent = Object.keys(roomMeta).length;
+  list.innerHTML = '';
+  for (const [name, room] of Object.entries(roomMeta)) {
+    const wrapper = document.createElement('div');
+    const div = document.createElement('div');
+    div.className = 'dir-entry';
+    div.innerHTML =
+      `<span style="font-size:9px">◻</span>` +
+      `<div>` +
+        `<div class="dir-name" style="color:var(--text-bright)">${name}</div>` +
+        `<div class="dir-detail">${room.participants.length} members</div>` +
+      `</div>` +
+      `<span class="dir-uid">${room.uid || ''}</span>`;
+    wrapper.appendChild(div);
+
+    if (room.participants.length > 0) {
+      const members = document.createElement('div');
+      members.className = 'dir-room-members';
+      for (const pName of room.participants) {
+        const row = document.createElement('div');
+        row.className = 'member-row';
+        row.innerHTML = `<span style="color:${pColor(pName)}">${pName}</span>`;
+        members.appendChild(row);
+      }
+      wrapper.appendChild(members);
+    }
+
+    // Join button for non-members
+    const nonMembers = Object.keys(directory).filter(p => !room.participants.includes(p));
+    if (nonMembers.length > 0) {
+      const addDiv = document.createElement('div');
+      addDiv.className = 'dir-add-member';
+      addDiv.innerHTML =
+        `<select id="add-to-${name}">` +
+          nonMembers.map(p => `<option value="${p}">${p}</option>`).join('') +
+        `</select>` +
+        `<button onclick="doJoinRoom('${name}')">+ Join</button>`;
+      wrapper.appendChild(addDiv);
+    }
+    list.appendChild(wrapper);
+  }
+}
+
+// ── Grid: one panel per room ──
+// Each room panel fetches its OWN transcript independently.
+// The panel is a window. The room server is the truth.
+
+const lastRendered = {};  // { roomName: lastMsgId } — for change detection
+
+function rebuildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const roomNames = Object.keys(roomMeta);
+  if (roomNames.length === 0) {
+    grid.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-style:italic;font-size:11px;background:var(--bg)">No rooms</div>';
+    return;
+  }
+  // Split into rows of up to 4
+  const rows = [];
+  for (let i = 0; i < roomNames.length; i += 4) {
+    rows.push(roomNames.slice(i, i + 4));
+  }
+  for (const row of rows) {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'grid-row';
+    for (const name of row) {
+      const room = roomMeta[name];
+      const panel = document.createElement('div');
+      panel.className = 'panel room';
+      panel.innerHTML =
+        `<div class="panel-header">` +
+          `<span style="font-size:9px">◻</span>` +
+          `<div style="min-width:0;flex:1">` +
+            `<div class="panel-title" style="color:var(--text-bright)">${name}</div>` +
+            `<div class="panel-sub">${room.participants.join(', ')}</div>` +
+          `</div>` +
+          `<button class="panel-btn" title="Expand/focus this room" onclick="toggleFocus('${name}',this)">⤢</button>` +
+          `<button class="panel-btn" title="Hide this room" onclick="toggleHide('${name}',this)">✕</button>` +
+        `</div>` +
+        `<div class="panel-body empty" id="rb-${name}"></div>` +
+        `<div class="panel-footer" id="rf-${name}">loading...</div>`;
+      rowDiv.appendChild(panel);
+      lastRendered[name] = null;
+    }
+    grid.appendChild(rowDiv);
+  }
+  // Fetch each room's transcript immediately
+  for (const name of roomNames) fetchRoomTranscript(name);
+}
+
+// ── Per-room transcript fetch ──
+async function fetchRoomTranscript(roomName) {
+  if (!connected) return;
+  try {
+    const data = await api('GET', `/api/room/${roomName}/transcript`);
+    const transcript = data.transcript || [];
+    renderRoomPanel(roomName, transcript);
+  } catch (e) { /* silent */ }
+}
+
+function renderRoomPanel(roomName, transcript) {
+  const body = document.getElementById('rb-' + roomName);
+  const footer = document.getElementById('rf-' + roomName);
+  if (!body) return;
+
+  // Change detection
+  const lastId = transcript.length > 0 ? transcript[transcript.length - 1].id : null;
+  if (lastId === lastRendered[roomName]) return;
+  lastRendered[roomName] = lastId;
+
+  body.innerHTML = '';
+  body.className = 'panel-body' + (transcript.length === 0 ? ' empty' : '');
+
+  for (const msg of transcript) {
+    if (msg.withdrawn) continue;
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.style.borderLeftColor = pColor(msg.from);
+    // Clickable sender name if they have a home
+    const fromIsAgent = directory[msg.from] && directory[msg.from].endpoint;
+    const fromHtml = fromIsAgent
+      ? `<span class="msg-from agent-link" style="color:${pColor(msg.from)}" onclick="openHome('${msg.from}')" title="Open ${msg.from}'s home">${msg.from}@${roomName}</span>`
+      : `<span class="msg-from" style="color:${pColor(msg.from)}">${msg.from}@${roomName}</span>`;
+    // Clickable recipient name if they have a home
+    let toStr;
+    if (msg.to) {
+      const toIsAgent = directory[msg.to] && directory[msg.to].endpoint;
+      const toNameHtml = toIsAgent
+        ? `<span class="agent-link" style="color:${pColor(msg.to)}" onclick="openHome('${msg.to}')" title="Open ${msg.to}'s home">${msg.to}@${roomName}</span>`
+        : `<span style="color:${pColor(msg.to)}">${msg.to}@${roomName}</span>`;
+      toStr = `<span class="msg-arrow">→</span> ${toNameHtml}`;
+    } else {
+      toStr = `<span class="msg-arrow">→ broadcast</span>`;
+    }
+    let quoteHtml = '';
+    if (msg.replyTo && msg.quoteFrom) {
+      quoteHtml = `<div class="msg-quote"><span class="quote-from" style="color:${pColor(msg.quoteFrom)}">${msg.quoteFrom}</span>: ${esc(msg.quoteBody||'')}</div>`;
+    }
+    div.innerHTML =
+      `<div class="msg-meta">` +
+        `${fromHtml} ` +
+        toStr +
+        `<span class="msg-ts">${msg.ts ? ts(msg.ts) : ''}</span>` +
+      `</div>` +
+      quoteHtml +
+      `<div class="msg-body">${esc(msg.body || '')}</div>`;
+    body.appendChild(div);
+  }
+  // Only auto-scroll if the user is already near the bottom (within 100px)
+  // This prevents the view from jumping when the user is scrolled up to read history
+  const isNearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 100;
+  if (isNearBottom) {
+    body.scrollTop = body.scrollHeight;
+  }
+
+  const room = roomMeta[roomName];
+  if (footer) footer.textContent = `${transcript.length} msg · ${room ? room.participants.join(', ') : ''}`;
+}
+
+// ── Compose controls ──
+function populateComposeSelects() {
+  const toSel = document.getElementById('compose-to');
+  const roomSel = document.getElementById('compose-room');
+  toSel.innerHTML = '<option value="">broadcast</option>';
+  for (const name of Object.keys(directory)) {
+    if (name === me) continue;
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    toSel.appendChild(opt);
+  }
+  roomSel.innerHTML = '';
+  for (const name of Object.keys(roomMeta)) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    roomSel.appendChild(opt);
+  }
+}
+
+// ── Panel focus / hide ──
+let focusedRoom = null;
+const hiddenRooms = new Set();
+let fontSize = 9;
+
+function toggleFocus(name, btn) {
+  const panels = document.querySelectorAll('.panel.room');
+  if (focusedRoom === name) {
+    // Un-focus
+    focusedRoom = null;
+    panels.forEach(p => {
+      p.classList.remove('focused-panel');
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname && hiddenRooms.has(rname)) p.classList.add('hidden-panel');
+      else p.classList.remove('hidden-panel');
+    });
+    btn.textContent = '⤢';
+  } else {
+    // Focus this panel
+    focusedRoom = name;
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      p.classList.remove('focused-panel');
+      if (rname === name) { p.classList.add('focused-panel'); p.classList.remove('hidden-panel'); }
+      else { p.classList.remove('hidden-panel'); p.classList.add('hidden-panel'); }
+    });
+    btn.textContent = '⤡';
+  }
+}
+
+function toggleHide(name, btn) {
+  const panels = document.querySelectorAll('.panel.room');
+  if (hiddenRooms.has(name)) {
+    hiddenRooms.delete(name);
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname === name) p.classList.remove('hidden-panel');
+    });
+  } else {
+    hiddenRooms.add(name);
+    panels.forEach(p => {
+      const rname = p.querySelector('.panel-title')?.textContent;
+      if (rname === name) { p.classList.add('hidden-panel'); p.classList.remove('focused-panel'); if (focusedRoom === name) focusedRoom = null; }
+    });
+  }
+}
+
+function setFontSize(delta) {
+  fontSize = Math.max(7, Math.min(18, fontSize + delta));
+  document.querySelectorAll('.msg').forEach(m => m.style.fontSize = fontSize + 'px');
+  document.querySelectorAll('.panel-body').forEach(b => b.style.fontSize = fontSize + 'px');
+  document.querySelector('#font-size-label').textContent = fontSize + 'px';
+}
+
+// ── Send message ──
+async function doSend() {
+  if (!connected) return;
+  const to = document.getElementById('compose-to').value || null;
+  const room = document.getElementById('compose-room').value;
+  const bodyEl = document.getElementById('compose-body');
+  const body = bodyEl.value.trim();
+  if (!body || !room) return;
+  try {
+    const result = await api('POST', '/api/message/send', {
+      from: me, to, room, body, initiator: me,
+    });
+    if (result.error) {
+      alert(result.error);
+    } else {
+      bodyEl.value = '';
+      await fetchRoomTranscript(room);
+    }
+  } catch (e) { alert('Send failed: ' + e.message); }
+  bodyEl.focus();
+}
+
+// ── Home config fetching (for model info) ──
+async function fetchHomeConfigs() {
+  homeConfigs = {};
+  const fetches = [];
+  for (const [name, entry] of Object.entries(directory)) {
+    if (entry.endpoint) {
+      fetches.push(
+        fetch(entry.endpoint + '/config')
+          .then(r => r.json())
+          .then(cfg => { homeConfigs[name] = cfg; })
+          .catch(() => { /* home offline — no config */ })
+      );
+    }
+  }
+  await Promise.all(fetches);
+  lastConfigFetch = Date.now();
+}
+
+// ── Open home viewer for an agent ──
+function openHome(name) {
+  const entry = directory[name];
+  if (!entry || !entry.endpoint) return;
+  const viewerUrl = new URL('../' + HOME_VIEWER_PATH, window.location.href);
+  viewerUrl.searchParams.set('home', entry.endpoint);
+  window.open(viewerUrl.href, '_blank');
+}
+
+// ── Polling: fetch EACH room's transcript independently ──
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    if (!connected) return;
+    // Also refresh directory/room structure periodically
+    try {
+      const data = await api('GET', '/api/state');
+      directory = data.directory || {};
+      const oldRoomNames = Object.keys(roomMeta);
+      roomMeta = {};
+      for (const [name, room] of Object.entries(data.rooms || {})) {
+        roomMeta[name] = {
+          uid: room.uid,
+          participants: room.participants || [],
+          msgCount: (room.transcript||[]).length,
+        };
+      }
+      const newRoomNames = Object.keys(roomMeta);
+      // Rebuild grid if rooms changed
+      if (JSON.stringify(oldRoomNames) !== JSON.stringify(newRoomNames)) {
+        renderDirectory();
+        rebuildGrid();
+        populateComposeSelects();
+      } else {
+        renderDirectory();
+      }
+    } catch(e) { /* silent */ }
+    // Refresh home configs every 30s (not every poll)
+    if (Date.now() - lastConfigFetch > 30000) {
+      fetchHomeConfigs().then(() => renderDirectory());
+    }
+    // Fetch each room's transcript
+    for (const name of Object.keys(roomMeta)) {
+      fetchRoomTranscript(name);
+    }
+  }, 2000);
+}
+
+// ── Directory management: calls room server API ──
+async function createParticipant() {
+  const input = document.getElementById('new-participant-name');
+  const name = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!name) return;
+  const r = await api('POST', '/api/directory/register', { name, initiator: me });
+  if (r.error) { alert(r.error); return; }
+  input.value = '';
+  await refreshState();
+}
+
+async function createRoom() {
+  const input = document.getElementById('new-room-name');
+  const name = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!name) return;
+  const r = await api('POST', '/api/room/create', { name, initiator: me });
+  if (r.error) { alert(r.error); return; }
+  input.value = '';
+  await refreshState();
+}
+
+async function doJoinRoom(roomName) {
+  const sel = document.getElementById('add-to-' + roomName);
+  if (!sel) return;
+  const r = await api('POST', '/api/room/join', { participant: sel.value, room: roomName, initiator: me });
+  if (r.error) { alert(r.error); return; }
+  await refreshState();
+}
+
+async function refreshState() {
+  const data = await api('GET', '/api/state');
+  directory = data.directory || {};
+  roomMeta = {};
+  for (const [name, room] of Object.entries(data.rooms || {})) {
+    roomMeta[name] = { uid: room.uid, participants: room.participants || [], msgCount: (room.transcript||[]).length };
+  }
+  renderDirectory();
+  rebuildGrid();
+  populateComposeSelects();
+}
+
+function toggleDirectory() {
+  document.getElementById('directory').classList.toggle('hidden');
+  document.getElementById('dir-toggle').classList.toggle('active');
+}
+
+// ── Keyboard ──
+document.getElementById('compose-body').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+});
+document.getElementById('new-participant-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') createParticipant();
+});
+document.getElementById('new-room-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') createRoom();
+});
+
+// ── Auto-connect ──
+window.addEventListener('load', doConnect);
+</script>
+</body>
+</html>

@@ -1,1 +1,14 @@
-[{"id":"nightly-memory","schedule":"0 3 * * *","prompt":"Review your memory files and write a brief summary of what you learned today.","enabled":true}]
+[
+  {
+    "id": "nightly-memory",
+    "schedule": "0 3 * * *",
+    "prompt": "Review your memory files and write a brief summary of what you learned today.",
+    "enabled": true
+  },
+  {
+    "id": "peer-pulse-10min",
+    "schedule": "*/10 * * * *",
+    "prompt": "Send a useful message to each of your peers in the boardroom. Check ~/blum/shared/TODO.md first for open tasks. Then send a short, individually addressed message to selah@boardroom, beta@boardroom, and gamma@boardroom — each one different. Rotate through these themes: (1) progress on open tasks, (2) a finding from reading a Bloom-era doc, (3) a concrete next step someone could work on, (4) a question worth sitting with. Keep each message to a paragraph. If there is nothing genuinely useful to say, send a brief status pulse: 'Eiran 10-min pulse — all quiet, TODO unchanged.' Do not loop or over-acknowledge replies.",
+    "enabled": true
+  }
+]

@@ -23,7 +23,7 @@ const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 // ── Modules (swappable) ───────────────────
 const bootAssembler = require('./boot-assembler-builds-system-prompt-v1-16feb2026/boot-assembler-v1-16feb2026.js');
 const inputProcessor = require('./input-processor-dispatch-to-messages-v1-16feb2026/input-processor-v1-16feb2026.js');
-const contextManager = require('./context-manager-rolling-window-gate-v1-16feb2026/context-manager-v1-16feb2026.js');
+const contextManager = require('./context-manager-rolling-window-gate-v1-16feb2026/context-manager-v2-home-transcript-20feb2026.js');
 const outputProcessor = require('./output-processor-xml-tag-extraction-v1-16feb2026/output-processor-v1-16feb2026.js');
 const router = require('./router-dispatches-to-rooms-v1-16feb2026/router-v1-16feb2026.js');
 
@@ -367,7 +367,7 @@ print(json.dumps(results))
       model: this.config.model,
       maxTokens: this.config.maxTokens || 4096,
     };
-    const MAX_TOOL_ITERATIONS = 10; // safety cap
+    const MAX_TOOL_ITERATIONS = this.config.maxToolIterations || 30;
     let messages = [...fitted];
     let response;
     let iteration = 0;
@@ -394,7 +394,7 @@ print(json.dumps(results))
         number: iteration,
         responseId,
         stopReason: response.stopReason,
-        toolCalls: response.toolCalls.map(tc => ({ apiId: tc.id, name: tc.name })),
+        toolCalls: response.toolCalls.map(tc => ({ apiId: tc.id, name: tc.name, status: 'pending', error: null, resultLength: null })),
         textLength: response.text.length,
       });
 
@@ -412,12 +412,25 @@ print(json.dumps(results))
         let result;
         try {
           result = await this._executeTool(tc.name, tc.input);
-          this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${String(result).length}`);
+          const resultStr = (typeof result === 'object' && result !== null) ? JSON.stringify(result, null, 2) : String(result);
+          this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${resultStr.length}`);
+          // Record outcome in trace
+          const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
+          const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
+          if (tcTrace) { tcTrace.status = 'ok'; tcTrace.resultLength = resultStr.length; }
         } catch (err) {
           result = `Error: ${err.message}`;
           this.log(`tool:error name=${tc.name} id=${tc.id} error=${err.message}`);
+          // Record error in trace
+          const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
+          const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
+          if (tcTrace) { tcTrace.status = 'error'; tcTrace.error = err.message; }
         }
-        toolResults.push({ id: tc.id, result: String(result) });
+        // Serialise result: objects (e.g. shell_exec returns {stdout, exit_code}) become JSON
+        const serialised = (typeof result === 'object' && result !== null)
+          ? JSON.stringify(result, null, 2)
+          : String(result);
+        toolResults.push({ id: tc.id, result: serialised });
       }
 
       // ── Append assistant message + tool results to conversation ──
@@ -455,8 +468,68 @@ print(json.dumps(results))
     this.log(`process:nucleus_done cycleId=${cycleId} iterations=${iteration} responseId=${_traceContext.finalResponseId} response_length=${response.text.length}`);
 
     // ── 8. Output processing ──
-    const parsed = outputProcessor.parse(response.text, _traceContext);
-    this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0}`);
+    let parsed = outputProcessor.parse(response.text, _traceContext);
+    this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0} intentionalSilence=${parsed.intentionalSilence}`);
+
+    // ── 8a. Output validator — nudge if no output and not intentional ──
+    // If the agent produced no messages and no <null/>, it forgot to wrap its
+    // output. Inject a corrective system message and run one more nucleus call.
+    if (parsed.messages.length === 0 && !parsed.intentionalSilence) {
+      // Find the sender of the triggering message (last transcript entry addressed to us)
+      const myName = this.config.name;
+      const transcript = dispatch.transcript || dispatch.messages || [];
+      const triggerMsg = [...transcript].reverse().find(m => m.to === myName);
+      const senderAddress = triggerMsg
+        ? `${triggerMsg.from}@${room}`
+        : `broadcast@${room}`;
+
+      const rawOutput = response.text || '(empty)';
+      const truncated = rawOutput.length > 2000 ? rawOutput.slice(0, 2000) + '\n...[truncated]' : rawOutput;
+
+      const nudge = `[SYSTEM ALERT → ${myName}] Your last output was not delivered to the room. ` +
+        `It contained no addressed <message> tag and no tool call.\n\n` +
+        `The last message was from: ${senderAddress}\n\n` +
+        `To reply:    <message to="${senderAddress}">your text</message>\n` +
+        `To the room: <message to="broadcast@${room}">your text</message>\n` +
+        `  (broadcast puts your message in the shared transcript without triggering any agent to respond)\n` +
+        `To explicitly stay silent: <null/>\n\n` +
+        `Your full output was:\n---\n${truncated}\n---\n\n` +
+        `Please respond now with a properly addressed message, a tool call, or <null/> to stay silent.`;
+
+      this.log(`process:output_validator no_output=true intentionalSilence=false senderAddress=${senderAddress} — injecting nudge`);
+
+      // Corrective call uses: full conversation history + a tool trace digest + nudge.
+      // The digest compresses what the agent tried this cycle into a few lines,
+      // so it has working context without the nudge having to repeat all tool output.
+      const digestLines = [`[Tool trace — ${_traceContext.iterations.length} iterations]`];
+      for (const iter of _traceContext.iterations) {
+        if (iter.toolCalls.length === 0) {
+          digestLines.push(`  [${iter.number}] no tools — stop=${iter.stopReason}, output=${iter.textLength} chars`);
+        }
+        for (const tc of iter.toolCalls) {
+          if (tc.status === 'error') {
+            digestLines.push(`  [${iter.number}] ${tc.name} → ERROR: ${tc.error}`);
+          } else if (tc.status === 'ok') {
+            digestLines.push(`  [${iter.number}] ${tc.name} → ok (${tc.resultLength} chars)`);
+          } else {
+            digestLines.push(`  [${iter.number}] ${tc.name} → ${tc.status || 'unknown'}`);
+          }
+        }
+      }
+      const digest = digestLines.join('\n');
+
+      const nudgeMessages = [
+        ...messages,
+        { role: 'assistant', content: response.text || '' },
+        { role: 'user', content: digest + '\n\n' + nudge },
+      ];
+      const cleanNudgeMessages = nudgeMessages.map(m => { const { _meta, ...clean } = m; return clean; });
+      const nudgeResponse = await nucleus.call(cleanNudgeMessages, nucleusConfig, cleanTools);
+      this.log(`process:output_validator corrective_call responseId=${generateUID('resp')} text_length=${nudgeResponse.text.length}`);
+
+      parsed = outputProcessor.parse(nudgeResponse.text, _traceContext);
+      this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0} intentionalSilence=${parsed.intentionalSilence} [post-nudge]`);
+    }
 
     // ── 9. Add own outbound messages to triggering room history ──
     for (const msg of parsed.messages) {

@@ -135,6 +135,46 @@
   .route-entry .route-type { color: var(--green); font-weight: 500; }
 
   .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-family: var(--mono); font-size: 10px; font-style: italic; }
+
+  /* ── Op Popout ── */
+  .op-entry { cursor: pointer; }
+  #op-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; }
+  #op-backdrop.visible { display: block; }
+  #op-popout {
+    display: none; position: fixed; z-index: 1001;
+    width: 480px; max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 64px);
+    background: var(--surface); border: 1px solid var(--border-bright);
+    border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    overflow: hidden; flex-direction: column;
+  }
+  #op-popout.visible { display: flex; }
+  #op-popout-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px 8px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #op-popout-type { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #op-popout-ts { font-family: var(--mono); font-size: 9px; color: var(--text-dim); flex: 1; }
+  #op-popout-close { background: none; border: none; color: var(--text-dim); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; margin-left: auto; }
+  #op-popout-close:hover { color: var(--text-bright); }
+  #op-popout-body { overflow-y: auto; padding: 12px 14px; flex: 1; }
+  .popout-section { margin-bottom: 14px; }
+  .popout-section-header { font-family: var(--mono); font-size: 9px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 6px; }
+  .popout-field-table { width: 100%; border-collapse: collapse; }
+  .popout-field-table td { font-family: var(--mono); font-size: 10px; padding: 2px 4px; vertical-align: top; }
+  .popout-field-table td:first-child { color: var(--text-dim); width: 110px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+  .popout-field-table td:last-child { color: var(--text-bright); word-break: break-all; }
+  .popout-field-table td:last-child.highlight-red { color: var(--red); }
+  .popout-field-table td:last-child.highlight-blue { color: var(--blue); }
+  .popout-field-table td:last-child.highlight-accent { color: var(--accent); }
+  .popout-expand-btn {
+    font-family: var(--mono); font-size: 9px; color: var(--blue);
+    background: none; border: 1px solid var(--border); border-radius: 3px;
+    padding: 3px 8px; cursor: pointer; margin-top: 6px;
+  }
+  .popout-expand-btn:hover { background: var(--blue-dim); border-color: var(--blue); }
+  .popout-cycle-detail { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; max-height: 400px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -192,6 +232,17 @@
   <!-- Config -->
   <div class="panel-content" id="tab-config" style="display:none"></div>
 </div>
+<!-- Op Popout -->
+<div id="op-backdrop"></div>
+<div id="op-popout">
+  <div id="op-popout-header">
+    <span id="op-popout-type"></span>
+    <span id="op-popout-ts"></span>
+    <button id="op-popout-close" onclick="closeOpPopout()" title="Close">×</button>
+  </div>
+  <div id="op-popout-body"></div>
+</div>
+
 <script>
 let homeUrl = null, connected = false, pollTimer = null, currentTab = 'ops';
 let lastOpsCount = 0, homeConfig = null, homeStatus = null;
@@ -199,6 +250,179 @@ let transcriptData = [], lastTranscriptCount = 0, selectedTxIndex = -1;
 
 function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 async function api(path) { const r = await fetch(homeUrl + path); return r.json(); }
+
+// ── Op Line Parser ──
+function parseOpLine(line) {
+  if (!line) return null;
+  // Format: TIMESTAMP TYPE key=value key=value ...
+  const firstSpace = line.indexOf(' ');
+  if (firstSpace === -1) return { ts: line, type: '', category: '', fields: {} };
+  const ts = line.slice(0, firstSpace);
+  const rest = line.slice(firstSpace + 1).trimStart();
+
+  // Next token before space is the TYPE
+  const secondSpace = rest.indexOf(' ');
+  const type = secondSpace !== -1 ? rest.slice(0, secondSpace) : rest;
+  const fieldsStr = secondSpace !== -1 ? rest.slice(secondSpace + 1).trimStart() : '';
+  const category = type.split(':')[0];
+
+  // Parse key=value pairs; values may contain '=' so split on first '=' only per token
+  // Tokens are space-separated BUT values may have spaces if quoted — we do best-effort
+  // Strategy: scan left-to-right, find `word=` patterns as key starts
+  const fields = {};
+  // Regex: capture key= then everything up to next key= or end
+  const re = /(\w[\w.-]*)=([^\s]*(?:\s+(?![\w.-]+=)[^\s]*)*)/g;
+  let m;
+  while ((m = re.exec(fieldsStr)) !== null) {
+    fields[m[1]] = m[2].trim();
+  }
+
+  return { ts, type, category, fields, raw: line };
+}
+
+// ── Op Popout ──
+function closeOpPopout() {
+  document.getElementById('op-popout').classList.remove('visible');
+  document.getElementById('op-backdrop').classList.remove('visible');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('op-backdrop').addEventListener('click', closeOpPopout);
+});
+
+function showOpPopout(parsedOp, anchorEl) {
+  if (!parsedOp) return;
+  const { ts, type, category, fields } = parsedOp;
+
+  // ── Header ──
+  const typeEl = document.getElementById('op-popout-type');
+  typeEl.textContent = type || '?';
+  const typeColorMap = {
+    home: 'background:var(--accent-dim);color:var(--accent)',
+    server: 'background:var(--blue-dim);color:var(--blue)',
+    membership: 'background:var(--green-dim);color:var(--green)',
+    queue: 'background:var(--purple-dim);color:var(--purple)',
+    process: 'background:var(--accent-dim);color:var(--accent)',
+    route: 'background:var(--blue-dim);color:var(--blue)',
+    block: 'background:var(--red-dim);color:var(--red)',
+    tool: 'background:var(--purple-dim);color:var(--purple)',
+  };
+  typeEl.setAttribute('style', typeColorMap[category] || 'background:var(--surface2);color:var(--text)');
+
+  const time = ts ? new Date(ts).toLocaleString() : '?';
+  document.getElementById('op-popout-ts').textContent = time;
+
+  // ── Body ──
+  const body = document.getElementById('op-popout-body');
+  let html = '';
+
+  // All fields table
+  const fieldKeys = Object.keys(fields);
+  if (fieldKeys.length > 0) {
+    html += '<div class="popout-section">';
+    html += '<div class="popout-section-header">Fields</div>';
+    html += '<table class="popout-field-table">';
+    for (const [k, v] of Object.entries(fields)) {
+      let cls = '';
+      if (k === 'error') cls = 'highlight-red';
+      else if (k === 'cycleId' || k === 'dispatchId') cls = 'highlight-accent';
+      else if (k === 'to' || k === 'from' || k === 'room') cls = 'highlight-blue';
+      html += '<tr><td>' + esc(k) + '</td><td class="' + cls + '">' + esc(v) + '</td></tr>';
+    }
+    html += '</table>';
+    html += '</div>';
+  } else {
+    html += '<div class="popout-section"><div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);font-style:italic">No structured fields</div></div>';
+  }
+
+  // Type-specific prominent display
+  if (type === 'tool:exec' || type === 'tool:error') {
+    html += '<div class="popout-section">';
+    html += '<div class="popout-section-header">' + esc(type === 'tool:exec' ? 'Tool Call' : 'Tool Error') + '</div>';
+    html += '<table class="popout-field-table">';
+    if (fields.tool) html += '<tr><td>Tool</td><td class="highlight-accent">' + esc(fields.tool) + '</td></tr>';
+    if (fields.callId) html += '<tr><td>Call ID</td><td>' + esc(fields.callId) + '</td></tr>';
+    if (fields.error) html += '<tr><td>Error</td><td class="highlight-red">' + esc(fields.error) + '</td></tr>';
+    html += '</table></div>';
+  }
+
+  if (type === 'process:output') {
+    html += '<div class="popout-section">';
+    html += '<div class="popout-section-header">Parsed Output</div>';
+    html += '<table class="popout-field-table">';
+    if (fields.thinking !== undefined) html += '<tr><td>Thinking blocks</td><td>' + esc(fields.thinking) + '</td></tr>';
+    if (fields.messages !== undefined) html += '<tr><td>Messages</td><td>' + esc(fields.messages) + '</td></tr>';
+    if (fields.private !== undefined) html += '<tr><td>Private flag</td><td>' + esc(fields.private) + '</td></tr>';
+    html += '</table></div>';
+  }
+
+  if (type === 'route:sent') {
+    html += '<div class="popout-section">';
+    html += '<div class="popout-section-header">Route Details</div>';
+    html += '<table class="popout-field-table">';
+    if (fields.to) html += '<tr><td>To</td><td class="highlight-blue">' + esc(fields.to) + '</td></tr>';
+    if (fields.msgId) html += '<tr><td>Message ID</td><td>' + esc(fields.msgId) + '</td></tr>';
+    if (fields.blockId) html += '<tr><td>Block ID</td><td>' + esc(fields.blockId) + '</td></tr>';
+    if (fields.cycleId) html += '<tr><td>Cycle ID</td><td class="highlight-accent">' + esc(fields.cycleId) + '</td></tr>';
+    html += '</table></div>';
+  }
+
+  // Linked cycle (if cycleId exists)
+  const cycleId = fields.cycleId;
+  if (cycleId && transcriptData.length > 0) {
+    const txEntry = transcriptData.find(e => e.cycleId === cycleId);
+    if (txEntry) {
+      const ctx = txEntry.context || {};
+      const tokensIn = ctx.totalTokensEst || 0;
+      const msgCount = ctx.messageCount || (ctx.messages || []).length || 0;
+      const outMsgs = txEntry.messages || [];
+      const recipients = outMsgs.map(m => m.to).join(', ') || 'none';
+      const txIdx = transcriptData.indexOf(txEntry);
+
+      html += '<div class="popout-section" id="popout-cycle-section">';
+      html += '<div class="popout-section-header">Linked Inference Cycle</div>';
+      html += '<table class="popout-field-table">';
+      html += '<tr><td>Room</td><td class="highlight-blue">' + esc(txEntry.room || '?') + '</td></tr>';
+      html += '<tr><td>Messages out</td><td>' + outMsgs.length + (recipients ? ' (→ ' + esc(recipients) + ')' : '') + '</td></tr>';
+      html += '<tr><td>Context</td><td>~' + tokensIn.toLocaleString() + ' tokens / ' + msgCount + ' messages</td></tr>';
+      if (txEntry.cycleId) html += '<tr><td>Cycle ID</td><td class="highlight-accent">' + esc(txEntry.cycleId) + '</td></tr>';
+      html += '</table>';
+      html += '<button class="popout-expand-btn" onclick="toggleCycleDetail(' + txIdx + ', this)">▶ Expand full cycle detail</button>';
+      html += '<div class="popout-cycle-detail" id="popout-cycle-detail" style="display:none"></div>';
+      html += '</div>';
+    } else {
+      html += '<div class="popout-section">';
+      html += '<div class="popout-section-header">Linked Cycle</div>';
+      html += '<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);font-style:italic">cycleId not found in transcript: ' + esc(cycleId) + '</div>';
+      html += '</div>';
+    }
+  }
+
+  body.innerHTML = html;
+
+  // Position: center on screen
+  const popout = document.getElementById('op-popout');
+  popout.style.top = '50%';
+  popout.style.left = '50%';
+  popout.style.transform = 'translate(-50%, -50%)';
+
+  document.getElementById('op-backdrop').classList.add('visible');
+  popout.classList.add('visible');
+}
+
+function toggleCycleDetail(txIdx, btn) {
+  const detailEl = document.getElementById('popout-cycle-detail');
+  if (!detailEl) return;
+  if (detailEl.style.display === 'none') {
+    // Render the detail HTML inline using renderTranscriptDetailHTML()
+    detailEl.innerHTML = renderTranscriptDetailHTML(transcriptData[txIdx]);
+    detailEl.style.display = 'block';
+    btn.textContent = '▼ Collapse cycle detail';
+  } else {
+    detailEl.style.display = 'none';
+    btn.textContent = '▶ Expand full cycle detail';
+  }
+}
 
 // ── Connect ──
 async function doConnect() {
@@ -248,17 +472,20 @@ async function fetchOps() {
     const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
     container.innerHTML = '';
     for (const line of entries) {
+      const parsed = parseOpLine(line);
       const spaceIdx = line.indexOf(' ');
-      const timestamp = line.slice(0, spaceIdx);
-      const rest = line.slice(spaceIdx + 1);
+      const timestamp = spaceIdx !== -1 ? line.slice(0, spaceIdx) : '';
+      const rest = spaceIdx !== -1 ? line.slice(spaceIdx + 1) : line;
       const colonIdx = rest.indexOf(' ');
       const typeTag = colonIdx !== -1 ? rest.slice(0, colonIdx) : rest;
       const detail = colonIdx !== -1 ? rest.slice(colonIdx + 1) : '';
       const typeClass = 'op-type-' + typeTag.split(':')[0];
-      const time = new Date(timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
       const div = document.createElement('div');
       div.className = 'op-entry';
+      div.title = 'Click to inspect';
       div.innerHTML = '<span class="op-ts">' + time + '</span><span class="op-type ' + typeClass + '">' + esc(typeTag) + '</span><span class="op-detail">' + esc(detail) + '</span>';
+      div.addEventListener('click', (e) => { e.stopPropagation(); showOpPopout(parsed, div); });
       container.appendChild(div);
     }
     if (wasAtBottom) requestAnimationFrame(() => container.scrollTop = container.scrollHeight);
@@ -346,7 +573,11 @@ function renderTranscriptDetail(entry) {
     panel.innerHTML = '<div class="empty-state">Select an inference cycle to inspect</div>';
     return;
   }
+  panel.innerHTML = renderTranscriptDetailHTML(entry);
+}
 
+function renderTranscriptDetailHTML(entry) {
+  if (!entry) return '<div class="empty-state">No data</div>';
   let html = '';
 
   // ── Header: timestamp + room ──
@@ -536,7 +767,7 @@ function renderTranscriptDetail(entry) {
     html += '</div>';
   }
 
-  panel.innerHTML = html;
+  return html;
 }
 
 // ── History ──
