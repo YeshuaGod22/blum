@@ -10,15 +10,22 @@
 // Architecture:
 //   [boot docs]            — identity, never trimmed (from boot assembler)
 //   [room context]         — where we are, who's here, reply address
-//   [home transcript]      — agent's OWN prior cycles, formatted as user/assistant
-//                            pairs. This is memory. Oldest trimmed first.
-//   [live room messages]   — recent messages from the triggering room that are
-//                            NOT yet in the home transcript (i.e. this dispatch).
-//                            Newest N messages only, within remaining budget.
+//   [home transcript]      — agent's OWN prior cycles, foveated:
+//                              • outbound messages → QUOTED (full fidelity)
+//                              • tool calls → SYNTHESIZED (compact trace digest)
+//                              • thinking → OMITTED
+//                            Oldest cycles trimmed first when over budget.
+//   [live room messages]   — recent messages from the triggering dispatch that are
+//                            NOT yet in the home transcript (what just happened).
+//                            Newest N messages, within remaining budget.
+//
+// Foveation is applied during home transcript processing. Tool-heavy cycles
+// are compressed to a one-line trace digest rather than raw output dumps.
+// Conversation (what the agent said, what triggered it) is always quoted.
 //
 // The key distinction:
-//   room history   = shared feed (everyone's messages, raw)  ← v1 bug
-//   home transcript = agent's own cycles (what I said, why)  ← correct
+//   room history    = shared feed (everyone's messages, raw)   ← v1 bug
+//   home transcript = agent's own cycles, foveated             ← correct
 //
 // Contract: build(home, dispatch, bootDocuments[], tokenBudget, _traceContext?) → messages[]
 // ========================================
@@ -26,6 +33,9 @@
 const fs = require('fs');
 const path = require('path');
 const { generateUID } = require('../../shared-uid-generator/generate-uid.js');
+
+// Foveation modules
+const { rawUID } = require('../../../../shared/projects/foveated-v3/src/uid.js');
 
 const CHARS_PER_TOKEN = 4;
 
@@ -51,21 +61,69 @@ function trimOldest(messages, budget) {
 }
 
 /**
- * Load and format the agent's home transcript as user/assistant pairs.
+ * Synthesize a compact tool trace digest for a home transcript cycle.
  *
- * Each entry in home-transcript.jsonl is one full inference cycle:
- *   - The triggering messages (what caused this cycle to run)
- *   - The agent's output messages (what it said)
+ * The home transcript's _trace has tool names, statuses, and result lengths
+ * but not the raw inputs/outputs (those were in the nucleus conversation).
+ * We synthesize a one-line-per-tool summary from the metadata we have.
  *
- * We format these as alternating user/assistant pairs so the nucleus sees
- * the agent's own conversational history — not the raw room feed.
+ * Each digest line gets a UID pointer so the agent can say "show me raw-..."
+ * and zoom in via a tool call to the full home-transcript.jsonl entry.
  *
- * Format:
- *   user:      "[trigger from X@room]: body"      (what triggered the cycle)
- *   assistant: "[Y@room]: body\n[Y@room2]: body"  (what the agent said)
+ * Format: [uid] N iterations — tool1(ok, 1234 chars), tool2(error: msg), ...
+ */
+function synthesizeToolTrace(entry) {
+  const trace = entry._trace || {};
+  const iterations = trace.iterations || [];
+  const totalIterations = trace.totalIterations || iterations.length;
+
+  if (totalIterations === 0) return null;
+
+  // Collect all tool calls across iterations
+  const toolLines = [];
+  for (const iter of iterations) {
+    const tcs = iter.toolCalls || [];
+    for (const tc of tcs) {
+      if (tc.status === 'error') {
+        toolLines.push(`${tc.name}(✗ ${tc.error || 'error'})`);
+      } else if (tc.status === 'ok') {
+        const size = tc.resultLength ? `${Math.round(tc.resultLength / 100) / 10}k chars` : 'ok';
+        toolLines.push(`${tc.name}(${size})`);
+      } else {
+        toolLines.push(`${tc.name}(${tc.status || '?'})`);
+      }
+    }
+  }
+
+  if (toolLines.length === 0) return null;
+
+  const uid = rawUID();
+  const stopReason = iterations[iterations.length - 1]?.stopReason || 'unknown';
+  const digest = `[${uid}] ${totalIterations} iter${totalIterations !== 1 ? 's' : ''}, stop=${stopReason} — ${toolLines.join(', ')}`;
+
+  return { digest, uid, cycleId: entry.cycleId };
+}
+
+/**
+ * Load and format the agent's home transcript as foveated user/assistant pairs.
  *
- * We skip the context snapshot stored in the entry (that was the fitted context
- * for that cycle — we're rebuilding context fresh each time).
+ * Each entry in home-transcript.jsonl is one full inference cycle. We apply
+ * foveation per the Foveated Context V3 spec:
+ *
+ *   thinking blocks  → OMIT entirely
+ *   tool calls       → SYNTHESIZE to a compact trace digest with UID pointer
+ *   outbound messages → QUOTE in full (conversation track, full fidelity)
+ *   trigger context  → QUOTE the last user message that triggered this cycle
+ *
+ * Result: alternating user/assistant pairs. Each pair is one prior cycle:
+ *   user:      what triggered it (last user message from fitted context)
+ *   assistant: [tool trace digest if any] + outbound messages (quoted)
+ *
+ * Thinking blocks are dropped entirely — they were private reasoning,
+ * not part of the conversation record.
+ *
+ * Only includes cycles from the triggering room (primary context).
+ * Oldest cycles are trimmed by the caller when over token budget.
  */
 function loadHomeTranscript(home, room, _traceContext = {}) {
   const cycleId = _traceContext.cycleId || null;
@@ -83,21 +141,14 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
       continue;
     }
 
-    // Only include cycles from the triggering room (primary context).
-    // Cross-room cycles would add noise; agent can use tools to fetch other rooms.
+    // Only include cycles from the triggering room.
     if (entry.room !== room) continue;
 
     // ── user turn: what triggered this cycle ──
-    // The entry doesn't store the raw trigger cleanly, but we can reconstruct
-    // the gist from the context snapshot if present, or skip if not.
-    // Better: use the dispatchId to find the triggering message body.
-    // For now: build a compact summary of what triggered this cycle.
-    // The context.messages in the entry contains the full fitted context at that time —
-    // we don't replay that, but we can find the last user message before the assistant spoke.
+    // Pull from the context snapshot stored in the entry — the last user-role
+    // message in the fitted context is what triggered this inference.
     let triggerText = null;
-
     if (entry.context && Array.isArray(entry.context.messages)) {
-      // Find the last user-role message in the fitted context (the trigger)
       const userMsgs = entry.context.messages.filter(m => m.role === 'user');
       if (userMsgs.length > 0) {
         const last = userMsgs[userMsgs.length - 1];
@@ -112,6 +163,7 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
         _meta: {
           ctxId: generateUID('ctx'),
           source: `home-transcript:${entry.cycleId}:trigger`,
+          foveation: 'QUOTE',
           cycleId,
           originCycleId: entry.cycleId,
           ts: entry.ts || null,
@@ -119,20 +171,37 @@ function loadHomeTranscript(home, room, _traceContext = {}) {
       });
     }
 
-    // ── assistant turn: what this agent said ──
+    // ── assistant turn: foveated ──
+    // Parts: tool trace digest (SYNTHESIZE) + outbound messages (QUOTE)
+    // thinking blocks → OMIT
+    const assistantParts = [];
+
+    // Tool trace (SYNTHESIZE) — compact digest with UID pointer
+    const toolTrace = synthesizeToolTrace(entry);
+    if (toolTrace) {
+      assistantParts.push(toolTrace.digest);
+    }
+
+    // Outbound messages (QUOTE) — full fidelity, conversation track
     if (entry.messages && entry.messages.length > 0) {
       const outbound = entry.messages
         .map(m => `[${m.to}]: ${m.content}`)
         .join('\n\n');
+      assistantParts.push(outbound);
+    }
+
+    if (assistantParts.length > 0) {
       messages.push({
         role: 'assistant',
-        content: outbound,
+        content: assistantParts.join('\n\n'),
         _meta: {
           ctxId: generateUID('ctx'),
           source: `home-transcript:${entry.cycleId}:output`,
+          foveation: toolTrace ? 'SYNTHESIZE+QUOTE' : 'QUOTE',
           cycleId,
           originCycleId: entry.cycleId,
           ts: entry.ts || null,
+          toolTraceUid: toolTrace?.uid || null,
         },
       });
     }
