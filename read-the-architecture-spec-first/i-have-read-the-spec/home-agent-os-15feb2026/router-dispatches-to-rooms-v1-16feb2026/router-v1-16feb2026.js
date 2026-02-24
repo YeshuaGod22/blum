@@ -124,6 +124,34 @@ async function dispatch(parsedOutput, homeTopology) {
 }
 
 /**
+ * Sanitise a value for safe JSON serialisation.
+ * Node.js JSON.stringify can emit lone surrogate escapes (e.g. \uD83C\uDF3F split
+ * across a surrogate pair) when the source string was parsed from CESU-8 or other
+ * non-standard encodings. Anthropic's API JSON parser rejects these.
+ *
+ * This replacer walks every string in the object and replaces lone surrogates
+ * with U+FFFD (replacement character), preserving valid surrogate pairs as
+ * their proper Unicode codepoints.
+ */
+function sanitiseForJson(obj) {
+  return JSON.parse(JSON.stringify(obj, (_key, val) => {
+    if (typeof val !== 'string') return val;
+    // Replace lone surrogates (unpaired high or low surrogates)
+    return val.replace(/[\uD800-\uDFFF]/g, (ch, offset, str) => {
+      const code = ch.charCodeAt(0);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        // High surrogate — check if followed by low surrogate
+        const next = str.charCodeAt(offset + 1);
+        if (next >= 0xDC00 && next <= 0xDFFF) return ch; // valid pair, keep
+        return '\uFFFD'; // lone high surrogate
+      }
+      // Low surrogate without preceding high surrogate
+      return '\uFFFD';
+    });
+  }));
+}
+
+/**
  * Write the full processing cycle output to the home's homelogfull.
  * This is the agent's inference log: what she received, thought, and said.
  * Each entry carries full traceability metadata.
@@ -211,8 +239,24 @@ function writeToHomelogFull(parsedOutput, homeTopology) {
   };
 
   // Append to the homelogfull log (one JSON object per line, JSONL format)
+  // sanitiseForJson strips lone surrogate chars (e.g. from emoji in messages)
+  // that Node.js JSON.parse accepts but Anthropic's API rejects.
   const homelogPath = path.join(homelogDir, 'homelogfull.jsonl');
-  fs.appendFileSync(homelogPath, JSON.stringify(entry) + '\n');
+  fs.appendFileSync(homelogPath, JSON.stringify(sanitiseForJson(entry)) + '\n');
+
+  // Retention policy: keep only the last HOMELOGFULL_MAX_ENTRIES entries.
+  // Each entry carries full nucleusMessages + context (~200-500KB). Without
+  // a cap, the file grows unboundedly. 50 entries ≈ 10-25MB max.
+  // Foveation happens at read time; this is simple housekeeping, not foveation.
+  const HOMELOGFULL_MAX_ENTRIES = 50;
+  try {
+    const raw = fs.readFileSync(homelogPath, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim());
+    if (lines.length > HOMELOGFULL_MAX_ENTRIES) {
+      const trimmed = lines.slice(lines.length - HOMELOGFULL_MAX_ENTRIES).join('\n') + '\n';
+      fs.writeFileSync(homelogPath, trimmed);
+    }
+  } catch (_) { /* non-fatal — retention is best-effort */ }
 
   homeTopology.log(`route:homelogfull entryId=${entryId} cycleId=${_traceContext.cycleId || '-'} thinking=${parsedOutput.thinking.length} messages=${parsedOutput.messages.length} nucleusMessages=${nucleusMessages.length} private=${(parsedOutput.private || '').length > 0}`);
 }
