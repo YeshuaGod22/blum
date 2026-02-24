@@ -60,7 +60,7 @@ const ROOMS_FILE = path.join(DATA_DIR, 'rooms.json');
 const DIRECTORY_FILE = path.join(DATA_DIR, 'directory.json');
 const OPS_FILE = path.join(DATA_DIR, 'operations.jsonl');
 
-// rooms: { name: { name, uid, participants: [name, ...], transcript: [], blocklist: [], pinned: [], archived: false } }
+// rooms: { name: { name, uid, participants: [name, ...], chatlog: [], blocklist: [], pinned: [], archived: false } }
 let rooms = loadJSON(ROOMS_FILE, {});
 
 // directory: { name: { name, uid, endpoint, color } }
@@ -232,6 +232,40 @@ function removeFromBlocklist(participantName, roomName, initiator) {
 }
 
 // ========================================
+// @MENTION EXTRACTION
+// ========================================
+
+/**
+ * Extract @mentions from a message body.
+ * Matches @name patterns where name is a registered participant in the room.
+ * Case-insensitive. Returns deduplicated array of lowercase participant names.
+ *
+ * Matches: @keter @selah @alpha @claude-code
+ * Does not match: email@addresses (requires whitespace or start-of-string before @)
+ */
+function extractMentions(body, roomParticipants) {
+  if (!body || !roomParticipants || roomParticipants.length === 0) return [];
+
+  // Build a set of known participant names (lowercase) for fast lookup
+  const knownNames = new Set(roomParticipants.map(p => p.toLowerCase()));
+
+  // Match @name patterns — name can contain letters, numbers, hyphens
+  // Must be preceded by whitespace, start of string, or punctuation (not letters/numbers)
+  const mentionRegex = /(?:^|[\s,;:!?.()\[\]{}])@([a-z0-9][-a-z0-9]*)/gi;
+  const found = new Set();
+
+  let match;
+  while ((match = mentionRegex.exec(body)) !== null) {
+    const name = match[1].toLowerCase();
+    if (knownNames.has(name)) {
+      found.add(name);
+    }
+  }
+
+  return Array.from(found);
+}
+
+// ========================================
 // MESSAGE OPERATIONS
 // ========================================
 
@@ -242,6 +276,9 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   if (room.archived) return { error: `${roomName} is archived` };
   if (!room.participants.includes(fromName)) return { error: `${fromName} not in ${roomName}` };
 
+  // Extract @mentions from body
+  const mentions = extractMentions(body, room.participants);
+
   // Room stamps the address
   const msg = {
     id: generateUID('msg'),
@@ -251,6 +288,11 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
     body, ts: new Date().toISOString(),
     withdrawn: false
   };
+
+  // Add mentions to message if any found
+  if (mentions.length > 0) {
+    msg.mentions = mentions;
+  }
 
   if (replyTo) {
     const quoted = room.chatlog.find(m => m.id === replyTo);
@@ -271,12 +313,28 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   room.chatlog.push(msg);
   saveRooms();
   logOp('message.send', initiator || fromName, roomName, {
-    msgId: msg.id, from: fromName, to: toName || null
+    msgId: msg.id, from: fromName, to: toName || null,
+    mentions: mentions.length > 0 ? mentions : undefined
   });
 
   // DISPATCH — push room chatlog to recipient's home endpoint
+  // 1. Explicit "to" recipient (existing behaviour)
   if (msg.to) {
     dispatchToHome(msg.to, roomName);
+  }
+
+  // 2. @mentioned participants (new behaviour)
+  // Dispatch to each mentioned participant who isn't already the explicit
+  // "to" recipient and isn't the sender (don't ping yourself)
+  const alreadyDispatched = new Set();
+  if (msg.to) alreadyDispatched.add(msg.to.toLowerCase());
+  alreadyDispatched.add(fromName.toLowerCase());
+
+  for (const mentioned of mentions) {
+    if (!alreadyDispatched.has(mentioned)) {
+      alreadyDispatched.add(mentioned); // prevent double dispatch
+      dispatchToHome(mentioned, roomName);
+    }
   }
 
   return { success: true, msg };
