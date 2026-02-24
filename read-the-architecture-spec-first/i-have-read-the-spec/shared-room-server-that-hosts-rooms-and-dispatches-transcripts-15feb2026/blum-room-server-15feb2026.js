@@ -155,7 +155,7 @@ function createRoom(name, initiator) {
   if (rooms[name]) return { error: `${name} already exists` };
   rooms[name] = {
     name, uid: generateUID('room'),
-    participants: [], transcript: [],
+    participants: [], chatlog: [],
     blocklist: [], pinned: [], archived: false
   };
   saveRooms();
@@ -253,7 +253,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   };
 
   if (replyTo) {
-    const quoted = room.transcript.find(m => m.id === replyTo);
+    const quoted = room.chatlog.find(m => m.id === replyTo);
     if (quoted) {
       msg.replyTo = replyTo;
       msg.quoteFrom = quoted.from;
@@ -268,7 +268,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
     msg.toAddress = toName + '@' + roomName;
   }
 
-  room.transcript.push(msg);
+  room.chatlog.push(msg);
   saveRooms();
   logOp('message.send', initiator || fromName, roomName, {
     msgId: msg.id, from: fromName, to: toName || null
@@ -285,7 +285,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
 function withdrawMessage(msgId, roomName, initiator, reason) {
   const room = rooms[roomName];
   if (!room) return { error: `Unknown room: ${roomName}` };
-  const msg = room.transcript.find(m => m.id === msgId);
+  const msg = room.chatlog.find(m => m.id === msgId);
   if (!msg) return { error: `Message not found` };
   msg.withdrawn = true;
   msg.withdrawnBy = initiator;
@@ -298,7 +298,7 @@ function withdrawMessage(msgId, roomName, initiator, reason) {
 function pinMessage(msgId, roomName, initiator) {
   const room = rooms[roomName];
   if (!room) return { error: `Unknown room: ${roomName}` };
-  if (!room.transcript.find(m => m.id === msgId)) return { error: `Not found` };
+  if (!room.chatlog.find(m => m.id === msgId)) return { error: `Not found` };
   if (!room.pinned.includes(msgId)) {
     room.pinned.push(msgId);
     saveRooms();
@@ -335,7 +335,7 @@ async function dispatchToHome(agentName, roomName) {
     type: 'push',
     room: roomName,
     roomUID: room.uid,
-    roomchatlog: room.transcript,
+    roomchatlog: room.chatlog,
     participants: room.participants,
     serverEndpoint: `http://localhost:${PORT}`,
     ts: new Date().toISOString()
@@ -403,7 +403,7 @@ const server = http.createServer(async (req, res) => {
     if (roomMatch) {
       const name = roomMatch[1];
       if (!rooms[name]) return respond(res, 404, { error: `Unknown room: ${name}` });
-      return respond(res, 200, { room: name, chatlog: rooms[name].transcript });
+      return respond(res, 200, { room: name, chatlog: rooms[name].chatlog });
     }
 
     // Operations log
@@ -456,7 +456,7 @@ const server = http.createServer(async (req, res) => {
         if (!rooms[roomName].participants.includes(agent)) return { error: `${agent} not in ${roomName}` };
         const dispatchId = generateUID('disp');
         logOp('dispatch.pull', body.initiator || agent, roomName, { participant: agent, dispatchId });
-        return { success: true, dispatchId, room: roomName, roomchatlog: rooms[roomName].transcript };
+        return { success: true, dispatchId, room: roomName, roomchatlog: rooms[roomName].chatlog };
       },
     };
 

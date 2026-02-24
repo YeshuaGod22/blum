@@ -4,8 +4,12 @@
  * Takes a tool call entry from JSONL and returns a compressed version
  * with UID pointer back to the original.
  * 
+ * Supports both:
+ * - API format: {tool, input, output}
+ * - Homelogfull format: {entryId, _trace, messages}
+ * 
  * Author: Selah
- * Date: 2026-02-20
+ * Date: 2026-02-20, updated 2026-02-23
  */
 
 /**
@@ -30,13 +34,20 @@ const TOP_N_RESULTS = 3;
  * Main summarizer function
  * 
  * @param {Object} entry - Raw JSONL entry containing tool call
- * @param {string} entry.tool - Tool name (shell_exec, read_file, etc.)
- * @param {Object} entry.input - Tool input parameters
- * @param {string|Object} entry.output - Tool output/result
  * @param {string} uid - UID for this entry (from uid.js)
  * @returns {Object} - { summary: string, uid: string, wasCompressed: boolean }
  */
 function summarize(entry, uid) {
+  // ============================================
+  // HOMELOGFULL FORMAT (Blum cycle entries)
+  // ============================================
+  if (entry.entryId || entry.cycleId || entry._trace) {
+    return summarizeHomelogfull(entry, uid);
+  }
+
+  // ============================================
+  // API FORMAT (single tool call)
+  // ============================================
   const { tool, input, output } = entry;
   
   // Handle errors - always QUOTE
@@ -66,14 +77,88 @@ function summarize(entry, uid) {
     case 'mem0_search':
       return summarizeMem0Search(input, output, uid);
     default:
-      return summarizeGeneric(tool, input, output, uid);
+      return summarizeGeneric(tool || 'unknown', input || {}, output || '', uid);
   }
+}
+
+/**
+ * Homelogfull entry summarizer (Blum cycle)
+ * 
+ * These entries contain full cycle data:
+ * - _trace.iterations with toolCalls
+ * - messages array (the output)
+ * - thinking array
+ * 
+ * We summarize:
+ * - Total iterations, total tool calls
+ * - Tool breakdown (which tools were called)
+ * - Final message preview
+ */
+function summarizeHomelogfull(entry, uid) {
+  const trace = entry._trace || {};
+  const iterations = trace.iterations || [];
+  const messages = entry.messages || [];
+  const cycleId = entry.cycleId || 'unknown';
+  const ts = entry.ts || '';
+  
+  // Count tools
+  const toolCounts = {};
+  let totalToolCalls = 0;
+  
+  for (const iter of iterations) {
+    const tools = iter.toolCalls || [];
+    totalToolCalls += tools.length;
+    
+    for (const tool of tools) {
+      const toolName = tool.name || tool.function?.name || 'unknown';
+      toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
+    }
+  }
+  
+  // Get tool breakdown string
+  const toolBreakdown = Object.entries(toolCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => `${name}×${count}`)
+    .join(', ');
+  
+  // Get message preview
+  const lastMessage = messages[messages.length - 1];
+  const messagePreview = lastMessage?.content 
+    ? lastMessage.content.slice(0, 100).replace(/\n/g, ' ')
+    : '(no message)';
+  
+  // Get timestamp (just time if same day)
+  const timeStr = ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+  
+  const summary = [
+    `[${uid}] ${timeStr} — ${iterations.length} iters, ${totalToolCalls} tools`,
+    toolBreakdown ? `  Tools: ${toolBreakdown}` : '',
+    `  → "${messagePreview}${messagePreview.length >= 100 ? '...' : ''}"`
+  ].filter(Boolean).join('\n');
+  
+  return {
+    summary,
+    uid,
+    wasCompressed: true,
+    fate: 'SYNTHESIZE',
+    meta: {
+      cycleId,
+      iterations: iterations.length,
+      totalToolCalls,
+      toolCounts,
+      messageCount: messages.length
+    }
+  };
 }
 
 /**
  * shell_exec summarizer
  */
 function summarizeShellExec(input, output, uid) {
+  input = input || {};
+  output = output || '';
+  
   const command = input.command || input.cmd || '[unknown command]';
   const outputStr = typeof output === 'string' ? output : JSON.stringify(output);
   
@@ -90,7 +175,6 @@ function summarizeShellExec(input, output, uid) {
   const lines = outputStr.split('\n').filter(l => l.trim());
   const lineCount = lines.length;
   const firstLine = lines[0] || '';
-  const lastLine = lines[lines.length - 1] || '';
   
   // Try to extract meaningful summary
   let summary;
@@ -118,6 +202,9 @@ function summarizeShellExec(input, output, uid) {
  * read_file summarizer
  */
 function summarizeReadFile(input, output, uid) {
+  input = input || {};
+  output = output || '';
+  
   const path = input.path || '[unknown path]';
   const filename = path.split('/').pop();
   const outputStr = typeof output === 'string' ? output : JSON.stringify(output);
@@ -159,6 +246,8 @@ function summarizeReadFile(input, output, uid) {
  * write_file summarizer
  */
 function summarizeWriteFile(input, output, uid) {
+  input = input || {};
+  
   const path = input.path || '[unknown path]';
   const filename = path.split('/').pop();
   const contentLength = (input.content || '').length;
@@ -175,6 +264,9 @@ function summarizeWriteFile(input, output, uid) {
  * web_fetch summarizer
  */
 function summarizeWebFetch(input, output, uid) {
+  input = input || {};
+  output = output || '';
+  
   const url = input.url || '[unknown url]';
   const domain = url.match(/https?:\/\/([^\/]+)/)?.[1] || url;
   const outputStr = typeof output === 'string' ? output : JSON.stringify(output);
@@ -198,6 +290,9 @@ function summarizeWebFetch(input, output, uid) {
  * web_search summarizer
  */
 function summarizeWebSearch(input, output, uid) {
+  input = input || {};
+  output = output || [];
+  
   const query = input.query || '[unknown query]';
   const results = Array.isArray(output) ? output : (output.results || []);
   
@@ -217,6 +312,9 @@ function summarizeWebSearch(input, output, uid) {
  * qmd_search summarizer
  */
 function summarizeQmdSearch(input, output, uid) {
+  input = input || {};
+  output = output || [];
+  
   const query = input.query || '[unknown query]';
   const results = Array.isArray(output) ? output : (output.results || []);
   
@@ -236,6 +334,9 @@ function summarizeQmdSearch(input, output, uid) {
  * mem0_search summarizer
  */
 function summarizeMem0Search(input, output, uid) {
+  input = input || {};
+  output = output || [];
+  
   const query = input.query || '[unknown query]';
   const results = Array.isArray(output) ? output : (output.results || output.memories || []);
   
@@ -255,6 +356,9 @@ function summarizeMem0Search(input, output, uid) {
  * Generic fallback summarizer
  */
 function summarizeGeneric(tool, input, output, uid) {
+  input = input || {};
+  output = output || '';
+  
   const outputStr = typeof output === 'string' ? output : JSON.stringify(output);
   const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
   
@@ -277,6 +381,7 @@ function summarizeGeneric(tool, input, output, uid) {
 
 module.exports = {
   summarize,
+  summarizeHomelogfull,
   summarizeShellExec,
   summarizeReadFile,
   summarizeWriteFile,
