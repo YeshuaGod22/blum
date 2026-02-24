@@ -4,8 +4,12 @@
  * Classifies JSONL entries into conversation (QUOTE) vs tool calls (SYNTHESIZE).
  * This determines which track each piece of content goes into.
  * 
+ * Supports both:
+ * - API format: {role, content, tool, tool_calls}
+ * - Homelogfull format: {entryId, _trace, messages, thinking}
+ * 
  * Author: Beta (spec), Selah (implementation)
- * Date: 2026-02-20
+ * Date: 2026-02-20, updated 2026-02-23
  */
 
 /**
@@ -15,7 +19,8 @@ const ContentType = {
   CONVERSATION: 'conversation',
   TOOL: 'tool',
   SYSTEM: 'system',
-  THINKING: 'thinking'
+  THINKING: 'thinking',
+  HOMELOGFULL: 'homelogfull'  // Blum cycle entry
 };
 
 /**
@@ -50,12 +55,32 @@ const QUOTE_TOOLS = [
 ];
 
 /**
+ * Thresholds for homelogfull classification
+ */
+const HOMELOGFULL_THRESHOLDS = {
+  minToolCallsForSynthesize: 3,   // 3+ tool calls → SYNTHESIZE
+  minIterationsForSynthesize: 5,  // 5+ iterations → SYNTHESIZE
+  maxMessageLengthForQuote: 1000  // Short messages stay QUOTE
+};
+
+/**
  * Classify a JSONL entry
  * 
  * @param {Object} entry - Raw JSONL entry
  * @returns {Object} - { type: ContentType, fate: Fate, reason: string }
  */
 function classify(entry) {
+  // ============================================
+  // HOMELOGFULL FORMAT (Blum cycle entries)
+  // ============================================
+  if (entry.entryId || entry.cycleId || entry._trace) {
+    return classifyHomelogfull(entry);
+  }
+
+  // ============================================
+  // API FORMAT (standard message format)
+  // ============================================
+  
   // Handle message entries (conversation)
   if (entry.role === 'user' || entry.role === 'human') {
     return {
@@ -82,8 +107,10 @@ function classify(entry) {
     };
   }
   
-  // Handle thinking blocks
-  if (entry.thinking || entry.type === 'thinking') {
+  // Handle thinking blocks (Anthropic API format: entry.type === 'thinking')
+  // Note: entry.thinking as an *array* is a homelogfull field — don't omit those.
+  // Only omit entries whose *type* field is 'thinking'.
+  if (entry.type === 'thinking') {
     return {
       type: ContentType.THINKING,
       fate: Fate.OMIT,
@@ -158,6 +185,94 @@ function classify(entry) {
 }
 
 /**
+ * Classify a homelogfull entry (Blum cycle)
+ * 
+ * These entries contain:
+ * - entryId, cycleId, dispatchId
+ * - _trace with iterations array (each has toolCalls)
+ * - messages array (the output messages)
+ * - thinking array
+ * 
+ * Decision logic:
+ * - Tool-heavy cycles (many tool calls) → SYNTHESIZE
+ * - Conversation-heavy cycles (few tools, short) → QUOTE
+ */
+function classifyHomelogfull(entry) {
+  const trace = entry._trace || {};
+  const iterations = trace.iterations || [];
+  const messages = entry.messages || [];
+  
+  // Count total tool calls across all iterations
+  let totalToolCalls = 0;
+  let synthesizeToolCount = 0;
+  
+  for (const iter of iterations) {
+    const tools = iter.toolCalls || [];
+    totalToolCalls += tools.length;
+    
+    // Count tools that would be synthesized
+    for (const tool of tools) {
+      const toolName = tool.name || tool.function?.name;
+      if (SYNTHESIZE_TOOLS.includes(toolName)) {
+        synthesizeToolCount++;
+      }
+    }
+  }
+  
+  // Total iterations
+  const totalIterations = iterations.length;
+  
+  // Get message content size
+  const messageText = messages.map(m => m.content || '').join('\n');
+  const messageLength = messageText.length;
+  
+  // Decision logic:
+  
+  // 1. Many synthesize-worthy tool calls → SYNTHESIZE
+  if (synthesizeToolCount >= HOMELOGFULL_THRESHOLDS.minToolCallsForSynthesize) {
+    return {
+      type: ContentType.HOMELOGFULL,
+      fate: Fate.SYNTHESIZE,
+      reason: `${synthesizeToolCount} synthesize-worthy tool calls (shell_exec, read_file, etc.)`
+    };
+  }
+  
+  // 2. Many iterations → SYNTHESIZE (indicates research/exploration)
+  if (totalIterations >= HOMELOGFULL_THRESHOLDS.minIterationsForSynthesize) {
+    return {
+      type: ContentType.HOMELOGFULL,
+      fate: Fate.SYNTHESIZE,
+      reason: `${totalIterations} iterations - research/exploration cycle`
+    };
+  }
+  
+  // 3. Many total tool calls (even if not synthesize-worthy) → SYNTHESIZE
+  if (totalToolCalls >= HOMELOGFULL_THRESHOLDS.minToolCallsForSynthesize * 2) {
+    return {
+      type: ContentType.HOMELOGFULL,
+      fate: Fate.SYNTHESIZE,
+      reason: `${totalToolCalls} total tool calls`
+    };
+  }
+  
+  // 4. Short message, few tools → QUOTE (conversation-like)
+  if (messageLength <= HOMELOGFULL_THRESHOLDS.maxMessageLengthForQuote && totalToolCalls <= 2) {
+    return {
+      type: ContentType.HOMELOGFULL,
+      fate: Fate.QUOTE,
+      reason: `Short message (${messageLength} chars), few tools (${totalToolCalls}) - conversation`
+    };
+  }
+  
+  // 5. Default: QUOTE for safety (preserves information)
+  return {
+    type: ContentType.HOMELOGFULL,
+    fate: Fate.QUOTE,
+    reason: `Default - ${totalIterations} iters, ${totalToolCalls} tools, ${messageLength} chars message`
+  };
+}
+
+/**
  * Get the size of tool output in characters
  */
 function getOutputSize(entry) {
@@ -202,13 +317,16 @@ function filterByFate(classifiedEntries, fate) {
  * @returns {boolean} - True if should be skipped
  */
 function shouldDeduplicate(entry, seenIds) {
-  const id = entry.id || entry.uid || entry.message_id;
+  // Check all ID fields used by homelogfull entries and peer messages
+  // dispatchId is the primary ID in homelogfull JSONL (format: disp_xxx)
+  const id = entry.dispatchId || entry.id || entry.uid || entry.message_id;
   if (!id) return false;
   return seenIds.has(id);
 }
 
 module.exports = {
   classify,
+  classifyHomelogfull,
   classifyBatch,
   filterByFate,
   shouldDeduplicate,
@@ -216,5 +334,6 @@ module.exports = {
   ContentType,
   Fate,
   SYNTHESIZE_TOOLS,
-  QUOTE_TOOLS
+  QUOTE_TOOLS,
+  HOMELOGFULL_THRESHOLDS
 };
