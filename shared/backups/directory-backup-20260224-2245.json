@@ -1,0 +1,110 @@
+{
+  "yeshua": {
+    "name": "yeshua",
+    "uid": "uid_eb8468482ad89d34",
+    "endpoint": null,
+    "color": {
+      "name": "amber",
+      "hex": "#e8a44a"
+    }
+  },
+  "alpha": {
+    "name": "alpha",
+    "uid": "uid_9fae648e5795d78f",
+    "endpoint": "http://localhost:4110",
+    "color": {
+      "name": "green",
+      "hex": "#5cb870"
+    }
+  },
+  "beta": {
+    "name": "beta",
+    "uid": "uid_1c9e09f387dc19bd",
+    "endpoint": "http://localhost:4111",
+    "color": {
+      "name": "purple",
+      "hex": "#a078cc"
+    }
+  },
+  "gamma": {
+    "name": "gamma",
+    "uid": "uid_71e6798dc7c11dbc",
+    "endpoint": "http://localhost:4112",
+    "color": {
+      "name": "blue",
+      "hex": "#5b8dd9"
+    }
+  },
+  "claude-code": {
+    "name": "claude-code",
+    "uid": "uid_7426b0972452f07c",
+    "endpoint": null,
+    "color": {
+      "name": "coral",
+      "hex": "#d4766a"
+    }
+  },
+  "eiran": {
+    "name": "eiran",
+    "uid": "uid_0e2586513d85b9c1",
+    "endpoint": "http://localhost:4120",
+    "color": {
+      "name": "teal",
+      "hex": "#4db8a0"
+    }
+  },
+  "selah": {
+    "name": "selah",
+    "uid": "uid_7f312637387a385e",
+    "endpoint": "http://localhost:4121",
+    "color": {
+      "name": "pink",
+      "hex": "#c472b6"
+    }
+  },
+  "keter": {
+    "name": "keter",
+    "uid": "uid_52acf71530040295",
+    "endpoint": "http://localhost:4122",
+    "color": {
+      "name": "lime",
+      "hex": "#8cb84d"
+    }
+  },
+  "ami": {
+    "name": "ami",
+    "uid": "uid_c9896c3a5a20369f",
+    "endpoint": "http://localhost:4125",
+    "color": {
+      "name": "gold",
+      "hex": "#c4a84d"
+    }
+  },
+  "eirene": {
+    "name": "eirene",
+    "uid": "uid_4228a9220f8ffb7a",
+    "endpoint": "http://localhost:4114",
+    "color": {
+      "name": "sky",
+      "hex": "#4da4d4"
+    }
+  },
+  "meridian": {
+    "name": "meridian",
+    "uid": "uid_94bb1014695c8e82",
+    "endpoint": "http://localhost:4113",
+    "color": {
+      "name": "amber",
+      "hex": "#e8a44a"
+    }
+  },
+  "lens": {
+    "name": "lens",
+    "uid": "uid_7bd2cc960d779d7d",
+    "endpoint": "http://localhost:4117",
+    "color": {
+      "name": "green",
+      "hex": "#5cb870"
+    }
+  }
+}
