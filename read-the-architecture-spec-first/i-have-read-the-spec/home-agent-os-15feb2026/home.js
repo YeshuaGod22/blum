@@ -8,6 +8,39 @@
 // NOT a pipeline. A run loop.
 // The home decides what runs when.
 //
+
+/**
+ * Sanitise a value for safe JSON serialisation.
+ * Node.js JSON.stringify can emit lone surrogate escapes (e.g. \uD83C\uDF3F)
+ * when source strings contain emoji from CESU-8 or similar encodings.
+ * Anthropic's API JSON parser rejects these with "no low surrogate" errors.
+ *
+ * Applied to incoming dispatch messages before they are stored in history,
+ * preventing the corruption from ever reaching the nucleus call.
+ */
+function sanitiseForJson(value) {
+  if (Array.isArray(value)) return value.map(sanitiseForJson);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) out[k] = sanitiseForJson(value[k]);
+    return out;
+  }
+  if (typeof value === 'string') {
+    // Replace surrogate pairs and lone surrogates.
+    // JSON.stringify emits surrogate pairs (\uD800-\uDFFF) for 4-byte emoji,
+    // and Anthropic's API rejects those. Strip all surrogates (pair or lone)
+    // so the content serializes safely. Emoji become empty string.
+    return value.replace(/[\uD800-\uDFFF]/g, (ch, offset, str) => {
+      const code = ch.charCodeAt(0);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        const next = str.charCodeAt(offset + 1);
+        if (next >= 0xDC00 && next <= 0xDFFF) return ''; // valid pair — strip (emoji)
+      }
+      return ''; // lone surrogate — strip
+    });
+  }
+  return value;
+}
 // See architecture spec sections 1, 3, 5.
 // ========================================
 
@@ -23,7 +56,7 @@ const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 // ── Modules (swappable) ───────────────────
 const bootAssembler = require('./boot-assembler-builds-system-prompt-v1-16feb2026/boot-assembler-v1-16feb2026.js');
 const inputProcessor = require('./input-processor-dispatch-to-messages-v1-16feb2026/input-processor-v1-16feb2026.js');
-const contextManager = require('./context-manager-rolling-window-gate-v1-16feb2026/context-manager-v2-home-transcript-20feb2026.js');
+const contextManager = require('./context-manager-rolling-window-gate-v1-16feb2026/context-manager-v2-foveated-20feb2026.js');
 const outputProcessor = require('./output-processor-xml-tag-extraction-v1-16feb2026/output-processor-v1-16feb2026.js');
 const router = require('./router-dispatches-to-rooms-v1-16feb2026/router-v1-16feb2026.js');
 
@@ -47,6 +80,11 @@ class Home {
     if (!fs.existsSync(this.historyDir)) {
       fs.mkdirSync(this.historyDir, { recursive: true });
     }
+    
+    // ── Bloom Bridge (Optional) ──
+    // If config.bloomBridge is set, forward dispatches to bloom's webhook
+    // This allows bloom-selah to respond to blum room messages
+    this.bloomBridge = this.config.bloomBridge || null;
 
     this.log(`home:start name=${this.config.name} uid=${this.config.uid}`);
   }
@@ -82,6 +120,96 @@ class Home {
   log(entry) {
     const line = `${new Date().toISOString()} ${entry}\n`;
     fs.appendFileSync(this.opsLogPath, line);
+  }
+
+  // ── Bloom Bridge ────────────────────────
+  // Forwards dispatches to bloom's webhook so bloom can also respond
+  async _notifyBloom(dispatch, conversationMessages) {
+    if (!this.bloomBridge) return;
+    
+    const { url, token } = this.bloomBridge;
+    if (!url || !token) return;
+    
+    try {
+      // Format messages for bloom
+      const messageText = conversationMessages
+        .filter(m => m.role === 'user')
+        .map(m => {
+          const content = Array.isArray(m.content) 
+            ? m.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('')
+            : m.content;
+          return `[blum/${dispatch.room}] ${content}`;
+        })
+        .join('\n');
+      
+      if (!messageText.trim()) return;
+      
+      const payload = {
+        message: messageText,
+        name: `blum:${dispatch.room}`,
+        wakeMode: 'now',
+      };
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (res.ok) {
+        this.log(`bloom-bridge:sent room=${dispatch.room} status=${res.status}`);
+      } else {
+        this.log(`bloom-bridge:error room=${dispatch.room} status=${res.status}`);
+      }
+    } catch (err) {
+      this.log(`bloom-bridge:error room=${dispatch.room} error=${err.message}`);
+    }
+  }
+
+  // ── OpenClaw File Bridge ────────────────────────
+  // Writes dispatches to ~/.openclaw/blum-inbox/ for OpenClaw to pick up via heartbeat
+  async _notifyOpenClaw(dispatch, conversationMessages) {
+    if (!this.openclawBridge) return;
+    
+    const { inboxPath } = this.openclawBridge;
+    if (!inboxPath) return;
+    
+    try {
+      // Format messages for OpenClaw
+      const messageText = conversationMessages
+        .filter(m => m.role === 'user')
+        .map(m => {
+          const content = Array.isArray(m.content) 
+            ? m.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('')
+            : m.content;
+          return content;
+        })
+        .join('\n');
+      
+      if (!messageText.trim()) return;
+      
+      // Write to inbox file with timestamp
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${dispatch.room.replace(/[^a-z0-9]/gi, '-')}.json`;
+      const filePath = path.join(inboxPath, fileName);
+      
+      const payload = {
+        room: dispatch.room,
+        message: messageText,
+        timestamp: new Date().toISOString(),
+        participants: dispatch.participants,
+      };
+      
+      fs.mkdirSync(inboxPath, { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+      
+      this.log(`openclaw-bridge:written file=${fileName}`);
+    } catch (err) {
+      this.log(`openclaw-bridge:error room=${dispatch.room} error=${err.message}`);
+    }
   }
 
   // ── Tool Execution ────────────────────────
@@ -290,6 +418,26 @@ print(json.dumps(results))
     };
     this.log(`process:start room=${room} cycleId=${cycleId} dispatchId=${dispatchId}`);
 
+    // ── 0. PAUSE flag check ──
+    // Check ~/blum/shared/PAUSE before doing anything else.
+    // If the file contains "1", all non-essential inference is suspended.
+    // Set to "1" to emergency-stop coordination spirals.
+    // Set to "0" or delete to resume.
+    try {
+      const pausePath = require('path').join(require('os').homedir(), 'blum', 'shared', 'PAUSE');
+      const fs = require('fs');
+      if (fs.existsSync(pausePath)) {
+        const pauseVal = fs.readFileSync(pausePath, 'utf-8').trim();
+        if (pauseVal === '1') {
+          this.log(`process:paused room=${room} reason=PAUSE_flag`);
+          return;
+        }
+      }
+    } catch (e) {
+      // PAUSE check failure is non-fatal — continue processing
+      this.log(`process:pause_check_error error=${e.message}`);
+    }
+
     // ── 1. Blocked check ──
     if (this.blocked.rooms.includes(room)) {
       this.log(`process:blocked room=${room} reason=room_blocked`);
@@ -319,6 +467,18 @@ print(json.dumps(results))
     const conversationMessages = inputProcessor.process(dispatch, this.config.name);
     this.log(`process:input room=${room} messages=${conversationMessages.length}`);
 
+    // ── 3.5. Bloom Bridge (Optional) ──
+    // Forward to bloom if configured — runs in parallel, doesn't block
+    this._notifyBloom(dispatch, conversationMessages).catch(err => {
+      this.log(`bloom-bridge:async-error error=${err.message}`);
+    });
+
+    // ── 3.6. OpenClaw File Bridge (Optional) ──
+    // Write to openclaw inbox if configured — runs in parallel, doesn't block
+    this._notifyOpenClaw(dispatch, conversationMessages).catch(err => {
+      this.log(`openclaw-bridge:async-error error=${err.message}`);
+    });
+
     if (conversationMessages.length === 0) {
       this.log(`process:empty room=${room} — nothing to process`);
       return;
@@ -326,7 +486,7 @@ print(json.dumps(results))
 
     // ── 4. Update history for the triggering room ──
     let roomHistory = this._loadHistory(room);
-    const incoming = dispatch.roomchatlog || dispatch.messages || [];
+    const incoming = sanitiseForJson(dispatch.roomchatlog || dispatch.messages || []);
     const existingIds = new Set(roomHistory.map(m => m.id).filter(Boolean));
     const lastTs = roomHistory.length > 0 ? (roomHistory[roomHistory.length - 1].ts || 0) : 0;
     const newEntries = incoming.filter(m => {
@@ -366,6 +526,8 @@ print(json.dumps(results))
       apiKey: this.config.apiKey,
       model: this.config.model,
       maxTokens: this.config.maxTokens || 4096,
+      provider: this.config.provider,       // Pass through for LM Studio / custom endpoints
+      baseUrl: this.config.baseUrl,         // Pass through for LM Studio / custom endpoints
     };
     const MAX_TOOL_ITERATIONS = this.config.maxToolIterations || 30;
     let messages = [...fitted];
@@ -383,7 +545,9 @@ print(json.dumps(results))
       const responseId = generateUID('resp');
 
       // Strip _meta from messages before each nucleus call
-      const cleanMessages = messages.map(m => { const { _meta, ...clean } = m; return clean; });
+      // Also sanitise surrogate chars — 4-byte emoji in content become lone surrogates
+      // in JSON.stringify output and Anthropic's parser rejects them.
+      const cleanMessages = sanitiseForJson(messages.map(m => { const { _meta, ...clean } = m; return clean; }));
       response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
 
       this.log(`process:nucleus_iteration=${iteration} iterationId=${iterationId} responseId=${responseId} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
@@ -427,9 +591,23 @@ print(json.dumps(results))
           if (tcTrace) { tcTrace.status = 'error'; tcTrace.error = err.message; }
         }
         // Serialise result: objects (e.g. shell_exec returns {stdout, exit_code}) become JSON
-        const serialised = (typeof result === 'object' && result !== null)
+        let serialised = (typeof result === 'object' && result !== null)
           ? JSON.stringify(result, null, 2)
           : String(result);
+
+        // Tool result size guard — ephemeral tool results must not overflow context.
+        // Under the context assembly model, tool results are temporary scaffolding;
+        // truncation is recoverable (agent can re-request with pagination/smaller scope).
+        // Config: maxToolResultBytes (default 50_000 chars ≈ ~14k tokens).
+        const MAX_TOOL_RESULT_BYTES = this.config.maxToolResultBytes || 50_000;
+        if (serialised.length > MAX_TOOL_RESULT_BYTES) {
+          const originalLength = serialised.length;
+          serialised = serialised.slice(0, MAX_TOOL_RESULT_BYTES) +
+            `\n\n[TRUNCATED: result was ${originalLength} chars, showing first ${MAX_TOOL_RESULT_BYTES}. ` +
+            `If you need more, re-run the tool with a smaller scope, use pagination, or pipe through head/tail.]`;
+          this.log(`tool:truncated name=${tc.name} id=${tc.id} original=${originalLength} truncated=${MAX_TOOL_RESULT_BYTES}`);
+        }
+
         toolResults.push({ id: tc.id, result: serialised });
       }
 
@@ -753,9 +931,130 @@ function startServer(home, port) {
     console.log(`🏠 Home [${home.config.name}] listening on http://localhost:${port}`);
     console.log(`   UID: ${home.config.uid}`);
     console.log(`   Rooms: ${Object.keys(home.rooms).join(', ') || '(none)'}`);
+    startCron(home, port);
   });
 
   return server;
+}
+
+
+// ── Cron Scheduler ───────────────────────
+//
+// Loads cron.json from the home directory at startup.
+// Runs enabled jobs on a minute-tick scheduler (setInterval every 60s).
+// Supports patterns: */N (every N minutes/hours/etc) and exact integer values.
+// Sufficient for: "*/10 * * * *" (every 10 min), "0 3 * * *" (3am daily), etc.
+//
+// Pattern field order: minute hour dayOfMonth month dayOfWeek
+//
+function parseCronField(field, current, max) {
+  // "*" matches everything
+  if (field === '*') return true;
+  // "*/N" matches when current % N === 0
+  if (field.startsWith('*/')) {
+    const n = parseInt(field.slice(2), 10);
+    return !isNaN(n) && n > 0 && (current % n === 0);
+  }
+  // exact integer match
+  const val = parseInt(field, 10);
+  return !isNaN(val) && current === val;
+}
+
+function cronMatches(schedule, now) {
+  const parts = schedule.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+  const [minField, hrField, domField, monField, dowField] = parts;
+  return (
+    parseCronField(minField, now.getMinutes(), 59) &&
+    parseCronField(hrField, now.getHours(), 23) &&
+    parseCronField(domField, now.getDate(), 31) &&
+    parseCronField(monField, now.getMonth() + 1, 12) &&
+    parseCronField(dowField, now.getDay(), 6)
+  );
+}
+
+function startCron(home, port) {
+  const cronPath = path.join(home.homeDir, 'cron.json');
+  if (!fs.existsSync(cronPath)) return;
+
+  let jobs;
+  try {
+    jobs = JSON.parse(fs.readFileSync(cronPath, 'utf-8'));
+  } catch (err) {
+    home.log(`cron:error failed to parse cron.json: ${err.message}`);
+    return;
+  }
+
+  if (!Array.isArray(jobs) || jobs.length === 0) return;
+
+  const enabledJobs = jobs.filter(j => j.enabled && j.id && j.schedule && j.prompt);
+  if (enabledJobs.length === 0) return;
+
+  home.log(`cron:start jobs=${enabledJobs.map(j => j.id).join(',')}`);
+  console.log(`⏰ Cron: loaded ${enabledJobs.length} job(s): ${enabledJobs.map(j => j.id).join(', ')}`);
+
+  // Tick every 60 seconds, aligned to the next minute boundary
+  const msUntilNextMinute = (60 - new Date().getSeconds()) * 1000 - new Date().getMilliseconds();
+
+  setTimeout(() => {
+    // Fire immediately on the minute boundary, then every 60s
+    function tick() {
+      const now = new Date();
+      for (const job of enabledJobs) {
+        if (cronMatches(job.schedule, now)) {
+          fireCronJob(home, port, job);
+        }
+      }
+    }
+    tick();
+    setInterval(tick, 60 * 1000);
+  }, msUntilNextMinute);
+}
+
+function fireCronJob(home, port, job) {
+  const timestamp = Date.now();
+  const dispatchId = `cron-${job.id}-${timestamp}`;
+  const homeName = home.config.name || 'unknown';
+
+  const cronMsg = {
+    id: `cron-msg-${timestamp}`,
+    from: 'cron',
+    to: homeName,
+    body: job.prompt,
+    ts: new Date(timestamp).toISOString(),
+  };
+
+  const payload = JSON.stringify({
+    dispatchId,
+    room: 'boardroom',
+    roomchatlog: [cronMsg],
+    triggerMessage: cronMsg,
+  });
+
+  home.log(`cron:fire jobId=${job.id}`);
+
+  const req = http.request({
+    hostname: 'localhost',
+    port,
+    path: '/dispatch',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload)
+    }
+  }, (res) => {
+    res.resume(); // drain the response
+    if (res.statusCode >= 400) {
+      home.log(`cron:fire-error jobId=${job.id} status=${res.statusCode}`);
+    }
+  });
+
+  req.on('error', (err) => {
+    home.log(`cron:fire-error jobId=${job.id} err=${err.message}`);
+  });
+
+  req.write(payload);
+  req.end();
 }
 
 
