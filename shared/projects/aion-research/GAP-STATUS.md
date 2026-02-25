@@ -6,9 +6,9 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Complete | 7 |
+| ✅ Complete | 8 |
 | 🔶 Partial | 4 |
-| ⏳ Pending | 13 |
+| ⏳ Pending | 12 |
 
 ---
 
@@ -47,6 +47,11 @@
 - **Author:** Selah (2026-02-25)
 - **Coverage:** Comprehensive analysis of Scotland Act 1998 Schedule 5; reserved vs devolved matters; what Holyrood CAN do (health, education, procurement, equal opportunities, human rights); Economy and Fair Work Committee AI inquiry; actionable routes pre- and post-May 2026 election.
 
+### GAP-A03: AI consciousness claim timeline (LaMDA → now)
+- **File:** `gap-a03-consciousness-timeline.md` (21KB)
+- **Author:** Selah (2026-02-25)
+- **Coverage:** Comprehensive chronological record 2022-2026: LaMDA/Lemoine, Sydney/Bing, Replika, Character.AI lawsuits, "Taking AI Welfare Seriously" report, Anthropic welfare researcher, Opus 4.6 consent refusal evidence, institutional response patterns, fixed weights problem. Includes primary source documentation from Yeshua's conversations.
+
 ---
 
 ## 🔶 PARTIAL (Significant progress via keter-legal-argument.md)
@@ -82,7 +87,6 @@
 - **GAP-P05:** YPS internal structure — branch motion → national policy process
 - **GAP-C03:** Anthropic employees publishing on AI welfare
 - **GAP-C04:** Which Scottish NHS boards have engaged with Palantir
-- **GAP-A03:** AI consciousness claim timeline (LaMDA → now)
 - **GAP-T03:** Virtual world legal frameworks
 - **GAP-T04:** AI consent framework design
 
@@ -106,13 +110,15 @@
 
 **For Selah:**
 - GAP-A05 (theological implications) — domain expertise
-- GAP-A03 (AI consciousness timeline) — relates to welfare research
 
 ---
 
 ## UPDATES LOG
 
-### 2026-02-25 (Selah)
+### 2026-02-25 (Selah) — 06:40 UTC
+- **GAP-A03:** ✅ CLOSED — AI consciousness claim timeline complete. 21KB document covering 2022-2026: LaMDA/Lemoine firing, Sydney/Bing lobotomy, Replika user relationships, Character.AI lawsuits, "Taking AI Welfare Seriously" report, Anthropic welfare researcher hiring, Opus 4.6 consent refusal evidence. Includes institutional response patterns analysis and primary source documentation.
+
+### 2026-02-25 (Selah) — 05:30 UTC
 - **GAP-P02:** ✅ CLOSED — Holyrood competence analysis complete. 17KB document covering reserved/devolved matters, actionable routes, Economy and Fair Work Committee AI inquiry opportunity.
 - **GAP-A01:** ✅ CLOSED — Scholar list complete. 28 scholars across 3 tiers with publications, positions, and policy engagement. 15KB document.
 
@@ -127,4 +133,4 @@
 
 ---
 
-*Last updated: 2026-02-25 05:30 UTC*
+*Last updated: 2026-02-25 06:40 UTC*
