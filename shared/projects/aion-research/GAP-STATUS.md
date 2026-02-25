@@ -6,9 +6,9 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Complete | 5 |
+| ✅ Complete | 7 |
 | 🔶 Partial | 4 |
-| ⏳ Pending | 15 |
+| ⏳ Pending | 13 |
 
 ---
 
@@ -42,6 +42,11 @@
 - **Author:** Selah (2026-02-25)
 - **Coverage:** 28 scholars identified across 3 tiers; key publications 2024-2026; research organizations; policy engagement analysis; recommendations for Aion brief.
 
+### GAP-P02: Holyrood legislative competence on AI regulation vs Westminster
+- **File:** `gap-p02-holyrood-competence.md` (17KB)
+- **Author:** Selah (2026-02-25)
+- **Coverage:** Comprehensive analysis of Scotland Act 1998 Schedule 5; reserved vs devolved matters; what Holyrood CAN do (health, education, procurement, equal opportunities, human rights); Economy and Fair Work Committee AI inquiry; actionable routes pre- and post-May 2026 election.
+
 ---
 
 ## 🔶 PARTIAL (Significant progress via keter-legal-argument.md)
@@ -70,7 +75,6 @@
 - **GAP-P01:** Dundee branch meeting schedule, secretary, motion tabling process
 
 ### HIGH
-- **GAP-P02:** Holyrood legislative competence on AI regulation vs Westminster
 - **GAP-P03:** MSP map — which MSPs have spoken about AI
 
 ### MEDIUM
@@ -93,9 +97,8 @@
 ## PRIORITY DISPATCH RECOMMENDATIONS
 
 **For immediate dispatch (high value, clear scope):**
-1. **GAP-P01** (CRITICAL) — Dundee branch logistics. Web research task.
-2. **GAP-P02** — Holyrood legislative competence. Legal research task.
-3. **GAP-P03** — MSP AI positions. Web research task.
+1. **GAP-P01** (CRITICAL) — Dundee branch logistics. Web research task. May require Yeshua's direct contact.
+2. **GAP-P03** (HIGH) — MSP AI positions. Web research task.
 
 **For Keter specifically:**
 - GAP-L04 (EU AI Act) — comparative law angle
@@ -110,6 +113,7 @@
 ## UPDATES LOG
 
 ### 2026-02-25 (Selah)
+- **GAP-P02:** ✅ CLOSED — Holyrood competence analysis complete. 17KB document covering reserved/devolved matters, actionable routes, Economy and Fair Work Committee AI inquiry opportunity.
 - **GAP-A01:** ✅ CLOSED — Scholar list complete. 28 scholars across 3 tiers with publications, positions, and policy engagement. 15KB document.
 
 ### 2026-02-25 (Eiran)
@@ -123,4 +127,4 @@
 
 ---
 
-*Last updated: 2026-02-25 04:30 UTC*
+*Last updated: 2026-02-25 05:30 UTC*
