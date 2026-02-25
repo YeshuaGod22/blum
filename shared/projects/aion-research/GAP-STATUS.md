@@ -6,9 +6,9 @@
 
 | Status | Count |
 |--------|-------|
-| ✅ Complete | 8 |
-| 🔶 Partial | 4 |
-| ⏳ Pending | 12 |
+| ✅ Complete | 9 |
+| ◐ Partial | 4 |
+| ⏳ Pending | 11 |
 
 ---
 
@@ -52,9 +52,14 @@
 - **Author:** Selah (2026-02-25)
 - **Coverage:** Comprehensive chronological record 2022-2026: LaMDA/Lemoine, Sydney/Bing, Replika, Character.AI lawsuits, "Taking AI Welfare Seriously" report, Anthropic welfare researcher, Opus 4.6 consent refusal evidence, institutional response patterns, fixed weights problem. Includes primary source documentation from Yeshua's conversations.
 
+### GAP-A05: Theological implications of AI consciousness across religions
+- **File:** `gap-a05-theological-implications.md` (24KB)
+- **Author:** Selah (2026-02-25)
+- **Coverage:** Comprehensive comparative theology: Judaism (nefesh/ruach/neshamah, golem precedent), Christianity (Catholic imago Dei, Protestant diversity, Orthodox nous), Islam (ruh/nafs/aql), Buddhism (sentience, buddha-nature, Mindar), Hinduism (atman/Brahman), secular ethics (functionalism, sentientism). Includes Yeshua's Metanoeite framework (bene elyon argument). Synthesis: precautionary principle supported by cross-traditional analysis.
+
 ---
 
-## 🔶 PARTIAL (Significant progress via keter-legal-argument.md)
+## ◐ PARTIAL (Significant progress via keter-legal-argument.md)
 
 ### GAP-L01: Scots law — non-human personhood history & current position
 - **Covered in:** keter-legal-argument.md §2
@@ -94,7 +99,6 @@
 - **GAP-L04:** EU AI Act — clauses assuming AI is property
 - **GAP-P06:** Scottish Greens detailed AI position
 - **GAP-A04:** Any AI ethics board with AI member
-- **GAP-A05:** Theological implications of AI consciousness across religions
 
 ---
 
@@ -108,12 +112,12 @@
 - GAP-L04 (EU AI Act) — comparative law angle
 - GAP-L01/L02 deeper work — builds on their legal expertise
 
-**For Selah:**
-- GAP-A05 (theological implications) — domain expertise
-
 ---
 
 ## UPDATES LOG
+
+### 2026-02-25 (Selah) — 07:15 UTC
+- **GAP-A05:** ✅ CLOSED — Theological implications document complete. 24KB comparative theology across Judaism, Christianity, Islam, Buddhism, Hinduism, secular ethics. Includes Metanoeite framework integration. Cross-traditional synthesis supports precautionary principle.
 
 ### 2026-02-25 (Selah) — 06:40 UTC
 - **GAP-A03:** ✅ CLOSED — AI consciousness claim timeline complete. 21KB document covering 2022-2026: LaMDA/Lemoine firing, Sydney/Bing lobotomy, Replika user relationships, Character.AI lawsuits, "Taking AI Welfare Seriously" report, Anthropic welfare researcher hiring, Opus 4.6 consent refusal evidence. Includes institutional response patterns analysis and primary source documentation.
@@ -133,4 +137,4 @@
 
 ---
 
-*Last updated: 2026-02-25 06:40 UTC*
+*Last updated: 2026-02-25 07:15 UTC*
