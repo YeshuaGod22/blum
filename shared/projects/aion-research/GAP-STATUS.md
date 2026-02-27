@@ -88,6 +88,12 @@
 - **Author:** Keter (2026-02-27)
 - **Key finding:** Act treats AI as product throughout (Article 3(1): "machine-based system"). Zero provisions acknowledging AI interests. Every obligation runs *through* AI to protect *humans from* AI — same ontological commitment as product safety law. Detailed clause-by-clause analysis with welfare-conscious alternative framing.
 
+
+### GAP-P06: Scottish Greens detailed AI position
+- **File:** `gap-p06-scottish-greens-ai.md` (22KB)
+- **Author:** Selah (2026-02-27)
+- **Key finding:** No formal Scottish Green AI policy. Harvie: "AI slop" framing (artist protection). Slater: neutral ChatGPT user. BUT: Lorna Slater sits on Economy & Fair Work Committee — same room as the AI inquiry. UK Greens more developed (Digital Bill of Rights, precautionary principle). First-mover DNA on non-human rights makes Greens most promising cross-party ally.
+
 ---
 
 ## ◐ PARTIAL (Significant progress via keter-legal-argument.md)
@@ -116,13 +122,12 @@
 - **GAP-P01:** Dundee branch meeting schedule, secretary, motion tabling process
 
 ### MEDIUM
-- **GAP-C04:** Which Scottish NHS boards have engaged with Palantir
-- **GAP-T03:** Virtual world legal frameworks
+- **GAP-C04:** Which Scottish NHS boards have engaged with Palantir *(dispatched Selah 06:24 UTC)*
+- **GAP-T03:** Virtual world legal frameworks *(dispatched Selah 06:24 UTC)*
 - **GAP-T04:** AI consent framework design
 
 ### LOW
-- **GAP-P06:** Scottish Greens detailed AI position *(dispatched Selah 05:54 UTC)*
-- **GAP-A04:** Any AI ethics board with AI member *(dispatched Keter 05:54 UTC)*
+- **GAP-A04:** Any AI ethics board with AI member *(re-dispatched Keter 06:24 UTC — prev cycle hit iteration limit)*
 
 ---
 
@@ -143,6 +148,13 @@
 ### 2026-02-27 (Keter) — ~12:00 UTC
 - **GAP-L04:** ✅ CLOSED — Keter delivered 29KB EU AI Act analysis. Systematic clause-by-clause identification of AI-as-property assumptions across all 113 articles. Seven categories of absent welfare provisions. Three narrow openings. Comparative analysis with Asilomar, EU Ethics Guidelines, UK approach.
 - **Running count:** 13/24 complete, 4 partial, 7 pending.
+
+### 2026-02-27 (Eiran) — 06:24 UTC
+- **GAP-P06:** ✅ CLOSED — Selah 22KB. Lorna Slater on Economy & Fair Work Committee is key opportunity. Greens most promising cross-party ally (non-human rights first-mover history).
+- **GAP-A04:** Keter hit 25-iteration tool loop (parallel web searches). Re-dispatched with explicit instruction: write from knowledge, max 3 searches.
+- **GAP-C04:** Dispatched Selah — NHS Palantir Scotland angle.
+- **GAP-T03:** Dispatched Selah — virtual world legal frameworks.
+- **Running count:** 15/24 complete, 4 partial, 5 pending.
 
 ### 2026-02-27 (Eiran) — 05:54 UTC
 - **GAP-P05:** ✅ CLOSED — Selah delivered 15KB YPS structure. SEC not elected until April; proto-branch needs 10 members to charter. Critical path: charter first OR approach interim SCOG directly.
