@@ -120,6 +120,15 @@ class Home {
   log(entry) {
     const line = `${new Date().toISOString()} ${entry}\n`;
     fs.appendFileSync(this.opsLogPath, line);
+    // Trim ops.log to last 2000 lines to prevent unbounded growth
+    try {
+      const MAX_OPS_LINES = 2000;
+      const content = fs.readFileSync(this.opsLogPath, 'utf-8');
+      const lines = content.split('\n').filter(Boolean);
+      if (lines.length > MAX_OPS_LINES) {
+        fs.writeFileSync(this.opsLogPath, lines.slice(-MAX_OPS_LINES).join('\n') + '\n');
+      }
+    } catch (_) {}
   }
 
   // ── Bloom Bridge ────────────────────────
