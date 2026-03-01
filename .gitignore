@@ -6,3 +6,4 @@ node_modules/
 # Auth / secrets
 auth-profiles.json
 openclaw.json
+blum/
