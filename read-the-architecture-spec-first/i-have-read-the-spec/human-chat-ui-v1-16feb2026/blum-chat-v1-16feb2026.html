@@ -189,8 +189,8 @@
 
   /* === MESSAGES === */
   .msg {
-    padding: 2px 5px; border-radius: 2px; font-size: 9px;
-    line-height: 1.4; border-left: 2px solid transparent;
+    padding: 3px 6px; border-radius: 2px; font-size: 12px;
+    line-height: 1.5; border-left: 2px solid transparent;
     animation: fadeIn 0.12s ease;
   }
   @keyframes fadeIn {
@@ -204,7 +204,7 @@
   .msg .msg-from { font-weight: 600; }
   .msg .msg-arrow { color: var(--text-dim); }
   .msg .msg-ts { color: var(--text-dim); margin-left: auto; font-size: 11px; padding-left: 8px; }
-  .msg .msg-body { color: var(--text-bright); }
+  .msg .msg-body { color: var(--text-bright); font-size: 13px; line-height: 1.5; }
   .msg .msg-quote {
     border-left: 2px solid var(--border-bright); padding: 1px 4px;
     margin: 1px 0 2px 0; font-family: var(--mono); font-size: 7px;
@@ -299,7 +299,7 @@
 <!-- Compose bar: always visible at bottom -->
 <div class="zoom-controls">
   <button onclick="setFontSize(-1)" title="Smaller text">A−</button>
-  <span id="font-size-label" style="font-size:9px;color:var(--text-dim);line-height:2.2;padding:0 2px">9px</span>
+  <span id="font-size-label" style="font-size:9px;color:var(--text-dim);line-height:2.2;padding:0 2px">13px</span>
   <button onclick="setFontSize(1)" title="Larger text">A+</button>
 </div>
 <div class="compose-bar" id="compose-bar">
@@ -356,6 +356,9 @@ async function api(method, path, body) {
 async function doConnect() {
   server = document.getElementById('server-url').value.replace(/\/+$/, '');
   me = document.getElementById('user-name').value.trim().toLowerCase();
+  // Persist settings for refresh
+  localStorage.setItem('blum-room-server', server);
+  localStorage.setItem('blum-room-user', me);
   try {
     const data = await api('GET', '/api/state');
     directory = data.directory || {};
@@ -611,7 +614,7 @@ function populateComposeSelects() {
 // ── Panel focus / hide ──
 let focusedRoom = null;
 const hiddenRooms = new Set();
-let fontSize = 9;
+let fontSize = 13;
 
 function toggleFocus(name, btn) {
   const panels = document.querySelectorAll('.panel.room');
@@ -807,8 +810,14 @@ document.getElementById('new-room-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') createRoom();
 });
 
-// ── Auto-connect ──
-window.addEventListener('load', doConnect);
+// ── Auto-connect with persistence ──
+window.addEventListener('load', () => {
+  const savedServer = localStorage.getItem('blum-room-server');
+  const savedUser = localStorage.getItem('blum-room-user');
+  if (savedServer) document.getElementById('server-url').value = savedServer;
+  if (savedUser) document.getElementById('user-name').value = savedUser;
+  doConnect();
+});
 </script>
 </body>
 </html>

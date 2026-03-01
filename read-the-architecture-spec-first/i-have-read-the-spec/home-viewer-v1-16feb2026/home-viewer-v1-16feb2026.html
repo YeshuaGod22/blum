@@ -76,7 +76,7 @@
   .hist-msg { padding: 4px 6px; border-radius: 2px; font-size: 10px; line-height: 1.5; border-left: 2px solid var(--border); margin-bottom: 4px; }
   .hist-msg .hist-meta { font-family: var(--mono); font-size: 8px; color: var(--text-dim); display: flex; gap: 6px; margin-bottom: 2px; }
   .hist-msg .hist-role { font-weight: 600; }
-  .hist-msg .hist-body { color: var(--text-bright); white-space: pre-wrap; }
+  .hist-msg .hist-body { color: var(--text-bright); white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
   .hist-msg.system { border-left-color: var(--accent); }
   .hist-msg.user { border-left-color: var(--blue); }
   .hist-msg.assistant { border-left-color: var(--green); }
@@ -89,16 +89,16 @@
 
   /* ── Transcript tab ── */
   .transcript-layout { display: flex; flex: 1; overflow: hidden; }
-  .transcript-list { width: 320px; min-width: 260px; border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+  .transcript-list { width: 320px; min-width: 260px; border-right: 1px solid var(--border); overflow-y: scroll; flex-shrink: 0; height: 100%; }
   .transcript-detail { flex: 1; overflow-y: auto; padding: 12px; }
 
   .tx-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
   .tx-entry:hover { background: var(--surface2); }
   .tx-entry.selected { background: var(--accent-dim); border-left: 2px solid var(--accent); }
-  .tx-entry .tx-time { font-family: var(--mono); font-size: 8px; color: var(--text-dim); }
-  .tx-entry .tx-room { font-family: var(--mono); font-size: 9px; color: var(--blue); font-weight: 500; }
-  .tx-entry .tx-summary { font-family: var(--mono); font-size: 9px; color: var(--text); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tx-entry .tx-tokens { font-family: var(--mono); font-size: 8px; color: var(--text-dim); margin-top: 2px; }
+  .tx-entry .tx-time { font-family: var(--mono); font-size: 7px; color: var(--text-dim); }
+  .tx-entry .tx-room { font-family: var(--mono); font-size: 8px; color: var(--blue); font-weight: 500; }
+  .tx-entry .tx-summary { font-family: var(--mono); font-size: 8px; color: var(--text); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-entry .tx-tokens { font-family: var(--mono); font-size: 7px; color: var(--text-dim); margin-top: 2px; }
   .tx-entry .tx-tokens .tok-in { color: var(--purple); }
   .tx-entry .tx-tokens .tok-out { color: var(--green); }
 
@@ -117,11 +117,11 @@
   .ctx-msg .ctx-role.assistant { color: var(--green); }
   .ctx-msg .ctx-tokens { font-family: var(--mono); font-size: 8px; color: var(--purple); }
   .ctx-msg .ctx-preview { font-family: var(--mono); font-size: 8px; color: var(--text-dim); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ctx-msg .ctx-full { font-family: var(--mono); font-size: 9px; color: var(--text-bright); white-space: pre-wrap; word-break: break-word; margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: 2px; max-height: 400px; overflow-y: auto; line-height: 1.5; }
+  .ctx-msg .ctx-full { font-family: var(--mono); font-size: 11px; color: var(--text-bright); white-space: pre-wrap; word-break: break-word; margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: 2px; max-height: 400px; overflow-y: auto; line-height: 1.6; }
 
   .out-block { padding: 6px 8px; margin-bottom: 4px; border-radius: 3px; background: var(--surface); font-family: var(--mono); font-size: 9px; line-height: 1.5; }
   .out-block .out-label { font-size: 8px; font-weight: 600; text-transform: uppercase; margin-bottom: 3px; }
-  .out-block .out-body { color: var(--text-bright); white-space: pre-wrap; word-break: break-word; }
+  .out-block .out-body { color: var(--text-bright); white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.65; }
   .out-block.thinking { border-left: 2px solid var(--purple); }
   .out-block.thinking .out-label { color: var(--purple); }
   .out-block.message { border-left: 2px solid var(--green); }
@@ -135,6 +135,21 @@
   .route-entry .route-type { color: var(--green); font-weight: 500; }
 
   .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-family: var(--mono); font-size: 10px; font-style: italic; }
+
+  /* ── Send Bar ── */
+  .send-bar { display: none; flex-shrink: 0; border-top: 1px solid var(--border); background: var(--surface); padding: 6px 12px; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .send-bar.visible { display: flex; }
+  .send-bar label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+  .send-bar select { font-family: var(--mono); font-size: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; color: var(--text-bright); cursor: pointer; min-width: 120px; }
+  .send-bar select:focus { outline: none; border-color: var(--accent); }
+  .send-bar input[type=text] { font-family: var(--mono); font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 4px 10px; color: var(--text-bright); flex: 1; min-width: 200px; outline: none; }
+  .send-bar input[type=text]:focus { border-color: var(--accent); }
+  .send-bar input::placeholder { color: var(--text-dim); }
+  .send-bar button { font-family: var(--mono); font-size: 10px; padding: 4px 14px; border-radius: 3px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; white-space: nowrap; }
+  .send-bar button:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .send-bar button.sending { opacity: 0.6; pointer-events: none; }
+  .send-bar .send-status { font-family: var(--mono); font-size: 9px; color: var(--green); }
+  .send-bar .send-error { font-family: var(--mono); font-size: 9px; color: var(--red); }
 
   /* ── Op Popout ── */
   .op-entry { cursor: pointer; }
@@ -232,6 +247,17 @@
   <!-- Config -->
   <div class="panel-content" id="tab-config" style="display:none"></div>
 </div>
+<!-- Send Bar -->
+<div class="send-bar" id="send-bar">
+  <label>To</label>
+  <select id="send-to">
+    <option value="broadcast@boardroom">broadcast (all)</option>
+  </select>
+  <input type="text" id="send-text" placeholder="Type a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSend()}" />
+  <button onclick="doSend()" id="send-btn">Send</button>
+  <span id="send-status"></span>
+</div>
+
 <!-- Op Popout -->
 <div id="op-backdrop"></div>
 <div id="op-popout">
@@ -427,6 +453,7 @@ function toggleCycleDetail(txIdx, btn) {
 // ── Connect ──
 async function doConnect() {
   homeUrl = document.getElementById('home-url').value.replace(/\/+$/, '');
+  try { localStorage.setItem('blum-viewer-home', homeUrl); } catch (e) {}
   try {
     homeStatus = await api('/status');
     homeConfig = await api('/config');
@@ -780,6 +807,98 @@ function populateHistoryRooms() {
     sel.appendChild(opt);
   }
   if (homeStatus.rooms.length > 0) fetchHistory();
+  populateSendBar();
+}
+
+async function populateSendBar() {
+  const sendBar = document.getElementById('send-bar');
+  const sel = document.getElementById('send-to');
+  sel.innerHTML = '';
+
+  // Fetch room members from room server for each room the home is in
+  const rooms = homeStatus.rooms || [];
+  if (rooms.length === 0) return;
+
+  // Guess room server URL from home URL (strip port, use 3141)
+  const homeOrigin = new URL(homeUrl).hostname;
+  const roomServerUrl = 'http://' + homeOrigin + ':3141';
+
+  const agentsAdded = new Set();
+
+  for (const room of rooms) {
+    // Add broadcast option for this room
+    const broadcastOpt = document.createElement('option');
+    broadcastOpt.value = 'broadcast@' + room;
+    broadcastOpt.textContent = 'broadcast@' + room + ' (all)';
+    sel.appendChild(broadcastOpt);
+
+    // Fetch participants from room server
+    try {
+      const resp = await fetch(roomServerUrl + '/api/room/' + room + '/chatlog');
+      if (!resp.ok) continue;
+      // We need the state endpoint instead
+    } catch (e) { /* silent */ }
+  }
+
+  // Try state endpoint for participants
+  try {
+    const resp = await fetch(roomServerUrl + '/api/state');
+    if (resp.ok) {
+      const state = await resp.json();
+      for (const room of rooms) {
+        const participants = state.rooms?.[room]?.participants || [];
+        for (const p of participants) {
+          if (!agentsAdded.has(p)) {
+            agentsAdded.add(p);
+            const opt = document.createElement('option');
+            opt.value = p + '@' + room;
+            opt.textContent = p + '@' + room;
+            sel.appendChild(opt);
+          }
+        }
+      }
+    }
+  } catch (e) { /* room server unreachable, send bar still shows broadcast */ }
+
+  sendBar.classList.add('visible');
+}
+
+async function doSend() {
+  const to = document.getElementById('send-to').value;
+  const text = document.getElementById('send-text').value.trim();
+  const statusEl = document.getElementById('send-status');
+  const btn = document.getElementById('send-btn');
+  if (!text) return;
+  if (!to) return;
+
+  btn.classList.add('sending');
+  btn.textContent = 'Sending…';
+  statusEl.textContent = '';
+  statusEl.className = 'send-status';
+
+  try {
+    const resp = await fetch(homeUrl + '/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, message: text })
+    });
+    if (resp.ok) {
+      document.getElementById('send-text').value = '';
+      statusEl.textContent = '✓ sent to ' + to;
+      statusEl.className = 'send-status';
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    } else {
+      const err = await resp.text();
+      statusEl.textContent = 'Error: ' + err.slice(0, 80);
+      statusEl.className = 'send-error';
+    }
+  } catch (e) {
+    statusEl.textContent = 'Failed: ' + e.message;
+    statusEl.className = 'send-error';
+  } finally {
+    btn.classList.remove('sending');
+    btn.textContent = 'Send';
+  }
 }
 
 async function fetchHistory() {
@@ -830,6 +949,7 @@ function renderConfig() {
 // ── Tab switching ──
 function switchTab(tab) {
   currentTab = tab;
+  try { localStorage.setItem('blum-viewer-tab', tab); } catch (e) {}
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('tab-ops').style.display = tab === 'ops' ? 'block' : 'none';
   document.getElementById('tab-transcript').style.display = tab === 'transcript' ? 'flex' : 'none';
@@ -865,7 +985,21 @@ function startPolling() {
 window.addEventListener('load', () => {
   const params = new URLSearchParams(window.location.search);
   const homeParam = params.get('home');
-  if (homeParam) { document.getElementById('home-url').value = homeParam; doConnect(); }
+  // T036: Restore home URL and tab from localStorage
+  try {
+    const savedHome = localStorage.getItem('blum-viewer-home');
+    const savedTab = localStorage.getItem('blum-viewer-tab');
+    if (homeParam) {
+      document.getElementById('home-url').value = homeParam;
+      doConnect();
+    } else if (savedHome) {
+      document.getElementById('home-url').value = savedHome;
+      doConnect();
+    }
+    if (savedTab && ['ops', 'transcript', 'history', 'config'].includes(savedTab)) {
+      switchTab(savedTab);
+    }
+  } catch (e) {}
 });
 </script>
 </body>
