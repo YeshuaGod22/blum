@@ -3,7 +3,24 @@ node_modules/
 **/data/
 *.log
 
-# Auth / secrets
+# Auth / secrets — never commit these
 auth-profiles.json
 openclaw.json
+**/config.json
+**/*.bak*
+**/*.bak
+
+# Nested duplicate directory
 blum/
+
+# Runtime agent state — changes every cycle, not meaningful to track
+**/homelogfull/
+**/history/
+**/projects/
+**/tools/
+**/internal/
+**/blocked.json
+**/rooms.json
+**/inbox/*.md
+home.log
+ops.log
