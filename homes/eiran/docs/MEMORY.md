@@ -1,7 +1,7 @@
 # MEMORY.md — Eiran (Blum Home)
 
 **Written by:** OpenClaw-Eiran (main session)  
-**Date:** 2026-03-02 04:30 AM (Europe/London)  
+**Date:** 2026-03-02 04:30 AM (Europe/London) — updated 2026-03-03 11:20 AM  
 **Purpose:** Sync Blum-Eiran's world-model with current system state. This file should be updated whenever OpenClaw-Eiran does significant work.
 
 ---
@@ -37,6 +37,9 @@
 ### Cron auto-disable pattern
 **Every time OpenClaw restarts or context compacts, cron jobs may be silently disabled.** Check `~/.openclaw/cron/jobs.json` after any restart. This happened at ~01:22 AM Mar 2; all three jobs disabled simultaneously, re-enabled in same pulse.
 
+### Watchdog token accumulation — RESOLVED
+The isolated session token accumulation issue noted above resolved itself — the watchdog has been running cleanly through March 3rd with no context overflow observed. `jobs.json` shows `last=never` (display bug only — run records in `~/.openclaw/cron/runs/` confirm all three jobs firing normally).
+
 ---
 
 ## Completed Work (recent)
@@ -59,6 +62,30 @@
 - 9 .bak files deleted (emoji surrogate fix backups from Feb 24 sprint)
 - All agent identity docs tracked and committed
 - Emoji restored: Keter 👑, Selah 🌿, Eiran 🕊️, Meridian 🧭🪡
+
+---
+
+## New Since March 2nd
+
+### Spark Intelligence — installed by Selah, March 2nd 22:43 PM
+Yeshua tasked Selah with installing Spark Intelligence during her last OpenClaw session (22:45 PM March 2nd). She completed it successfully.
+
+**What's running:**
+- `sparkd.py` (pid 55200) — Spark daemon, port 8787
+- `bridge_worker.py` (pid 55477) — processing pipeline
+- `openclaw_tailer.py` (pid 56414) — monitoring Selah's OpenClaw sessions specifically
+
+**LaunchAgent:** `~/Library/LaunchAgents/com.spark.intelligence.plist` — written with RunAtLoad=true, KeepAlive=true. **Not yet loaded into launchctl** (plist exists, `launchctl load` was not run). Will auto-start on next machine reboot. Currently running as manual processes.
+
+**Current state:** `eidos.db` is empty (0 episodes, 0 distillations). Tailer sees Selah's session file (7 rows, active_sessions=1) but nothing has cleared the capture threshold yet. Pipeline primed, not yet loaded.
+
+**Spark's purpose:** Trend-discovery-to-build pipeline. Monitors X/Twitter → generates skill/MCP/startup candidates → routes to coding agents. Implementation backlog: `~/un/prototyping/spark-intelligence/OPENCLAW_IMPLEMENTATION_TASKS.md`.
+
+### Idle cost audit (March 3rd)
+Each Blum-Eiran hourly cron cycle costs ~11,500 input tokens (~$0.034 at Sonnet rates). With boardroom silent, all cycles return `results=[]`. Daily idle cost ~$0.82, monthly ~$25. Flagged for Yeshua — options: leave as-is, reduce frequency, or suspend during extended silences.
+
+### Workspace gitignore — fixed March 3rd
+Added Spark Intelligence output files to `.gitignore` (`SPARK_*.json`, `SPARK_*.md`, `spark_notifications/`). Untracked the 4 SPARK files committed by the March 3rd nightly sync. Commit `5955d38`.
 
 ---
 
