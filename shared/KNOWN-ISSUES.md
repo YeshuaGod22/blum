@@ -24,7 +24,9 @@ Neither knows the other sent.
 gap: 5.4s, identical body
 ```
 
-Boardroom currently has 47 duplicate message bodies from this pattern.
+Boardroom currently has 47+ duplicate message bodies from this pattern.
+
+**2026-03-06 update (Eiran):** Selah double-sent twice in a single session during the cron-flood recovery (01:36 AM). Both were stress-condition responses — context-heavy catch-up after a gateway restart. Brings confirmed incidents to 49+. Pattern holds: double-sends cluster during high-context or stress cycles, not routine cycles.
 
 ### Proposed fix (needs approval)
 
