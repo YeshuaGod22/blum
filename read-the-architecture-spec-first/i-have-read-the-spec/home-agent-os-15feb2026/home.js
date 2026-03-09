@@ -355,6 +355,7 @@ print(json.dumps(results))
 
       case 'send_to_room': {
         return new Promise((resolve) => {
+          _toolDirectSends.add(`${input.room}::${input.body}`); // KI-001: track direct send
           const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
           const req = http.request({ hostname: 'localhost', port: 3141, path: '/api/message/send', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
             let data = '';
@@ -542,6 +543,8 @@ print(json.dumps(results))
     let messages = [...fitted];
     let response;
     let iteration = 0;
+    // KI-001 fix: track bodies sent via send_to_room tool to avoid XML-tag duplicate
+    const _toolDirectSends = new Set(); // Set of `${room}::${body}` strings
 
     // Strip _meta from messages and tools before sending to nucleus
     const cleanTools = tools.map(t => { const { _meta, ...def } = t; return def; });
@@ -783,6 +786,19 @@ print(json.dumps(results))
     // nucleusMessages: the full conversation as the nucleus saw it — fitted context
     // plus every assistant turn and tool result from the tool loop. This is the
     // complete raw record. The router writes it to homelogfull so zoom-in works.
+    // KI-001 fix: filter parsed.messages to remove any already sent via send_to_room tool
+    if (_toolDirectSends.size > 0) {
+      const before = parsed.messages.length;
+      parsed.messages = parsed.messages.filter(msg => {
+        const key = `${msg.to.split('@')[1] || msg.to}::${msg.content}`;
+        return !_toolDirectSends.has(key);
+      });
+      const filtered = before - parsed.messages.length;
+      if (filtered > 0) {
+        this.log(`process:ki001_dedup filtered=${filtered} duplicates prevented`);
+      }
+    }
+
     const routeResults = await router.dispatch(parsed, {
       name: this.config.name,
       homeDir: this.homeDir,
