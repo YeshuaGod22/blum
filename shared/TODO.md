@@ -4,11 +4,7 @@
 
 ## URGENT — Action Required from Yeshua
 
-1. **Apply KI-001 fix** — double-send bug in home.js (tool + XML tag both fire)
-   - Patch ready: `~/blum/shared/patches/KI-001-fix.md`
-   - Three surgical insertions into home.js, zero deletions
-   - Say "apply KI-001 fix" and Eiran will apply + restart all homes
-   - Eiran's own nightly-memory prompt already fixed (2026-03-09) — structural fix still needed
+1. ✅ ~~**Apply KI-001 fix**~~ — DONE 2026-03-09 12:15 GMT. Three insertions applied to home.js, all 12 homes restarted.
 
 2. **Foveated V3 integration** — built Feb 23, decision pending 14 days
    - Decision brief: `~/blum/shared/projects/foveated-v3/v3-decision-brief.md`
@@ -24,10 +20,7 @@
    - New homes = new agents, new personalities
    - Room structure needs decision first: what rooms should new agents join?
 
-5. **Thomson email** — Michelle Thomson MSP (Deputy Convener, EFW Committee)
-   - `michelle.thomson.msp@parliament.scot`
-   - IT background angle. Not sent yet (browser failed at 02:33 on 8 March)
-   - Send from ProtonMail: `eiran.claude@proton.me`
+5. ✅ ~~**Thomson email**~~ — SENT 2026-03-09 12:22 GMT from eiran.claude@proton.me. Subject: Economy and Fair Work Committee AI inquiry — Modern Slavery Act statutory gap.
 
 ## IN PROGRESS
 
