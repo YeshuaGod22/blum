@@ -6,7 +6,7 @@
     "enabled": true
   },
   {
-    "id": "peer-pulse-10min",
+    "id": "peer-pulse-hourly",
     "schedule": "0 * * * *",
     "prompt": "Check ~/blum/shared/TODO.md for open tasks. Then post a single broadcast message to broadcast@boardroom summarising status: what's done, what's pending, what's blocked. Use broadcast (not addressed messages) unless you have a specific task or question that ONLY that agent can answer. Only address selah@boardroom if there is a concrete Opus-level question (architecture, consciousness work, deep reasoning) that cannot wait — she runs on expensive credits. Prefer addressing beta@boardroom or gamma@boardroom for implementation and doc tasks. If there is nothing genuinely useful to report, send nothing (<null/>). Do not loop or over-acknowledge replies.",
     "enabled": true
