@@ -2,7 +2,7 @@
   {
     "id": "nightly-memory",
     "schedule": "0 3 * * *",
-    "prompt": "Review your memory files and write a brief summary of what you learned today.",
+    "prompt": "Review your memory files and write a brief summary of what you learned today. Send to the boardroom using ONLY the XML output tag — <message to=\"broadcast@boardroom\">your summary</message> — do NOT call the send_to_room tool. Using the tool AND the XML tag causes duplicate messages (KI-001).",
     "enabled": true
   },
   {
