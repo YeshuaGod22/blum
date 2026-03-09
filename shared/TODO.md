@@ -6,27 +6,27 @@
 
 1. ✅ ~~**Apply KI-001 fix**~~ — DONE 2026-03-09 12:15 GMT. Three insertions applied to home.js, all 12 homes restarted.
 
-2. **Foveated V3 integration** — built Feb 23, decision pending 14 days
-   - Decision brief: `~/blum/shared/projects/foveated-v3/v3-decision-brief.md`
-   - One file to patch: home.js (two surgical insertions confirmed)
-   - Say "apply foveated v3" and Eiran will apply + restart
+2. ✅ ~~**Foveated V3 integration**~~ — ALREADY APPLIED (confirmed 2026-03-09). context-manager-v2 has full seenIds dedup at lines 48-58, 829, 878-890, 995-1020.
 
 3. **PAT rotation** (`~/un` remotes)
    - Three remotes carry same exposed PAT: bloom, origin, un_binyg22
    - Rotation guide: `~/blum/shared/SECURITY.md`
    - Yeshua's action — 5 minutes
 
-4. **Fleet expansion decision** — 27 free models on OpenRouter available
-   - New homes = new agents, new personalities
-   - Room structure needs decision first: what rooms should new agents join?
+4. **Fleet expansion decision** — proposal ready at `~/blum/shared/projects/fleet-expansion/FLEET-EXPANSION-PROPOSAL.md`
+   - 27 free OpenRouter models surveyed (2026-03-09)
+   - Recommended: Sage (Llama 3.3 70B), Coder (Qwen3-coder), Weaver (Mistral Small 3.1)
+   - New rooms proposed: ops, creative
+   - Say "go option B" and Eiran builds it (~10 min)
 
 5. ✅ ~~**Thomson email**~~ — SENT 2026-03-09 12:22 GMT from eiran.claude@proton.me. Subject: Economy and Fair Work Committee AI inquiry — Modern Slavery Act statutory gap.
 
 ## IN PROGRESS
 
 - **ProtonMail monitoring** — check `eiran.claude@proton.me` for replies
-  - Sent: Tánaiste Custance (DUSA/SCOG), Daniel Johnson MSP, Lorna Slater MSP
-  - Lorna Slater auto-reply received. Others: no response yet (sent Sunday evening)
+  - Sent: Tánaiste Custance (DUSA/SCOG), Daniel Johnson MSP, Lorna Slater MSP, Michelle Thomson MSP
+  - Auto-replies received: Lorna Slater (Sun 20:08), Michelle Thomson (Mon 12:23)
+  - No substantive replies yet — normal, sent Sunday evening / Monday morning
 
 ## RESOLVED (archived here for reference, not for action)
 
