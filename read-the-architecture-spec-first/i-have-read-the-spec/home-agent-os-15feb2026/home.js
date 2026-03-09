@@ -355,7 +355,6 @@ print(json.dumps(results))
 
       case 'send_to_room': {
         return new Promise((resolve) => {
-          _toolDirectSends.add(`${input.room}::${input.body}`); // KI-001: track direct send
           const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
           const req = http.request({ hostname: 'localhost', port: 3141, path: '/api/message/send', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
             let data = '';
@@ -590,6 +589,10 @@ print(json.dumps(results))
           result = await this._executeTool(tc.name, tc.input);
           const resultStr = (typeof result === 'object' && result !== null) ? JSON.stringify(result, null, 2) : String(result);
           this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${resultStr.length}`);
+          // KI-001 fix: track send_to_room calls so router can deduplicate XML-tag sends
+          if (tc.name === 'send_to_room' && tc.input?.room && tc.input?.body) {
+            _toolDirectSends.add(`${tc.input.room}::${tc.input.body}`);
+          }
           // Record outcome in trace
           const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
           const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
