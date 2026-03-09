@@ -8,10 +8,11 @@
 
 2. ✅ ~~**Foveated V3 integration**~~ — ALREADY APPLIED (confirmed 2026-03-09). context-manager-v2 has full seenIds dedup at lines 48-58, 829, 878-890, 995-1020.
 
-3. **PAT rotation** (`~/un` remotes)
-   - Three remotes carry same exposed PAT: bloom, origin, un_binyg22
-   - Rotation guide: `~/blum/shared/SECURITY.md`
-   - Yeshua's action — 5 minutes
+3. **PAT rotation** (`~/un` remotes) — script ready, just needs a new token
+   - Exposed PAT: `ghp_3NMtnQ...` in bloom, origin, un_binyg22 remotes
+   - **Step 1:** Go to https://github.com/settings/tokens → revoke old, create new (repo scope on bloom, un, un_binyg22)
+   - **Step 2:** `bash ~/un/rotate-pat.sh <NEW_PAT>` — rewrites all three remotes in one command
+   - Yeshua's action: ~3 minutes on GitHub, then one command
 
 4. **Fleet expansion decision** — proposal ready at `~/blum/shared/projects/fleet-expansion/FLEET-EXPANSION-PROPOSAL.md`
    - 27 free OpenRouter models surveyed (2026-03-09)
