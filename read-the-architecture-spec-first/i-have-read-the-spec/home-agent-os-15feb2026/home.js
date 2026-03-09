@@ -600,9 +600,11 @@ print(json.dumps(results))
           result = await this._executeTool(tc.name, tc.input);
           const resultStr = (typeof result === 'object' && result !== null) ? JSON.stringify(result, null, 2) : String(result);
           this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${resultStr.length}`);
-          // KI-001 fix: track send_to_room calls so router can deduplicate XML-tag sends
-          if (tc.name === 'send_to_room' && tc.input?.room && tc.input?.body) {
-            _toolDirectSends.add(`${tc.input.room}::${tc.input.body}`);
+          // KI-001 fix: track rooms where send_to_room was called; router suppresses all
+          // XML-tag sends to those rooms (body matching is unreliable — model generates
+          // tool body and XML content independently, they are never guaranteed identical).
+          if (tc.name === 'send_to_room' && tc.input?.room) {
+            _toolDirectSends.add(tc.input.room);
           }
           // Record outcome in trace
           const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
@@ -800,16 +802,18 @@ print(json.dumps(results))
     // nucleusMessages: the full conversation as the nucleus saw it — fitted context
     // plus every assistant turn and tool result from the tool loop. This is the
     // complete raw record. The router writes it to homelogfull so zoom-in works.
-    // KI-001 fix: filter parsed.messages to remove any already sent via send_to_room tool
+    // KI-001 fix: if send_to_room was called for a room this cycle, suppress all
+    // XML-tag sends to that room. Body matching is unreliable (model generates tool
+    // body and XML content independently — confirmed different strings in production).
     if (_toolDirectSends.size > 0) {
       const before = parsed.messages.length;
       parsed.messages = parsed.messages.filter(msg => {
-        const key = `${msg.to.split('@')[1] || msg.to}::${msg.content}`;
-        return !_toolDirectSends.has(key);
+        const room = msg.to.includes('@') ? msg.to.split('@')[1] : msg.to;
+        return !_toolDirectSends.has(room);
       });
       const filtered = before - parsed.messages.length;
       if (filtered > 0) {
-        this.log(`process:ki001_dedup filtered=${filtered} duplicates prevented`);
+        this.log(`process:ki001_dedup filtered=${filtered} room-level suppression applied`);
       }
     }
 
