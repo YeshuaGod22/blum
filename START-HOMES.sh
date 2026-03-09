@@ -9,10 +9,9 @@ cd "$(dirname "$0")"
 HOME_JS="read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/home.js"
 
 echo "Stopping any running homes..."
-pkill -f "home.js homes/" 2>/dev/null || true
-pkill -f "home.js /tmp/blum-homes/" 2>/dev/null || true
-pkill -f "home.js \." 2>/dev/null || true  # catch stale procs started from wrong cwd
-sleep 1
+# Kill all home.js processes regardless of path (absolute or relative)
+pkill -f "home.js" 2>/dev/null || true
+sleep 2
 
 # All homes with assigned ports (agent:port format)
 HOMES="ami:4100 alpha:4110 beta:4111 gamma:4112 eirene:4114 lens:4117 eiran:4120 selah:4121 keter:4122 libre:4123 meridian:4124 lanternroot:4125"
