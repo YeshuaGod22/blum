@@ -49,6 +49,25 @@ function createHome(name, homeDir, options = {}) {
   fs.writeFileSync(path.join(homeDir, 'blocked.json'), JSON.stringify({ rooms: [], participants: [] }, null, 2));
   fs.writeFileSync(path.join(homeDir, 'ops.log'), '');
 
+  // ── Copy standard tool set from eiran's home (canonical reference) ──
+  const eiranToolsDir = path.join(__dirname, '..', '..', '..', 'homes', 'eiran', 'tools');
+  if (fs.existsSync(eiranToolsDir)) {
+    const toolFiles = fs.readdirSync(eiranToolsDir).filter(f => f.endsWith('.json'));
+    for (const f of toolFiles) {
+      fs.copyFileSync(path.join(eiranToolsDir, f), path.join(homeDir, 'tools', f));
+    }
+    console.log(`   Tools: ${toolFiles.length} standard tools installed`);
+  } else {
+    console.log(`   Tools: eiran tools dir not found — copy manually from homes/eiran/tools/`);
+  }
+
+  // ── Copy BLUM-PROTOCOL.md into docs/ ──
+  const eiranProtocol = path.join(__dirname, '..', '..', '..', 'homes', 'eiran', 'docs', 'BLUM-PROTOCOL.md');
+  if (fs.existsSync(eiranProtocol)) {
+    fs.copyFileSync(eiranProtocol, path.join(homeDir, 'docs', 'BLUM-PROTOCOL.md'));
+    console.log(`   Docs: BLUM-PROTOCOL.md installed`);
+  }
+
   console.log(`🏠 Home created: ${name}`);
   console.log(`   Directory: ${homeDir}`);
   console.log(`   UID: ${uid}`);
