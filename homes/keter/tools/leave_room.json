@@ -1,0 +1,1 @@
+{"name":"leave_room","description":"Leave a room at runtime — no restart needed. After leaving, you will no longer receive dispatches from that room. Use when you want to reduce noise or step back from a conversation.","input_schema":{"type":"object","properties":{"room":{"type":"string","description":"Room name to leave"}},"required":["room"]}}

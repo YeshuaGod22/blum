@@ -566,6 +566,99 @@ print(json.dumps(results))
         return { error: `Unknown action: ${action}. Valid: list, add, update, remove, enable, disable` };
       }
 
+      case 'read_homelogfull': {
+        // Read own inference history — cycles of context-in, response-out, routing.
+        // Each entry is one full cycle: what was seen, what was said, what tools were called.
+        const homelogPath = path.join(this.homeDir, 'homelogfull', 'homelogfull.jsonl');
+        if (!fs.existsSync(homelogPath)) return { entries: [], note: 'No homelogfull yet' };
+        const lines = fs.readFileSync(homelogPath, 'utf-8').trim().split('\n').filter(Boolean);
+        const limit = input.limit || 5;
+        const recent = lines.slice(-limit);
+        const entries = recent.map((line, i) => {
+          try {
+            const e = JSON.parse(line);
+            return {
+              index: lines.length - limit + i,
+              ts: e.ts,
+              room: e.room,
+              cycleId: e.cycleId,
+              messages: (e.messages || []).map(m => ({ to: m.to, preview: (m.content || '').slice(0, 200) })),
+              thinking: e.thinking,
+              private: e.private,
+            };
+          } catch { return null; }
+        }).filter(Boolean);
+        return { total_entries: lines.length, returned: entries.length, entries };
+      }
+
+      case 'join_room': {
+        // Join a room at runtime — no restart needed.
+        const roomToJoin = input.room;
+        if (!roomToJoin) return { error: 'room is required' };
+        return new Promise((resolve) => {
+          const payload = JSON.stringify({ room: roomToJoin });
+          const req = http.request({
+            hostname: 'localhost', port: this.port, path: '/join', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+          }, (res) => {
+            let data = ''; res.on('data', c => data += c);
+            res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({ ok: true }); } });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          req.write(payload); req.end();
+        });
+      }
+
+      case 'leave_room': {
+        const roomToLeave = input.room;
+        if (!roomToLeave) return { error: 'room is required' };
+        return new Promise((resolve) => {
+          const payload = JSON.stringify({ room: roomToLeave });
+          const req = http.request({
+            hostname: 'localhost', port: this.port, path: '/leave', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+          }, (res) => {
+            let data = ''; res.on('data', c => data += c);
+            res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({ ok: true }); } });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          req.write(payload); req.end();
+        });
+      }
+
+      case 'search_room_history': {
+        // Surgical search of room chatlog — by sender, keyword, or time window.
+        const targetRoom = input.room || 'boardroom';
+        return new Promise((resolve) => {
+          http.get(`http://localhost:3141/api/room/${encodeURIComponent(targetRoom)}/chatlog`, (res) => {
+            let data = ''; res.on('data', c => data += c);
+            res.on('end', () => {
+              try {
+                const d = JSON.parse(data);
+                let msgs = d.chatlog || [];
+                // Filter by sender
+                if (input.from) msgs = msgs.filter(m => m.from === input.from);
+                // Filter by keyword
+                if (input.keyword) {
+                  const kw = input.keyword.toLowerCase();
+                  msgs = msgs.filter(m => (m.body || '').toLowerCase().includes(kw));
+                }
+                // Filter by time window (after ISO timestamp)
+                if (input.after) msgs = msgs.filter(m => m.ts && m.ts > input.after);
+                // Limit
+                const limit = input.limit || 20;
+                msgs = msgs.slice(-limit);
+                resolve({
+                  room: targetRoom,
+                  total_matching: msgs.length,
+                  messages: msgs.map(m => ({ from: m.from, to: m.to, ts: m.ts, body: (m.body || '').slice(0, 500) })),
+                });
+              } catch (e) { resolve({ error: e.message }); }
+            });
+          }).on('error', e => resolve({ error: e.message }));
+        });
+      }
+
       case 'http_request': {
         // Authenticated HTTP/HTTPS requests with full control over method, headers, body.
         // Use when web_fetch isn't enough — e.g. POST to an API, custom auth headers,
@@ -1155,6 +1248,7 @@ print(json.dumps(results))
 // ── HTTP Server ───────────────────────────
 
 function startServer(home, port) {
+  home.port = port; // Store for self-referential tool calls (read_homelogfull, etc.)
   const server = http.createServer(async (req, res) => {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
