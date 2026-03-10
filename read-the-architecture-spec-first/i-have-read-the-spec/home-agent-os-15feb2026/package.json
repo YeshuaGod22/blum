@@ -1,0 +1,10 @@
+{
+  "name": "blum-home-agent-os",
+  "version": "1.0.0",
+  "description": "Blum home agent OS — standalone Node.js agent runtime",
+  "main": "home.js",
+  "private": true,
+  "dependencies": {
+    "puppeteer": "^22.15.0"
+  }
+}

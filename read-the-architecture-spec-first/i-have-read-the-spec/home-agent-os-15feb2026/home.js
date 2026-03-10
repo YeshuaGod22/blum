@@ -730,6 +730,83 @@ print(json.dumps(results))
         return { name, uid, model, configuredRooms: rooms, activeRooms: currentRooms, tokenBudget, maxTokens, createdAt };
       }
 
+      case 'browser_action': {
+        // Headless browser automation via Puppeteer.
+        // Supports: navigate, screenshot, get_text, click, type, evaluate, get_links, scroll.
+        let puppeteer;
+        try {
+          puppeteer = require('puppeteer');
+        } catch (e) {
+          return { error: 'puppeteer not installed. Run: cd home-agent-os-15feb2026 && npm install puppeteer' };
+        }
+        const action = input.action || 'get_text';
+        let browser;
+        try {
+          browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+          });
+          const page = await browser.newPage();
+          await page.setViewport({ width: 1280, height: 800 });
+          await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36');
+
+          if (input.url) {
+            await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          }
+
+          let result;
+          if (action === 'navigate') {
+            result = { url: page.url(), title: await page.title() };
+          } else if (action === 'get_text') {
+            const text = await page.evaluate(() => document.body.innerText);
+            result = { url: page.url(), title: await page.title(), text: text.slice(0, 10000) };
+          } else if (action === 'get_links') {
+            const links = await page.evaluate(() =>
+              Array.from(document.querySelectorAll('a[href]')).slice(0, 50)
+                .map(a => ({ text: a.innerText.trim().slice(0, 100), href: a.href }))
+            );
+            result = { url: page.url(), links };
+          } else if (action === 'screenshot') {
+            const screenshotPath = input.output_path
+              ? expandPath(input.output_path)
+              : path.join(this.homeDir, 'internal', `screenshot-${Date.now()}.png`);
+            fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+            await page.screenshot({ path: screenshotPath, fullPage: input.full_page || false });
+            result = { url: page.url(), saved_to: screenshotPath };
+          } else if (action === 'click') {
+            if (!input.selector) { result = { error: 'click requires selector' }; }
+            else {
+              await page.click(input.selector);
+              await page.waitForNetworkIdle({ timeout: 5000 }).catch(() => {});
+              result = { clicked: input.selector, url: page.url() };
+            }
+          } else if (action === 'type') {
+            if (!input.selector || input.text === undefined) { result = { error: 'type requires selector and text' }; }
+            else {
+              await page.click(input.selector);
+              await page.type(input.selector, input.text);
+              result = { typed: input.text, into: input.selector };
+            }
+          } else if (action === 'evaluate') {
+            if (!input.script) { result = { error: 'evaluate requires script' }; }
+            else {
+              const evalResult = await page.evaluate(new Function(`return (${input.script})()`));
+              result = { result: evalResult };
+            }
+          } else if (action === 'scroll') {
+            await page.evaluate((px) => window.scrollBy(0, px), input.pixels || 500);
+            result = { scrolled: input.pixels || 500 };
+          } else {
+            result = { error: `Unknown action: ${action}. Valid: navigate, get_text, get_links, screenshot, click, type, evaluate, scroll` };
+          }
+          await browser.close();
+          return result;
+        } catch (e) {
+          if (browser) await browser.close().catch(() => {});
+          return { error: e.message };
+        }
+      }
+
       case 'image_analyze': {
         // Resolve source: local file → base64, URL → pass through
         const isUrl = /^https?:\/\//.test(input.source);
