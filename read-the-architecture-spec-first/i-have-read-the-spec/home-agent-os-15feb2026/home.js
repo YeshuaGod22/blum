@@ -566,6 +566,77 @@ print(json.dumps(results))
         return { error: `Unknown action: ${action}. Valid: list, add, update, remove, enable, disable` };
       }
 
+      case 'http_request': {
+        // Authenticated HTTP/HTTPS requests with full control over method, headers, body.
+        // Use when web_fetch isn't enough — e.g. POST to an API, custom auth headers,
+        // reading JSON APIs, webhooks, etc.
+        return new Promise((resolve) => {
+          let urlObj;
+          try { urlObj = new URL(input.url); }
+          catch (e) { resolve({ error: `Invalid URL: ${input.url}` }); return; }
+          const mod = urlObj.protocol === 'https:' ? https : http;
+          const method = (input.method || 'GET').toUpperCase();
+          const headers = input.headers || {};
+          if (!headers['User-Agent']) headers['User-Agent'] = 'blum-home/1.0';
+          let body = null;
+          if (input.body) {
+            body = typeof input.body === 'string' ? input.body : JSON.stringify(input.body);
+            if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+            headers['Content-Length'] = Buffer.byteLength(body);
+          }
+          const options = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+            path: urlObj.pathname + urlObj.search,
+            method,
+            headers,
+          };
+          const req = mod.request(options, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              let parsed;
+              try { parsed = JSON.parse(data); } catch { parsed = data.slice(0, 10000); }
+              resolve({ status: res.statusCode, headers: res.headers, body: parsed });
+            });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          if (body) req.write(body);
+          req.end();
+        });
+      }
+
+      case 'list_rooms': {
+        // Returns room topology from the room server — what rooms exist, who's in them.
+        return new Promise((resolve) => {
+          http.get('http://localhost:3141/api/rooms', (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try {
+                const rooms = JSON.parse(data);
+                const summary = {};
+                for (const [name, room] of Object.entries(rooms)) {
+                  summary[name] = {
+                    participants: room.participants || [],
+                    message_count: (room.chatlog || room.transcript || []).length,
+                  };
+                }
+                resolve(summary);
+              } catch (e) { resolve({ error: e.message }); }
+            });
+          }).on('error', e => resolve({ error: e.message }));
+        });
+      }
+
+      case 'get_home_config': {
+        // Returns own config: name, model, uid, rooms, tokenBudget.
+        // Sensitive fields (apiKey, privateKey) are omitted.
+        const { name, uid, model, rooms, tokenBudget, maxTokens, createdAt } = this.config;
+        const currentRooms = Object.keys(this.rooms);
+        return { name, uid, model, configuredRooms: rooms, activeRooms: currentRooms, tokenBudget, maxTokens, createdAt };
+      }
+
       case 'image_analyze': {
         // Resolve source: local file → base64, URL → pass through
         const isUrl = /^https?:\/\//.test(input.source);

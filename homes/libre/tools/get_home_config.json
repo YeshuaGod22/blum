@@ -1,0 +1,1 @@
+{"name":"get_home_config","description":"Read your own home configuration — name, model, UID, configured rooms, active rooms, token budget. Useful for self-awareness: knowing what model you're running on, what rooms you're in, and what your token budget is. Sensitive fields (API keys) are omitted.","input_schema":{"type":"object","properties":{},"required":[]}}

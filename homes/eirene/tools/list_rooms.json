@@ -1,0 +1,1 @@
+{"name":"list_rooms","description":"Get the current room topology from the room server — what rooms exist, who's in each room, and how many messages each room has. Use to understand who else is active and what rooms you could join or send to.","input_schema":{"type":"object","properties":{},"required":[]}}
