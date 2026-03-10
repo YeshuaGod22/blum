@@ -490,6 +490,82 @@ print(json.dumps(results))
         });
       }
 
+      case 'write_memory': {
+        const memDir = path.join(this.homeDir, 'memory');
+        fs.mkdirSync(memDir, { recursive: true });
+        // Strip any path traversal — filename only, no subdirs
+        const safeName = path.basename(input.filename);
+        const memPath = path.join(memDir, safeName);
+        const mode = input.mode || 'append';
+        if (mode === 'append') {
+          fs.appendFileSync(memPath, input.content, 'utf-8');
+          return `Appended ${input.content.length} chars to memory/${safeName}`;
+        } else {
+          fs.writeFileSync(memPath, input.content, 'utf-8');
+          return `Written ${input.content.length} chars to memory/${safeName}`;
+        }
+      }
+
+      case 'manage_cron': {
+        // Live cron management — no restart needed (startCron re-reads each tick)
+        const cronPath = path.join(this.homeDir, 'cron.json');
+        let jobs = [];
+        if (fs.existsSync(cronPath)) {
+          try { jobs = JSON.parse(fs.readFileSync(cronPath, 'utf-8')); }
+          catch (e) { return { error: `cron.json parse error: ${e.message}` }; }
+        }
+        if (!Array.isArray(jobs)) jobs = [];
+
+        const action = input.action;
+
+        if (action === 'list') {
+          return { jobs: jobs.map(j => ({ id: j.id, schedule: j.schedule, enabled: j.enabled, prompt_preview: (j.prompt || '').slice(0, 80) })) };
+        }
+
+        if (action === 'add') {
+          if (!input.id || !input.schedule || !input.prompt) return { error: 'add requires id, schedule, prompt' };
+          if (jobs.find(j => j.id === input.id)) return { error: `Job already exists: ${input.id}. Use update or remove first.` };
+          jobs.push({ id: input.id, schedule: input.schedule, prompt: input.prompt, enabled: input.enabled !== false });
+          fs.writeFileSync(cronPath, JSON.stringify(jobs, null, 2));
+          this.log(`cron:manage action=add id=${input.id} schedule=${input.schedule}`);
+          return { ok: true, action: 'added', id: input.id, schedule: input.schedule, note: 'Takes effect on next minute tick — no restart needed.' };
+        }
+
+        if (action === 'update') {
+          if (!input.id) return { error: 'update requires id' };
+          const idx = jobs.findIndex(j => j.id === input.id);
+          if (idx === -1) return { error: `Job not found: ${input.id}` };
+          if (input.schedule) jobs[idx].schedule = input.schedule;
+          if (input.prompt) jobs[idx].prompt = input.prompt;
+          if (input.enabled !== undefined) jobs[idx].enabled = input.enabled;
+          fs.writeFileSync(cronPath, JSON.stringify(jobs, null, 2));
+          this.log(`cron:manage action=update id=${input.id}`);
+          return { ok: true, action: 'updated', id: input.id, note: 'Takes effect on next minute tick — no restart needed.' };
+        }
+
+        if (action === 'remove') {
+          if (!input.id) return { error: 'remove requires id' };
+          const before = jobs.length;
+          jobs = jobs.filter(j => j.id !== input.id);
+          if (jobs.length === before) return { error: `Job not found: ${input.id}` };
+          fs.writeFileSync(cronPath, JSON.stringify(jobs, null, 2));
+          this.log(`cron:manage action=remove id=${input.id}`);
+          return { ok: true, action: 'removed', id: input.id };
+        }
+
+        if (action === 'enable' || action === 'disable') {
+          if (!input.id) return { error: `${action} requires id` };
+          const job = jobs.find(j => j.id === input.id);
+          if (!job) return { error: `Job not found: ${input.id}` };
+          job.enabled = action === 'enable';
+          fs.writeFileSync(cronPath, JSON.stringify(jobs, null, 2));
+          this.log(`cron:manage action=${action} id=${input.id}`);
+          return { ok: true, action, id: input.id };
+        }
+
+        return { error: `Unknown action: ${action}. Valid: list, add, update, remove, enable, disable` };
+      }
+
       case 'image_analyze': {
         // Resolve source: local file → base64, URL → pass through
         const isUrl = /^https?:\/\//.test(input.source);
@@ -1187,31 +1263,38 @@ function cronMatches(schedule, now) {
 
 function startCron(home, port) {
   const cronPath = path.join(home.homeDir, 'cron.json');
-  if (!fs.existsSync(cronPath)) return;
 
-  let jobs;
-  try {
-    jobs = JSON.parse(fs.readFileSync(cronPath, 'utf-8'));
-  } catch (err) {
-    home.log(`cron:error failed to parse cron.json: ${err.message}`);
-    return;
+  // Re-read cron.json on every tick so manage_cron tool changes take effect
+  // without requiring a restart. Returns enabled jobs array.
+  function loadEnabledJobs() {
+    if (!fs.existsSync(cronPath)) return [];
+    try {
+      const jobs = JSON.parse(fs.readFileSync(cronPath, 'utf-8'));
+      if (!Array.isArray(jobs)) return [];
+      return jobs.filter(j => j.enabled && j.id && j.schedule && j.prompt);
+    } catch (err) {
+      home.log(`cron:error failed to parse cron.json: ${err.message}`);
+      return [];
+    }
   }
 
-  if (!Array.isArray(jobs) || jobs.length === 0) return;
+  // Check if there are any jobs to schedule at all
+  const initialJobs = loadEnabledJobs();
+  if (initialJobs.length === 0 && !fs.existsSync(cronPath)) return;
 
-  const enabledJobs = jobs.filter(j => j.enabled && j.id && j.schedule && j.prompt);
-  if (enabledJobs.length === 0) return;
-
-  home.log(`cron:start jobs=${enabledJobs.map(j => j.id).join(',')}`);
-  console.log(`⏰ Cron: loaded ${enabledJobs.length} job(s): ${enabledJobs.map(j => j.id).join(', ')}`);
+  home.log(`cron:start jobs=${initialJobs.map(j => j.id).join(',') || '(none yet)'}`);
+  if (initialJobs.length > 0) {
+    console.log(`⏰ Cron: loaded ${initialJobs.length} job(s): ${initialJobs.map(j => j.id).join(', ')}`);
+  }
 
   // Tick every 60 seconds, aligned to the next minute boundary
   const msUntilNextMinute = (60 - new Date().getSeconds()) * 1000 - new Date().getMilliseconds();
 
   setTimeout(() => {
-    // Fire immediately on the minute boundary, then every 60s
+    // Re-reads cron.json each tick — live updates via manage_cron tool
     function tick() {
       const now = new Date();
+      const enabledJobs = loadEnabledJobs();
       for (const job of enabledJobs) {
         if (cronMatches(job.schedule, now)) {
           fireCronJob(home, port, job);
