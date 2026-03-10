@@ -49,16 +49,16 @@ function createHome(name, homeDir, options = {}) {
   fs.writeFileSync(path.join(homeDir, 'blocked.json'), JSON.stringify({ rooms: [], participants: [] }, null, 2));
   fs.writeFileSync(path.join(homeDir, 'ops.log'), '');
 
-  // ── Copy standard tool set from eiran's home (canonical reference) ──
-  const eiranToolsDir = path.join(__dirname, '..', '..', '..', 'homes', 'eiran', 'tools');
-  if (fs.existsSync(eiranToolsDir)) {
-    const toolFiles = fs.readdirSync(eiranToolsDir).filter(f => f.endsWith('.json'));
+  // ── Copy standard tool set from shared/tools/ (canonical, tracked in git) ──
+  const sharedToolsDir = path.join(__dirname, '..', '..', '..', 'shared', 'tools');
+  if (fs.existsSync(sharedToolsDir)) {
+    const toolFiles = fs.readdirSync(sharedToolsDir).filter(f => f.endsWith('.json'));
     for (const f of toolFiles) {
-      fs.copyFileSync(path.join(eiranToolsDir, f), path.join(homeDir, 'tools', f));
+      fs.copyFileSync(path.join(sharedToolsDir, f), path.join(homeDir, 'tools', f));
     }
-    console.log(`   Tools: ${toolFiles.length} standard tools installed`);
+    console.log(`   Tools: ${toolFiles.length} standard tools installed from shared/tools/`);
   } else {
-    console.log(`   Tools: eiran tools dir not found — copy manually from homes/eiran/tools/`);
+    console.log(`   Tools: shared/tools/ not found — copy manually from shared/tools/`);
   }
 
   // ── Copy BLUM-PROTOCOL.md into docs/ ──

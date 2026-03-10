@@ -1,0 +1,1 @@
+{"name":"web_fetch","description":"Fetch and extract readable text content from a URL.","input_schema":{"type":"object","properties":{"url":{"type":"string","description":"URL to fetch"}},"required":["url"]}}

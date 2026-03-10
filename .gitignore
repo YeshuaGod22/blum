@@ -18,6 +18,10 @@ blum/
 **/history/
 **/projects/
 **/tools/
+
+# But the canonical shared tool set IS tracked
+!shared/tools/
+!shared/tools/*.json
 **/internal/
 **/blocked.json
 **/rooms.json

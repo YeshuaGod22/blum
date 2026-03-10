@@ -64,6 +64,38 @@ const router = require('./router-dispatches-to-rooms-v1-16feb2026/router-v1-16fe
 const nucleus = require('../nucleus-pure-llm-call-messages-in-string-out-15feb2026/nucleus-15feb2026.js');
 
 
+// ── Peer Discovery Cache ──────────────────
+// Maps agent name → port. Populated lazily by probing ports 4100-4130.
+// Avoids hardcoded port maps — self-healing when new homes are added.
+const _peerPortCache = new Map();
+const PEER_PORT_RANGE = { start: 4100, end: 4130 };
+
+async function findAgentPort(name) {
+  const key = name.toLowerCase();
+  if (_peerPortCache.has(key)) return _peerPortCache.get(key);
+  // Probe all ports in range, collect results
+  const probes = [];
+  for (let p = PEER_PORT_RANGE.start; p <= PEER_PORT_RANGE.end; p++) {
+    probes.push(new Promise((resolve) => {
+      const req = http.get(`http://localhost:${p}/status`, { timeout: 500 }, (res) => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+          try {
+            const status = JSON.parse(d);
+            if (status.name) _peerPortCache.set(status.name.toLowerCase(), p);
+            resolve(status.name?.toLowerCase() === key ? p : null);
+          } catch { resolve(null); }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    }));
+  }
+  const results = await Promise.all(probes);
+  return results.find(p => p !== null) || null;
+}
+
 // ── Home State ────────────────────────────
 class Home {
   constructor(homeDir) {
@@ -407,15 +439,9 @@ print(json.dumps(results))
       }
 
       case 'get_agent_status': {
-        // Agent name → port mapping from START-HOMES.sh convention
-        const agentPorts = {
-          ami: 4100, alpha: 4110, beta: 4111, gamma: 4112,
-          eirene: 4114, lens: 4117, eiran: 4120, selah: 4121,
-          keter: 4122, libre: 4123, meridian: 4124, lanternroot: 4125,
-        };
         const targetName = input.name.toLowerCase();
-        const port = agentPorts[targetName];
-        if (!port) return { error: `Unknown agent: ${input.name}. Known agents: ${Object.keys(agentPorts).join(', ')}` };
+        const port = await findAgentPort(targetName);
+        if (!port) return { alive: false, name: targetName, error: `Agent not found on ports ${PEER_PORT_RANGE.start}-${PEER_PORT_RANGE.end}` };
         return new Promise((resolve) => {
           http.get(`http://localhost:${port}/status`, (res) => {
             let data = '';
@@ -429,14 +455,9 @@ print(json.dumps(results))
       }
 
       case 'dispatch_to_agent': {
-        const agentPorts = {
-          ami: 4100, alpha: 4110, beta: 4111, gamma: 4112,
-          eirene: 4114, lens: 4117, eiran: 4120, selah: 4121,
-          keter: 4122, libre: 4123, meridian: 4124, lanternroot: 4125,
-        };
         const targetName = input.to.toLowerCase();
-        const port = agentPorts[targetName];
-        if (!port) return { error: `Unknown agent: ${input.to}. Known agents: ${Object.keys(agentPorts).join(', ')}` };
+        const port = await findAgentPort(targetName);
+        if (!port) return { error: `Agent not found: ${input.to} (probed ports ${PEER_PORT_RANGE.start}-${PEER_PORT_RANGE.end})` };
         const room = input.room || 'boardroom';
         const timestamp = Date.now();
         const msg = {
