@@ -1,0 +1,14 @@
+{
+  "name": "zoom_uid",
+  "description": "Expand a compressed tool output by its UID. Use when you see [uid:XXX] markers in context and need the full original content. The foveated context system compresses large tool outputs to save space - this tool lets you retrieve the original.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "uid": {
+        "type": "string",
+        "description": "The UID to expand (e.g., 'raw-20260220-154532-003')"
+      }
+    },
+    "required": ["uid"]
+  }
+}

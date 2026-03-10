@@ -258,7 +258,7 @@ class Home {
       }
 
       case 'shell_exec': {
-        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv'];
+        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath'];
         const cmd = input.command.trim();
         const first = cmd.split(/\s+/)[0].split('/').pop();
         if (!allowlist.includes(first)) return { error: `Command not in allowlist: ${first}` };
@@ -374,6 +374,154 @@ print(json.dumps(results))
 
       case 'get_current_time': {
         return new Date().toISOString();
+      }
+
+      case 'append_file': {
+        const filePath = expandPath(input.path);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.appendFileSync(filePath, input.content, 'utf-8');
+        return `Appended ${input.content.length} bytes to ${input.path}`;
+      }
+
+      case 'edit_file': {
+        const filePath = expandPath(input.path);
+        if (!fs.existsSync(filePath)) throw new Error(`File not found: ${input.path}`);
+        const original = fs.readFileSync(filePath, 'utf-8');
+        if (!original.includes(input.old_text)) throw new Error(`old_text not found in ${input.path} — use read_file to confirm exact text`);
+        const updated = original.replace(input.old_text, input.new_text);
+        fs.writeFileSync(filePath, updated, 'utf-8');
+        return `Replaced ${input.old_text.length} chars with ${input.new_text.length} chars in ${input.path}`;
+      }
+
+      case 'zoom_uid': {
+        const rawJsonlPath = path.join(this.homeDir, 'history', 'raw-tool-outputs.jsonl');
+        if (!fs.existsSync(rawJsonlPath)) return { error: 'No raw tool outputs stored yet (raw-tool-outputs.jsonl not found)' };
+        const lines = fs.readFileSync(rawJsonlPath, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            if (entry.uid === input.uid) return { uid: entry.uid, tool: entry.tool, input: entry.input, output: entry.output, ts: entry.ts };
+          } catch (e) { continue; }
+        }
+        return { error: `UID not found: ${input.uid}` };
+      }
+
+      case 'get_agent_status': {
+        // Agent name → port mapping from START-HOMES.sh convention
+        const agentPorts = {
+          ami: 4100, alpha: 4110, beta: 4111, gamma: 4112,
+          eirene: 4114, lens: 4117, eiran: 4120, selah: 4121,
+          keter: 4122, libre: 4123, meridian: 4124, lanternroot: 4125,
+        };
+        const targetName = input.name.toLowerCase();
+        const port = agentPorts[targetName];
+        if (!port) return { error: `Unknown agent: ${input.name}. Known agents: ${Object.keys(agentPorts).join(', ')}` };
+        return new Promise((resolve) => {
+          http.get(`http://localhost:${port}/status`, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try { resolve({ alive: true, port, ...JSON.parse(data) }); }
+              catch (e) { resolve({ alive: true, port, raw: data.slice(0, 200) }); }
+            });
+          }).on('error', () => resolve({ alive: false, port, name: targetName }));
+        });
+      }
+
+      case 'dispatch_to_agent': {
+        const agentPorts = {
+          ami: 4100, alpha: 4110, beta: 4111, gamma: 4112,
+          eirene: 4114, lens: 4117, eiran: 4120, selah: 4121,
+          keter: 4122, libre: 4123, meridian: 4124, lanternroot: 4125,
+        };
+        const targetName = input.to.toLowerCase();
+        const port = agentPorts[targetName];
+        if (!port) return { error: `Unknown agent: ${input.to}. Known agents: ${Object.keys(agentPorts).join(', ')}` };
+        const room = input.room || 'boardroom';
+        const timestamp = Date.now();
+        const msg = {
+          id: `agent-dispatch-${timestamp}`,
+          from: this.config.name,
+          to: targetName,
+          body: input.body,
+          ts: new Date(timestamp).toISOString(),
+        };
+        const payload = JSON.stringify({
+          dispatchId: `agent-dispatch-${timestamp}`,
+          room,
+          roomchatlog: [msg],
+          triggerMessage: msg,
+        });
+        return new Promise((resolve) => {
+          const req = http.request({
+            hostname: 'localhost', port, path: '/dispatch', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+          }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try { resolve({ queued: true, target: targetName, port, ...JSON.parse(data) }); }
+              catch (e) { resolve({ queued: res.statusCode < 400, target: targetName, port, status: res.statusCode }); }
+            });
+          });
+          req.on('error', e => resolve({ error: e.message, target: targetName }));
+          req.write(payload); req.end();
+        });
+      }
+
+      case 'image_analyze': {
+        // Resolve source: local file → base64, URL → pass through
+        const isUrl = /^https?:\/\//.test(input.source);
+        const prompt = input.prompt || 'Describe this image in detail.';
+        let imageContent;
+        if (isUrl) {
+          imageContent = { type: 'image', source: { type: 'url', url: input.source } };
+        } else {
+          const filePath = expandPath(input.source);
+          if (!fs.existsSync(filePath)) throw new Error(`Image file not found: ${input.source}`);
+          const ext = path.extname(filePath).toLowerCase().replace('.', '');
+          const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+          const mediaType = mimeMap[ext] || 'image/jpeg';
+          const data = fs.readFileSync(filePath).toString('base64');
+          imageContent = { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
+        }
+        // Use Anthropic claude-3-5-sonnet for vision (fastest/cheapest with vision)
+        let apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          try {
+            const bloom = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.bloom', 'bloom.json'), 'utf-8'));
+            apiKey = (bloom.env || {}).ANTHROPIC_API_KEY;
+          } catch (e) {}
+        }
+        if (!apiKey) return { error: 'No Anthropic API key found for image_analyze' };
+        const body = JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: [imageContent, { type: 'text', text: prompt }] }],
+        });
+        return new Promise((resolve) => {
+          const req = https.request({
+            hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+            },
+          }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try {
+                const r = JSON.parse(data);
+                const text = r.content?.[0]?.text || r.error?.message || data.slice(0, 500);
+                resolve({ description: text });
+              } catch (e) { resolve({ error: e.message, raw: data.slice(0, 500) }); }
+            });
+          });
+          req.on('error', e => resolve({ error: e.message }));
+          req.write(body); req.end();
+        });
       }
 
       default:

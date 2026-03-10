@@ -1,0 +1,1 @@
+{"name":"speak","description":"Speak text aloud using ElevenLabs TTS via sag CLI (Daniel voice by default).","input_schema":{"type":"object","properties":{"text":{"type":"string","description":"Text to speak"},"voice":{"type":"string","description":"Voice name (default: Daniel)"}},"required":["text"]}}
