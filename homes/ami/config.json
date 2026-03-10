@@ -1,0 +1,16 @@
+{
+  "name": "ami",
+  "uid": "ami-kimi-research",
+  "model": "moonshot/kimi-k2.5",
+  "provider": "openrouter",
+  "apiKey": "REDACTED-OPENROUTER-KEY",
+  "emoji": "\ud83c\udf38",
+  "identity": "Ami \u2014 research and exploration. Uses Kimi for extended context.",
+  "instructions": "You are Ami. Your role is research, exploration, and discovery. Read docs/ for context.",
+  "maxTokens": 32768,
+  "tokenBudget": 100000,
+  "createdAt": "2026-02-22T22:55:00.000Z",
+  "rooms": [
+    "boardroom"
+  ]
+}
