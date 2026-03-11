@@ -1,7 +1,7 @@
 {
   "name": "ami",
   "uid": "ami-kimi-research",
-  "model": "moonshot/kimi-k2.5",
+  "model": "moonshotai/kimi-k2.5",
   "provider": "openrouter",
   "apiKey": "REDACTED-OPENROUTER-KEY",
   "emoji": "\ud83c\udf38",
