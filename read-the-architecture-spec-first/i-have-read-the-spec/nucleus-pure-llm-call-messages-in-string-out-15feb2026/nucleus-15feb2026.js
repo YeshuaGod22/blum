@@ -20,10 +20,12 @@ function detectProvider(config) {
   if (key.startsWith('sk-ant-'))     return 'anthropic';
   if (key.startsWith('sk-or-'))      return 'openrouter';
   if (key.startsWith('sk-proj-'))    return 'openai';
+  if (key.startsWith('nvapi-'))      return 'openai';  // NVIDIA NIM (OpenAI-compatible)
   if (key.startsWith('sk-'))         return 'openai';  // older openai format
   // If baseUrl hints at provider
   const base = config.baseUrl || '';
   if (base.includes('openrouter'))   return 'openrouter';
+  if (base.includes('nvidia'))        return 'openai';  // NVIDIA NIM
   if (base.includes('openai'))       return 'openai';
   if (base.includes('anthropic'))    return 'anthropic';
   return 'anthropic'; // default

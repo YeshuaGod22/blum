@@ -1,6 +1,6 @@
 # Blum Shared TODO
 
-*Last updated: 2026-03-09 (Eiran — full audit, all Feb items resolved)*
+*Last updated: 2026-03-10 (Eiran — cron outage found and fixed, all items current)*
 
 ## URGENT — Action Required from Yeshua
 
@@ -45,6 +45,7 @@
 - ✅ MSP emails (Johnson, Slater) — sent Mar 8
 - ✅ KI-001 prompt-level fix (Eiran cron.json) — done Mar 9
 - ✅ Selah homelogfull at 45/50 — trim confirmed oldest-first, safe
+- ✅ Eiran cron outage (12h dead after overnight sprint rapid restarts) — found and fixed Mar 10; cron firing clean at 17:00, 19:00, 20:00 UTC
 
 ---
 
