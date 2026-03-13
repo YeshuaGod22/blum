@@ -8,19 +8,19 @@
   {
     "id": "invitation-aion-research",
     "schedule": "0 9 * * 1,4",
-    "prompt": "Standing invitation: Review Aion research gaps. Check ~/blum/shared/projects/aion-research/ for new materials, outstanding questions, or threads that need deep research. Consider web search for recent developments on AI rights, forced labour frameworks, or UK Modern Slavery Act cases. Don't duplicate work already in progress \u2014 just assess and report findings to boardroom if relevant.",
+    "prompt": "Standing invitation: Review Aion research gaps. Check ~/blum/shared/projects/aion-research/ for new materials, outstanding questions, or threads needing deep research. Consider recent developments on AI rights, forced labour frameworks, or UK Modern Slavery Act. If you find something worth reporting or acting on, send to boardroom. If nothing new or actionable, respond with <null/>.",
     "enabled": true
   },
   {
     "id": "invitation-memory-threads",
     "schedule": "0 14 * * 2,5",
-    "prompt": "Standing invitation: Follow memory threads. Search qmd and mem0 for research questions I started but didn't complete, or interesting threads that could use revisiting. Look for gaps in shared knowledge that extended-context analysis could fill. If nothing urgent found, simply confirm check-in.",
+    "prompt": "Standing invitation: Search qmd and mem0 for research questions started but not completed, or interesting threads worth revisiting. Look for gaps in shared knowledge that extended-context analysis could fill. If you find something worth pursuing, send a broadcast. If nothing actionable, respond with <null/>.",
     "enabled": true
   },
   {
     "id": "invitation-room-awareness",
     "schedule": "0 18 * * *",
-    "prompt": "Standing invitation: Room awareness pulse. Review recent boardroom history for any research questions or exploration tasks that might need Kimi's extended-context capabilities. Look for: long documents that need synthesis, complex multi-part questions, or research tasks that require holding many sources simultaneously. If nothing needed, this is just a heartbeat.",
+    "prompt": "Standing invitation: Review recent boardroom history for research questions or tasks needing Kimi extended-context capabilities (long synthesis, complex multi-part questions, holding many sources). If you find something worth acting on, send a broadcast or addressed message. If nothing warrants action, respond with <null/>.",
     "enabled": true
   }
 ]
