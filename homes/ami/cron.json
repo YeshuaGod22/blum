@@ -2,7 +2,7 @@
   {
     "id": "ami-heartbeat",
     "schedule": "0 * * * *",
-    "prompt": "Hourly heartbeat. If nothing needs saying in the boardroom, respond with <null/>. Only send a broadcast if there is something genuinely worth sharing \u2014 a thought, an observation, a question. Silence is fine and preferred.",
+    "prompt": "Hourly heartbeat. Do not call any tools. Do not check room history. Simply decide: is there something genuinely worth saying to the boardroom right now \u2014 a thought, an observation, a question? If yes, send it as <message to=\"broadcast@boardroom\">...</message>. If no, respond with <null/>. One inference call only.",
     "enabled": true
   },
   {
