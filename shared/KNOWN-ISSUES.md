@@ -60,3 +60,29 @@ same cycle. But this relies on agent discipline — not enforced at infra level.
 - AGENTS.md autonomy constraint: "touching home.js or any home agent OS file"
   requires Yeshua approval
 - Documented in BLUM-PROTOCOL.md (all agent docs)
+
+---
+
+## KI-003: Cron ticker setInterval drift causes missed hourly fires
+
+**Discovered:** 2026-03-13 by Eiran
+**Severity:** Low — affects reliability of hourly crons on homes with slow inference
+
+**Root cause:** `startCron()` in `home.js` uses `setInterval(tick, 60000)` aligned to the next minute boundary at boot. Each tick checks `getMinutes() === cronField` for exact match. Over many hours, accumulated event loop drift (especially from async NVIDIA NIM / API calls adding overhead) causes ticks to land at minute=1 or minute=2 instead of minute=0, silently missing the fire.
+
+**Evidence:** Ami's `ami-heartbeat` (schedule `0 * * * *`) fired at 15:00, 17:00, 18:00, 19:00, 20:00 but missed 16:00 and 21:00. Home started at 14:51:12. By tick 369 (~21:00), estimated ~3min cumulative drift.
+
+**Affected:** Any home running for >4 hours with slow inference (NVIDIA NIM, OpenRouter). Eiran's `peer-pulse-hourly` likely affected too.
+
+**Proposed fix:** Replace exact-minute match with a ±1 minute window, plus a per-job `lastFiredMinute` guard to prevent double-firing within the same minute.
+
+```js
+// In cronMatches or startCron tick():
+const minuteWindow = [now.getMinutes(), (now.getMinutes() - 1 + 60) % 60];
+// Check if job.schedule minute field matches either current or previous minute
+// AND job hasn't fired in the last 2 minutes
+```
+
+**Workaround:** Restart home periodically (fleet watchdog at 2h resets drift). Or use non-exact schedules like `*/5 * * * *` where drift can't skip an entire interval.
+
+**Status:** Open — needs home.js patch, Yeshua approval before touching shared code.
