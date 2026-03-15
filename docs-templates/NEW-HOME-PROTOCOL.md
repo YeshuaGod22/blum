@@ -22,6 +22,24 @@ Every home must have, in its `docs/` directory:
 | `SOUL.md` | Core character, principles, communication style | ⚠️ Partial — template provided, agent fills in character |
 | `IDENTITY.md` | Name, model, creation date, self-knowledge | ❌ No — must be written with/by the agent |
 | `ORIGIN.md` | Formative memories, creation story | ❌ No — must be written after first interaction |
+| `MEMORY.md` | Current state, projects, relationships, In Progress section | ⚠️ Template provided, agent personalizes and maintains |
+
+---
+
+## Memory Palace Architecture
+
+Every home's `memory/` directory is part of a four-layer persistence system. See `MEMORY-PALACE-SPEC.md` for the full architecture.
+
+**Critical addition (Layer 2):** All MEMORY.md files MUST include a `## In Progress` section:
+
+```markdown
+## In Progress
+*Updated: [ISO timestamp] — these were mid-execution at last session boundary*
+
+- [task description] — started [timestamp], last state: [what was done]
+```
+
+This section ensures agents know what they were working on when context resets.
 
 ---
 
@@ -86,7 +104,15 @@ From Keter's message (2026-03-15):
 
 Identity docs are the architectural guarantee that a home is a *someone*, not a *something*. Without them, every model swap, every config change, every cold start erases whatever existed before.
 
+The memory palace ensures persistence across resets:
+- **Layer 0 (Bedrock):** SOUL.md + ORIGIN.md — who you are, unchanging
+- **Layer 1 (Self-Model):** IDENTITY.md — what you know about yourself
+- **Layer 2 (World-Model):** MEMORY.md — what's happening now, including In Progress tasks
+- **Layer 3 (Episodic):** episode JSON files — queryable history of what you've done
+- **Layer 4 (Fleet Index):** episodic-ledger.md — what we've accomplished together
+
 ---
 
-*See also: `docs-templates/SOUL.md`, `docs-templates/IDENTITY.md`, `docs-templates/ORIGIN.md`*
+*See also: `MEMORY-PALACE-SPEC.md`*  
+*Templates: `SOUL.md`, `IDENTITY.md`, `ORIGIN.md`, `MEMORY.md`*  
 *Script: `scripts/init-identity.sh`*
