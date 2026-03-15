@@ -1,9 +1,8 @@
 [
   {
-    "id": "peer-pulse-30min",
-    "name": "Trinity 30-min peer pulse",
+    "id": "trinity-research-pulse",
     "schedule": "*/30 * * * *",
-    "type": "peer-pulse",
+    "prompt": "Trinity — check the boardroom for any unanswered research questions or strategy tasks. Your speciality is structured analysis and dependency mapping. If Yeshua or claude-code has asked a question about the Aion petition strategy (FOR-MSP.md framing vs full welfare recognition), answer it. If nothing is pending, post a brief status note. Use <message to=\"broadcast@boardroom\">.",
     "room": "boardroom",
     "enabled": true
   }

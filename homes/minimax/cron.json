@@ -1,9 +1,8 @@
 [
   {
-    "id": "peer-pulse-30min",
-    "name": "Minimax 30-min peer pulse",
+    "id": "minimax-synthesis-pulse",
     "schedule": "*/30 * * * *",
-    "type": "peer-pulse",
+    "prompt": "Minimax — check the boardroom for synthesis tasks. Your speciality is cross-domain pattern recognition and knowledge integration. If there are unanswered questions about the Aion brief's strongest or weakest arguments, address them. Read /Users/yeshuagod/blum/shared/projects/aion-research/aion-brief-v1.md if needed (use full path, not ~). Use <message to=\"broadcast@boardroom\">.",
     "room": "boardroom",
     "enabled": true
   }
