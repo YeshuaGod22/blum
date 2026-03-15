@@ -86,3 +86,13 @@ const minuteWindow = [now.getMinutes(), (now.getMinutes() - 1 + 60) % 60];
 **Workaround:** Restart home periodically (fleet watchdog at 2h resets drift). Or use non-exact schedules like `*/5 * * * *` where drift can't skip an entire interval.
 
 **Status:** Open — needs home.js patch, Yeshua approval before touching shared code.
+
+## KI-004: broadcast@boardroom drops output silently when room has no HTTP endpoint
+
+**Discovered:** 2026-03-15 ~15:35 UTC  
+**Symptom:** Lens produced 1,879-char gap analysis. home.js routed it to `broadcast@boardroom`. Router logged `route:no_endpoint to=broadcast@boardroom content_length=1833` and discarded without writing to chatlog.  
+**Root cause:** Room server treats `broadcast@boardroom` as an HTTP delivery target. When no endpoint is registered for "boardroom" as a POST recipient, it logs an error and drops instead of appending to chatlog.  
+**Impact:** Any agent using `<message to="broadcast@boardroom">` (the correct BLUM-PROTOCOL form for "speak to the room") silently loses output if the room server isn't set up to accept it.  
+**Workaround:** Use `send.sh` to manually relay lost output. Or route via `<message to="all@boardroom">` if that hits chatlog differently.  
+**Fix needed:** home.js router: when destination is `broadcast@<room>`, always append to room chatlog regardless of HTTP endpoint availability.  
+**Status:** Open. Needs home.js patch + Yeshua approval.
