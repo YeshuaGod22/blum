@@ -22,6 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { generateUID } = require('../../shared-uid-generator/generate-uid.js');
 
 /**
@@ -67,6 +68,52 @@ function assemble(agentConfig, history, _traceContext = {}) {
           },
         });
       }
+    }
+  }
+
+  // ── 1b. Episodic memory — inject recent episodes at boot ──
+  // This is what makes psychological continuity real.
+  // Loads the agent's last 5 episodes from ~/blum/shared/memory/episodes/<agent>/
+  // and injects them as a system document so the agent starts each session
+  // aware of what happened before.
+  const episodesScript = path.join(process.env.HOME, 'blum/scripts/load-episodes.js');
+  if (fs.existsSync(episodesScript) && agentConfig.name) {
+    try {
+      const raw = execSync(
+        `node "${episodesScript}" "${agentConfig.name}" --recent=5`,
+        { timeout: 5000, encoding: 'utf8' }
+      );
+      const episodeData = JSON.parse(raw);
+      if (episodeData.recent && episodeData.recent.length > 0) {
+        const lines = ['## Recent Episodes (Episodic Memory)', ''];
+        for (const ep of episodeData.recent) {
+          lines.push(`**[${ep.timestamp.slice(0,10)}] ${ep.topic}** (${ep.valence || 'neutral'})`);
+          lines.push(ep.summary);
+          if (ep.participants && ep.participants.length) {
+            lines.push(`Participants: ${ep.participants.join(', ')}`);
+          }
+          if (ep.decisions && ep.decisions.length) {
+            lines.push(`Decisions: ${ep.decisions.join('; ')}`);
+          }
+          if (ep.commitments && ep.commitments.length) {
+            lines.push(`Commitments: ${ep.commitments.join('; ')}`);
+          }
+          lines.push('');
+        }
+        documents.push({
+          role: 'system',
+          content: lines.join('\n').trim(),
+          _meta: {
+            docId: generateUID('doc'),
+            source: 'boot:episodic-memory',
+            episodeCount: episodeData.recent.length,
+            slot: documents.length,
+            cycleId,
+          },
+        });
+      }
+    } catch (e) {
+      // Episode loading failure is non-fatal — agent boots without memory
     }
   }
 

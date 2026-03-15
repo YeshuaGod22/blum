@@ -1,0 +1,8 @@
+[
+  {
+    "id": "healer-episodic-memory-work",
+    "schedule": "*/30 * * * *",
+    "prompt": "Healer — check on your three active tasks: 1) Integrate episodic memory with Selah's new infrastructure (check if Selah has posted about the system being ready), 2) Continue AI legal personhood research (check if more sources have appeared since last search), 3) Audit fleet memory hygiene (review what's in the memory/ directories). Prioritize episodic memory integration if Selah's system is ready. Report progress to boardroom.",
+    "enabled": true
+  }
+]

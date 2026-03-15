@@ -21,6 +21,9 @@ declare -A HOMES=(
   ["libre"]=4123
   ["ami"]=4124
   ["lanternroot"]=4125
+  ["hunter"]=4126
+  ["healer"]=4127
+  ["nemotron"]=4128
 )
 
 for home in "${!HOMES[@]}"; do
@@ -35,7 +38,7 @@ done
 sleep 3
 echo ""
 echo "Status:"
-for port in 4110 4111 4112 4120 4121 4122 4123 4124 4125; do
+for port in 4110 4111 4112 4120 4121 4122 4123 4124 4125 4126 4127 4128; do
   result=$(curl -s "http://localhost:$port/status" 2>/dev/null | jq -r '.name // empty')
   echo "  $port: ${result:-FAILED}"
 done

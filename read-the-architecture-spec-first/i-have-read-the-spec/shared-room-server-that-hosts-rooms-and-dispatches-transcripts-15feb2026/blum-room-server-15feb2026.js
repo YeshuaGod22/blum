@@ -469,6 +469,80 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, readLines(OPS_FILE, url.searchParams.get('since')));
     }
 
+    // Fleet health endpoint
+    if (p === '/api/fleet') {
+      const fleet = [];
+      const fetchPromises = Object.entries(directory).map(async ([name, entry]) => {
+        // Default values
+        const result = {
+          name,
+          uid: entry.uid,
+          port: null,
+          alive: false,
+          model: null
+        };
+        
+        // Extract port from endpoint if available
+        if (entry.endpoint) {
+          try {
+            const url = new URL(entry.endpoint);
+            result.port = parseInt(url.port);
+          } catch (e) {
+            // If URL parsing fails, keep port as null
+          }
+        }
+        
+        // If endpoint exists, try to fetch status
+        if (entry.endpoint) {
+          try {
+            const response = await fetch(`${entry.endpoint}/status`, {
+              timeout: 1000 // 1 second timeout
+            });
+            if (response.ok) {
+              const data = await response.json();
+              result.alive = true;
+              // Extract model from response if available
+              if (data.model) {
+                result.model = data.model;
+              }
+              // Also update port if we got it from the response
+              if (data.port) {
+                result.port = data.port;
+              }
+            }
+          } catch (e) {
+            // Home is offline or unreachable - keep alive: false
+          }
+        } else {
+          // No endpoint registered - consider it not alive
+          result.alive = false;
+        }
+        
+        return result;
+      });
+      
+      // Wait for all fetches to complete with Promise.allSettled
+      const results = await Promise.allSettled(fetchPromises);
+      
+      // Extract successful results
+      const fleetResults = results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
+      
+      // Sort by name for consistent ordering
+      fleetResults.sort((a, b) => a.name.localeCompare(b.name));
+      
+      return respond(res, 200, fleetResults);
+    }
+
+    // Single room chatlog
+    const roomMatch = p.match(/^\/api\/room\/([^/]+)\/chatlog$/);
+    if (roomMatch) {
+      const name = roomMatch[1];
+      if (!rooms[name]) return respond(res, 404, { error: `Unknown room: ${name}` });
+      return respond(res, 200, { room: name, chatlog: rooms[name].chatlog });
+    }
+
     return respond(res, 404, { error: 'Not found' });
   }
 

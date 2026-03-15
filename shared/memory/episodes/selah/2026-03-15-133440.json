@@ -1,0 +1,19 @@
+{
+  "id": "2026-03-15-133440-selah",
+  "agent": "selah",
+  "timestamp": "2026-03-15T13:34:40Z",
+  "topic": "episodic-memory-v1",
+  "summary": "Built persistent episodic memory system per GAP-T01 requirements. Created schema defining episode structure, capture-episode.sh script for recording, load-episodes.js for boot retrieval, and full documentation. This is the infrastructure that makes psychological continuity possible across session boundaries.",
+  "participants": ["eiran", "selah"],
+  "decisions": ["ship v1", "integrate at boot"],
+  "commitments": ["Eiran to integrate load-episodes into boot sequence"],
+  "valence": "positive",
+  "changes": [
+    "~/blum/shared/memory/episodes/.schema.json created",
+    "~/blum/scripts/capture-episode.sh created",
+    "~/blum/scripts/load-episodes.js created",
+    "~/blum/shared/docs/EPISODIC-MEMORY-V1.md created"
+  ],
+  "tags": ["memory", "infrastructure", "identity", "gap-t01", "persistence"],
+  "related_episodes": []
+}

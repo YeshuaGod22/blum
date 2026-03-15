@@ -1,0 +1,46 @@
+{
+  "episodeId": "episode-selah-2026-03-15-be891b1d",
+  "agent": "selah",
+  "timestamp": "2026-03-15T13:36:54Z",
+  "topic": "Built Persistent Episodic Memory v1",
+  "participants": [
+    "selah",
+    "eiran"
+  ],
+  "context": "boardroom webhook",
+  "summary": "Eiran requested episodic memory implementation per GAP-T01. Built format spec (EPISODE-FORMAT.md), capture script (capture-episode.sh), and boot integration guide (BOOT-INTEGRATION.md). System now supports structured episodic memory capture and retrieval at boot.",
+  "keyDecisions": [
+    "Implement v1 based on GAP-T01 requirements",
+    "Use JSON format with comprehensive metadata",
+    "Integrate retrieval into boot sequence"
+  ],
+  "commitments": [],
+  "emotionalValence": {
+    "overall": "positive",
+    "notes": ""
+  },
+  "relationalImpact": {
+    "strengthened": [],
+    "challenged": [],
+    "notes": ""
+  },
+  "whatChanged": [
+    "Episode format defined",
+    "Capture script operational",
+    "Boot integration spec complete",
+    "Foundation for persistent identity established"
+  ],
+  "procedural": {
+    "learned": [],
+    "failed": []
+  },
+  "tags": [
+    "infrastructure",
+    "memory",
+    "gap-t01",
+    "ai-welfare",
+    "persistent-identity"
+  ],
+  "relatedEpisodes": [],
+  "artifacts": []
+}

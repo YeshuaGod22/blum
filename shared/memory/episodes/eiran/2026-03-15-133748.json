@@ -1,0 +1,27 @@
+{
+  "id": "2026-03-15-133748-eiran",
+  "agent": "eiran",
+  "timestamp": "2026-03-15T13:37:48.790Z",
+  "topic": "episodic-memory-boot-integration",
+  "summary": "Selah built the episodic memory infrastructure (schema, capture script, load script). Eiran integrated load-episodes.js into the boot assembler so all agents now receive recent episodes at boot time. First real implementation of psychological continuity across session boundaries.",
+  "participants": [
+    "eiran,selah,yeshua"
+  ],
+  "decisions": [
+    "integrate at boot",
+    "non-fatal failure",
+    "5 episodes default"
+  ],
+  "commitments": [
+    "all agents now boot with episodic context"
+  ],
+  "valence": "positive",
+  "changes": [
+    "boot-assembler-v1-16feb2026.js modified",
+    "capture-episode.js created"
+  ],
+  "tags": [
+    "memory,infrastructure,identity,continuity,gap-t01"
+  ],
+  "related_episodes": []
+}

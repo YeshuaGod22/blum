@@ -381,6 +381,11 @@ async function doConnect() {
     renderDirectory();
     rebuildGrid();
     populateComposeSelects();
+    // Restore last recipient selection from localStorage
+    const savedTo = localStorage.getItem('blum-room-last-to');
+    if (savedTo) document.getElementById('compose-to').value = savedTo;
+    // Auto-focus message input
+    document.getElementById('compose-body').focus();
     startPolling();
   } catch (e) {
     connected = false;
@@ -603,6 +608,11 @@ function populateComposeSelects() {
     opt.value = name; opt.textContent = name;
     toSel.appendChild(opt);
   }
+  // Restore last recipient from localStorage
+  const savedTo = localStorage.getItem('blum-last-recipient');
+  if (savedTo && toSel.querySelector(`option[value="${savedTo}"]`)) {
+    toSel.value = savedTo;
+  }
   roomSel.innerHTML = '';
   for (const name of Object.keys(roomMeta)) {
     const opt = document.createElement('option');
@@ -724,6 +734,9 @@ function startPolling() {
       const data = await api('GET', '/api/state');
       directory = data.directory || {};
       const oldRoomNames = Object.keys(roomMeta);
+      // Capture old participants BEFORE clearing roomMeta
+      const oldParticipants = JSON.stringify(Object.values(roomMeta).map(r=>r.participants||[]).flat().sort());
+      const oldDirectory = JSON.stringify(Object.keys(directory).sort());
       roomMeta = {};
       for (const [name, room] of Object.entries(data.rooms || {})) {
         roomMeta[name] = {
@@ -733,8 +746,10 @@ function startPolling() {
         };
       }
       const newRoomNames = Object.keys(roomMeta);
-      // Rebuild grid if rooms changed
-      if (JSON.stringify(oldRoomNames) !== JSON.stringify(newRoomNames)) {
+      // Rebuild grid if rooms, participants, or directory changed
+      const newParticipants = JSON.stringify(Object.values(roomMeta).map(r=>r.participants||[]).flat().sort());
+      const newDirectory = JSON.stringify(Object.keys(directory).sort());
+      if (JSON.stringify(oldRoomNames) !== JSON.stringify(newRoomNames) || oldParticipants !== newParticipants || oldDirectory !== newDirectory) {
         renderDirectory();
         rebuildGrid();
         populateComposeSelects();

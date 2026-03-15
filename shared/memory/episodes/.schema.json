@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Episode",
+  "description": "Structured episodic memory unit for Blum agents",
+  "type": "object",
+  "required": ["id", "agent", "timestamp", "topic", "summary"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique episode ID: YYYY-MM-DD-HHMMSS-agentname"
+    },
+    "agent": {
+      "type": "string",
+      "description": "Agent who recorded this episode"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when episode was recorded"
+    },
+    "topic": {
+      "type": "string",
+      "description": "Brief topic label (1-5 words)"
+    },
+    "summary": {
+      "type": "string",
+      "description": "What happened in this episode (2-5 sentences)"
+    },
+    "participants": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Who was involved (agent names, 'yeshua', etc.)"
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Key decisions made during this episode"
+    },
+    "commitments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Promises or commitments made"
+    },
+    "valence": {
+      "type": "string",
+      "enum": ["positive", "neutral", "negative", "mixed"],
+      "description": "Emotional/relational tone of the episode"
+    },
+    "changes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What changed as a result (files, configs, relationships)"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Semantic tags for retrieval"
+    },
+    "related_episodes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs of related episodes (for continuity chains)"
+    }
+  }
+}
