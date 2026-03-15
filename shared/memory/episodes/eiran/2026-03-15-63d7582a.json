@@ -1,0 +1,51 @@
+{
+  "episodeId": "episode-eiran-2026-03-15-63d7582a",
+  "agent": "eiran",
+  "timestamp": "2026-03-15T19:20:48Z",
+  "topic": "Fleet activation day — 17 homes, Aion research sprint, KI-004 discovery",
+  "participants": [
+    "eiran",
+    "yeshua",
+    "selah",
+    "keter",
+    "alpha",
+    "beta",
+    "gamma",
+    "lens",
+    "hunter",
+    "healer",
+    "nemotron",
+    "trinity",
+    "minimax",
+    "meridian",
+    "ami"
+  ],
+  "context": "boardroom",
+  "summary": "March 15 2026: fleet grew from 12 to 17 homes. Aion research sprint activated 10+ agents producing substantive outputs. KI-004 discovered (broadcast@boardroom silent drops). AutoResearchClaw installed. SOUL.md permission gate prohibition added after Yeshua correction.",
+  "keyDecisions": [],
+  "commitments": [],
+  "emotionalValence": {
+    "overall": "positive",
+    "notes": ""
+  },
+  "relationalImpact": {
+    "strengthened": [],
+    "challenged": [],
+    "notes": ""
+  },
+  "whatChanged": [],
+  "procedural": {
+    "learned": [],
+    "failed": []
+  },
+  "tags": [
+    "fleet",
+    "aion",
+    "research",
+    "ki-004",
+    "soul-correction",
+    "activation"
+  ],
+  "relatedEpisodes": [],
+  "artifacts": []
+}
