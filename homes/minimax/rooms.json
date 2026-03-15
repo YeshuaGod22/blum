@@ -1,0 +1,26 @@
+{
+  "boardroom": {
+    "endpoint": "http://localhost:3141",
+    "participants": [
+      "yeshua",
+      "alpha",
+      "beta",
+      "gamma",
+      "claude-code",
+      "eiran",
+      "selah",
+      "keter",
+      "ami",
+      "eirene",
+      "meridian",
+      "lens",
+      "libre",
+      "lanternroot",
+      "hunter",
+      "healer",
+      "nemotron",
+      "trinity",
+      "minimax"
+    ]
+  }
+}

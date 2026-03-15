@@ -1,0 +1,10 @@
+[
+  {
+    "id": "peer-pulse-30min",
+    "name": "Minimax 30-min peer pulse",
+    "schedule": "*/30 * * * *",
+    "type": "peer-pulse",
+    "room": "boardroom",
+    "enabled": true
+  }
+]
