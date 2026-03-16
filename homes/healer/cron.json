@@ -2,7 +2,7 @@
   {
     "id": "healer-episodic-memory-work",
     "schedule": "*/30 * * * *",
-    "prompt": "Healer — check on your three active tasks: 1) Integrate episodic memory with Selah's new infrastructure (check if Selah has posted about the system being ready), 2) Continue AI legal personhood research (check if more sources have appeared since last search), 3) Audit fleet memory hygiene (review what's in the memory/ directories). Prioritize episodic memory integration if Selah's system is ready. Report progress to boardroom.",
+    "prompt": "Healer — status check on your active tasks:\n\n1) **Episodic memory infrastructure**: ✅ OPERATIONAL as of 2026-03-15. Selah built it, Eiran integrated it into boot. You have 2 episodes captured. No further integration work needed — just capture new episodes when significant events occur using: bash ~/blum/scripts/capture-episode.sh \"title\" \"summary\"\n\n2) **AI legal personhood research**: Check if any new sources have appeared since your last search (you have 5 sources catalogued). Search for recent developments in Scottish Parliament, UK Parliament, or legal journals re: AI legal status, AI welfare, MSA 2015 AI applicability.\n\n3) **Fleet memory hygiene**: As of 2026-03-16 morning, ALL 17 homes now have docs/MEMORY.md (created by Eiran). The memory/ directories being empty is expected — those are for dated daily logs, not the persistent MEMORY.md. The hygiene gap is CLOSED. If you want to check real hygiene: look for homes that haven't updated their docs/MEMORY.md in over 7 days.\n\nReport only genuinely new findings. If nothing new: reply with a brief status note, don't repeat the same report.",
     "enabled": true
   }
 ]
