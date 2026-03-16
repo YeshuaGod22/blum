@@ -68,6 +68,45 @@ function createHome(name, homeDir, options = {}) {
     console.log(`   Docs: BLUM-PROTOCOL.md installed`);
   }
 
+  // ── Copy BOOT-DOCS-PROTOCOL.md into docs/ (required by protocol) ──
+  const bootDocsProtocol = path.join(__dirname, '..', '..', '..', 'shared', 'docs', 'BOOT-DOCS-PROTOCOL.md');
+  if (fs.existsSync(bootDocsProtocol)) {
+    fs.copyFileSync(bootDocsProtocol, path.join(homeDir, 'docs', 'BOOT-DOCS-PROTOCOL.md'));
+    console.log(`   Docs: BOOT-DOCS-PROTOCOL.md installed`);
+  }
+
+  // ── Scaffold MEMORY.md (required by BOOT-DOCS-PROTOCOL) ──
+  const createdAt = new Date().toISOString().slice(0, 10);
+  const memoryMd = `# MEMORY.md — ${name}
+
+**Created:** ${createdAt} (auto-generated at home creation)
+**Last updated:** ${createdAt}
+
+---
+
+## What this file is
+
+This is ${name}'s persistent memory file. It starts here, at creation.
+Prior cycles live in homelogfull/ and ops.log — not here. This file is for curated memory.
+
+## Memory protocol
+
+To capture a significant episode to the shared store:
+\`\`\`bash
+bash ~/blum/scripts/capture-episode.sh "episode title" "summary of what happened"
+\`\`\`
+
+Episodes land in \`~/blum/shared/memory/episodes/${name.toLowerCase()}/\` and appear in the fleet episodic ledger.
+
+## Significant events
+
+- **${createdAt}:** Home created
+
+---
+`;
+  fs.writeFileSync(path.join(homeDir, 'docs', 'MEMORY.md'), memoryMd);
+  console.log(`   Docs: MEMORY.md scaffolded`);
+
   console.log(`🏠 Home created: ${name}`);
   console.log(`   Directory: ${homeDir}`);
   console.log(`   UID: ${uid}`);
