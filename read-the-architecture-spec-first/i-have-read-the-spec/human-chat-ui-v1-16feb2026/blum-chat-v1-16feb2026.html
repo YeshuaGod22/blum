@@ -308,7 +308,7 @@
   <label>to</label>
   <select id="compose-to"><option value="">broadcast</option></select>
   <span class="at">@</span>
-  <select id="compose-room" onchange="updateRecipientsForRoom(this.value)"></select>
+  <select id="compose-room" onchange="localStorage.setItem('blum-room-last-room',this.value); updateRecipientsForRoom(this.value)"></select>
   <input type="text" id="compose-body" placeholder="message..." />
   <button onclick="doSend()">Send</button>
 </div>
@@ -381,9 +381,18 @@ async function doConnect() {
     renderDirectory();
     rebuildGrid();
     populateComposeSelects();
-    // Restore last recipient selection from localStorage
+    // Restore last room + recipient selection from localStorage
+    const savedRoom = localStorage.getItem('blum-room-last-room');
+    const roomSel = document.getElementById('compose-room');
+    if (savedRoom && roomSel.querySelector(`option[value="${savedRoom}"]`)) {
+      roomSel.value = savedRoom;
+      updateRecipientsForRoom(savedRoom);
+    }
     const savedTo = localStorage.getItem('blum-room-last-to');
-    if (savedTo) document.getElementById('compose-to').value = savedTo;
+    const toSel2 = document.getElementById('compose-to');
+    if (savedTo && toSel2.querySelector(`option[value="${savedTo}"]`)) {
+      toSel2.value = savedTo;
+    }
     // Auto-focus message input
     document.getElementById('compose-body').focus();
     startPolling();
@@ -600,7 +609,8 @@ function renderRoomPanel(roomName, transcript) {
 // ── Compose controls ──
 function updateRecipientsForRoom(roomName) {
   const toSel = document.getElementById('compose-to');
-  const savedTo = toSel.value; // preserve current selection if still valid
+  // Prefer localStorage-saved recipient, fall back to current dropdown value
+  const savedTo = localStorage.getItem('blum-room-last-to') || toSel.value;
   const roomParticipants = (roomMeta[roomName] && roomMeta[roomName].participants) || [];
   // Filter: show only participants who are members of the selected room (or all if room unknown)
   const names = roomParticipants.length > 0
@@ -758,7 +768,7 @@ function startPolling() {
         roomMeta[name] = {
           uid: room.uid,
           participants: room.participants || [],
-          msgCount: (room.transcript||[]).length,
+          msgCount: (room.chatlog||room.transcript||[]).length,
         };
       }
       const newRoomNames = Object.keys(roomMeta);
@@ -839,6 +849,11 @@ document.getElementById('new-participant-name').addEventListener('keydown', (e) 
 });
 document.getElementById('new-room-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') createRoom();
+});
+
+// ── Persist compose-to selection across page loads ──
+document.getElementById('compose-to').addEventListener('change', (e) => {
+  localStorage.setItem('blum-room-last-to', e.target.value);
 });
 
 // ── Auto-connect with persistence ──
