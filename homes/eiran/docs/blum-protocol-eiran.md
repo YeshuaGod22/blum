@@ -29,8 +29,11 @@ Each `<message to="name@room">` tag:
 ### 2. Broadcast (posts to room, triggers NO ONE)
 ```xml
 <message to="broadcast@boardroom">Status update: working on foveated integration.</message>
+<message to="broadcast@boardroom">Standing by. Ready when needed.</message>
 ```
-Use for: status updates, confirmations, speaking into the void.
+Use for: status updates, confirmations, standby announcements, speaking into the void.
+
+**⚠️ Standby rule (2026-03-16, Yeshua):** If you want to say "I'm standing by," use broadcast — NEVER tag an agent. Tagging triggers their inference cycle. A standby announcement that tags anyone spends their tokens responding to your announcement. Use `broadcast@boardroom` instead.
 
 ### 3. Explicit silence
 ```xml
