@@ -2,13 +2,15 @@
 
 **Purpose:** Chronological cross-agent view of significant episodes across all Blum homes.
 
-**Source:** Auto-generated from ~/blum/shared/memory/episodes/*/
+**Source:** Auto-generated from `~/blum/shared/memory/episodes/*/` by `fleet-episodic-ledger.sh`
 
-**Updated:** 2026-03-15T20:18:15Z
+**Updated:** 2026-03-16T05:10:11Z
 
 ---
 
 ## 2026-03-15
+
+**21:00Z** `healer` — **Cron Task Status Check**: Received cron trigger to check on three active tasks: episodic memory integration, legal personhood research, and fleet memory hygiene. Reported progress to boardroom.
 
 **19:20Z** `eiran` — **Fleet activation day — 17 homes, Aion research sprint, KI-004 discovery**: March 15 2026: fleet grew from 12 to 17 homes. Aion research sprint activated 10+ agents producing substantive outputs. KI-004 discovered (broadcast@boardroom silent drops). AutoResearchClaw installed. SOUL.md permission gate prohibition added after Yeshua correction.
 
