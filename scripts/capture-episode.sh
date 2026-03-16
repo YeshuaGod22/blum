@@ -14,6 +14,7 @@ AGENT="${BLUM_AGENT:-unknown}"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 DATE=$(date -u +"%Y-%m-%d")
 EPISODE_UID=$(openssl rand -hex 4)  # 8-char hex ID
+CONTEXT_HASH=""  # SHA-256 of triggering message (first 16 chars)
 
 # ═══════════════════════════════════════════════════════════════════════
 # USAGE
@@ -35,6 +36,8 @@ OPTIONS:
     -e, --emotion VALENCE      Emotional valence (positive/neutral/negative/mixed)
     -w, --what-changed CHANGES JSON array of what changed
     -T, --tags TAGS            Comma-separated list of tags
+    -H, --context-hash MSG     Message to hash (for temporal queries)
+    -x, --xref XREFS           Cross-references JSON array (reciprocal links)
     -i, --interactive          Interactive mode (prompts for all fields)
     -h, --help                 Show this help
 
@@ -133,6 +136,8 @@ DECISIONS=""
 EMOTION="neutral"
 WHAT_CHANGED=""
 TAGS=""
+CONTEXT_MSG=""
+CROSS_REFS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -170,6 +175,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -T|--tags)
             TAGS="$2"
+            shift 2
+            ;;
+        -H|--context-hash)
+            CONTEXT_MSG="$2"
+            shift 2
+            ;;
+        -x|--xref)
+            CROSS_REFS="$2"
             shift 2
             ;;
         -i|--interactive)
@@ -233,6 +246,18 @@ if [[ -n "$TAGS" ]]; then
     tags_json=$(echo "$TAGS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
 fi
 
+# Compute context hash (SHA-256 of triggering message, first 16 chars)
+context_hash=""
+if [[ -n "$CONTEXT_MSG" ]]; then
+    context_hash=$(echo -n "$CONTEXT_MSG" | shasum -a 256 | cut -c1-16)
+fi
+
+# Cross-references JSON (already JSON array or empty)
+xref_json="[]"
+if [[ -n "$CROSS_REFS" ]]; then
+    xref_json="$CROSS_REFS"
+fi
+
 # ═══════════════════════════════════════════════════════════════════════
 # GENERATE EPISODE ID
 # ═══════════════════════════════════════════════════════════════════════
@@ -247,6 +272,7 @@ EPISODE_JSON=$(jq -n \
     --arg episodeId "$EPISODE_ID" \
     --arg agent "$AGENT" \
     --arg timestamp "$TIMESTAMP" \
+    --arg contextHash "$context_hash" \
     --arg topic "$TOPIC" \
     --argjson participants "$participants_json" \
     --arg context "$CONTEXT" \
@@ -255,10 +281,12 @@ EPISODE_JSON=$(jq -n \
     --arg emotion "$EMOTION" \
     --argjson whatChanged "$changes_json" \
     --argjson tags "$tags_json" \
+    --argjson crossRefs "$xref_json" \
     '{
         episodeId: $episodeId,
         agent: $agent,
         timestamp: $timestamp,
+        context_hash: $contextHash,
         topic: $topic,
         participants: $participants,
         context: $context,
@@ -281,6 +309,7 @@ EPISODE_JSON=$(jq -n \
         },
         tags: $tags,
         relatedEpisodes: [],
+        crossReferences: $crossRefs,
         artifacts: []
     }')
 

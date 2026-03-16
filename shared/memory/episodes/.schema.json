@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Episode",
   "description": "Structured episodic memory unit for Blum agents",
+  "version": "1.1",
   "type": "object",
   "required": ["id", "agent", "timestamp", "topic", "summary"],
   "properties": {
@@ -17,6 +18,10 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp when episode was recorded"
+    },
+    "context_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of triggering message (first 16 chars) — enables temporal queries"
     },
     "topic": {
       "type": "string",
@@ -60,6 +65,29 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "IDs of related episodes (for continuity chains)"
+    },
+    "cross_references": {
+      "type": "array",
+      "description": "Reciprocal links to other agents' perspectives on same event",
+      "items": {
+        "type": "object",
+        "required": ["agent", "relationship"],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "Other agent involved"
+          },
+          "episode_id": {
+            "type": "string",
+            "description": "Their episode ID for same event (if known)"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": ["requested-by", "delivered-to", "collaborated-with", "reviewed-by", "assigned-by", "received-from"],
+            "description": "Relational direction from this agent's perspective"
+          }
+        }
+      }
     }
   }
 }
