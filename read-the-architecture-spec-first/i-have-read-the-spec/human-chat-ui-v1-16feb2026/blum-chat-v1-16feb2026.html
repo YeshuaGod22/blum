@@ -731,12 +731,13 @@ function startPolling() {
     if (!connected) return;
     // Also refresh directory/room structure periodically
     try {
-      const data = await api('GET', '/api/state');
-      directory = data.directory || {};
+      // Capture old state BEFORE updating
       const oldRoomNames = Object.keys(roomMeta);
-      // Capture old participants BEFORE clearing roomMeta
       const oldParticipants = JSON.stringify(Object.values(roomMeta).map(r=>r.participants||[]).flat().sort());
       const oldDirectory = JSON.stringify(Object.keys(directory).sort());
+      
+      const data = await api('GET', '/api/state');
+      directory = data.directory || {};
       roomMeta = {};
       for (const [name, room] of Object.entries(data.rooms || {})) {
         roomMeta[name] = {
