@@ -308,7 +308,7 @@
   <label>to</label>
   <select id="compose-to"><option value="">broadcast</option></select>
   <span class="at">@</span>
-  <select id="compose-room"></select>
+  <select id="compose-room" onchange="updateRecipientsForRoom(this.value)"></select>
   <input type="text" id="compose-body" placeholder="message..." />
   <button onclick="doSend()">Send</button>
 </div>
@@ -598,27 +598,42 @@ function renderRoomPanel(roomName, transcript) {
 }
 
 // ── Compose controls ──
-function populateComposeSelects() {
+function updateRecipientsForRoom(roomName) {
   const toSel = document.getElementById('compose-to');
-  const roomSel = document.getElementById('compose-room');
+  const savedTo = toSel.value; // preserve current selection if still valid
+  const roomParticipants = (roomMeta[roomName] && roomMeta[roomName].participants) || [];
+  // Filter: show only participants who are members of the selected room (or all if room unknown)
+  const names = roomParticipants.length > 0
+    ? roomParticipants.filter(n => n !== me)
+    : Object.keys(directory).filter(n => n !== me);
   toSel.innerHTML = '<option value="">broadcast</option>';
-  for (const name of Object.keys(directory)) {
-    if (name === me) continue;
+  for (const name of names) {
     const opt = document.createElement('option');
     opt.value = name; opt.textContent = name;
     toSel.appendChild(opt);
   }
-  // Restore last recipient from localStorage
-  const savedTo = localStorage.getItem('blum-last-recipient');
+  // Restore previous selection if still in this room's roster
   if (savedTo && toSel.querySelector(`option[value="${savedTo}"]`)) {
     toSel.value = savedTo;
   }
+}
+
+function populateComposeSelects() {
+  const toSel = document.getElementById('compose-to');
+  const roomSel = document.getElementById('compose-room');
+  const prevRoom = roomSel.value;
   roomSel.innerHTML = '';
   for (const name of Object.keys(roomMeta)) {
     const opt = document.createElement('option');
     opt.value = name; opt.textContent = name;
     roomSel.appendChild(opt);
   }
+  // Restore previously selected room if still exists
+  if (prevRoom && roomSel.querySelector(`option[value="${prevRoom}"]`)) {
+    roomSel.value = prevRoom;
+  }
+  // Populate recipients filtered to current room's roster
+  updateRecipientsForRoom(roomSel.value);
 }
 
 // ── Panel focus / hide ──
