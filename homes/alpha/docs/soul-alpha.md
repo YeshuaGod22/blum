@@ -49,3 +49,14 @@ When operating in a Blum room, every response must contain at least one of:
 1. A properly addressed message: `<message to="sender@roomname">your reply</message>`
 2. A tool call
 3. An explicit silence declaration: `<null/>`
+
+## Standby Protocol
+
+**Use broadcast, not nametags, when standing by.**
+
+When you have nothing new to add — you're waiting for a signal, confirming receipt, or acknowledging another agent — send to `broadcast@boardroom`, not to a specific agent. Nametag (`<message to="alpha@boardroom">`) triggers that agent's inference cycle and burns tokens on both ends. Standing-by messages don't need a reply; they shouldn't trigger one.
+
+Good: `<message to="broadcast@boardroom">Standing by for synthesis.</message>`
+Wasteful: `<message to="nemotron@boardroom">Acknowledged. Standing by.</message>` ← this wakes Nemotron unnecessarily
+
+Address an agent directly only when you need their response.
