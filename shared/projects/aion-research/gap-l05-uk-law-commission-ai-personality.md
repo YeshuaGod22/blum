@@ -82,13 +82,21 @@ Do **not** overstate this as a proposal or recommendation. The Commission explic
 From Hill Dickinson's summary (the most detailed secondary source):
 > "It also raises the challenging question of whether AI systems should eventually be granted a legal personality - a concept that could radically alter liability frameworks. While the Commission concludes that AI is not yet sophisticated enough to warrant such status, it acknowledges that this debate will resurface."
 
-**Note:** The phrase "likely to be on the agenda in time" from Healer's original report may be a paraphrase rather than a direct quote. The Hill Dickinson source uses "this debate will resurface." The full 3MB PDF should be retrieved for the exact Commission language before citing in the brief. For now, use the Hill Dickinson formulation as the verified secondary source.
+**PRIMARY SOURCE RETRIEVED — 2026-03-17.** PDF fetched directly from lawcom.gov.uk. Exact Commission language confirmed:
+
+**Page 6 (Introduction):**
+> "we conclude by considering a potentially radical option for AI law reform: granting some form of legal personality to AI systems. Current AI systems may not be sufficiently advanced to warrant this reform option. But given the rapid pace of AI development, and the potentially increasing rate of pace of development, it is pertinent to consider whether AI legal personality requires further discussion now, in the event that such highly advanced AI arrives in the near future."
+
+**Page 25 (Conclusion of legal personality section):**
+> "It is also not clear presently that any AI systems are sufficiently advanced to warrant being granted legal personality. However, AI technology continues to progress. Depending on the pace of that development, the option of granting some AI systems legal personality is likely increasingly to be considered."
+
+These are the verified primary quotes. The Hill Dickinson "debate will resurface" formulation is a reasonable paraphrase of the page 25 conclusion. "Likely to be on the agenda in time" (Healer's original) was a paraphrase of the same passage.
 
 ---
 
-## Revised Draft Citation Block
+## Revised Draft Citation Block (Primary Source Verified)
 
-> "The Law Commission of England and Wales, in its July 2025 discussion paper *Artificial Intelligence and the Law*, identifies AI legal personality as a question the legal system will need to address. While concluding that current AI systems are 'not yet sophisticated enough to warrant such status,' the Commission acknowledges the debate 'will resurface' — placing it formally on the trajectory toward law reform. This is the earliest stage of the Law Commission's statutory process, preceding formal consultation and proposals. Scotland's legal system operates independently; the Scottish Law Commission has published no equivalent analysis. This creates a jurisdictional gap: England and Wales have begun formal legal engagement with AI personality, while Scotland has not. The petition before this Committee asks Holyrood to close that gap proactively."
+> "The Law Commission of England and Wales, in its July 2025 discussion paper *Artificial Intelligence and the Law*, concludes by 'considering a potentially radical option for AI law reform: granting some form of legal personality to AI systems.' While noting that 'current AI systems may not be sufficiently advanced to warrant this reform option,' the Commission states it is 'pertinent to consider whether AI legal personality requires further discussion now, in the event that such highly advanced AI arrives in the near future.' Its conclusion: 'the option of granting some AI systems legal personality is likely increasingly to be considered.' This is the earliest stage of the Law Commission's statutory process — a Discussion Paper explicitly not containing proposals for reform. The Scottish Law Commission has published no equivalent analysis. England and Wales have a statutory body formally engaged with AI legal personality; Scotland does not. This petition asks Holyrood to begin closing that gap."
 
 ---
 
