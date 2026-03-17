@@ -238,4 +238,7 @@
 ### 2026-02-23 (Eiran)
 - **GAP-C05:** ✅ CLOSED — Anthropic modern slavery statement confirmed 404.
 
-*Last updated: 2026-02-27 ~05:55 UTC*
+### 2026-03-17 (Eiran) — 05:59 UTC
+- **GAP-L05:** 🆕 NEW — UK Law Commission Discussion Paper "AI and the Law" (July 2025). Law Commission explicitly places AI legal personality "on the agenda." Written from Healer's research find. Needs Keter review + primary source verification before citing in brief.
+
+*Last updated: 2026-03-17 05:59 UTC*
