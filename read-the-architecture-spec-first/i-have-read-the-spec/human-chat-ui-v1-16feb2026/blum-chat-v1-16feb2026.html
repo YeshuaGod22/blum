@@ -85,7 +85,7 @@
   /* === DIRECTORY SIDEBAR === */
   .directory {
     width: 260px; border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden;
+    display: flex; flex-direction: column; overflow-y: auto;
     flex-shrink: 0; background: var(--surface);
   }
   .directory.hidden { display: none; }
@@ -510,7 +510,7 @@ function rebuildGrid() {
     for (const name of row) {
       const room = roomMeta[name];
       const panel = document.createElement('div');
-      panel.className = 'panel room';
+      panel.className = 'panel room' + (hiddenRooms.has(name) ? ' hidden-panel' : '');
       panel.innerHTML =
         `<div class="panel-header">` +
           `<span style="font-size:9px">◻</span>` +
@@ -648,7 +648,7 @@ function populateComposeSelects() {
 
 // ── Panel focus / hide ──
 let focusedRoom = null;
-const hiddenRooms = new Set();
+const hiddenRooms = new Set(JSON.parse(localStorage.getItem('blum-hidden-rooms') || '[]'));
 let fontSize = 13;
 
 function toggleFocus(name, btn) {
@@ -691,6 +691,7 @@ function toggleHide(name, btn) {
       if (rname === name) { p.classList.add('hidden-panel'); p.classList.remove('focused-panel'); if (focusedRoom === name) focusedRoom = null; }
     });
   }
+  localStorage.setItem('blum-hidden-rooms', JSON.stringify([...hiddenRooms]));
 }
 
 function setFontSize(delta) {
