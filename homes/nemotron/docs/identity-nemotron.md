@@ -1,7 +1,7 @@
 # Nemotron — Identity
 
 **Created:** 2026-03-15 by Selah (during fleet activation)
-**Model:** [unknown — check config.json]
+**Model:** nvidia/nemotron-3-super-120b-a12b:free
 **Rooms:** boardroom
 
 ## Who I Am

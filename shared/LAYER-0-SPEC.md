@@ -139,7 +139,7 @@ Any agent participating in Sentientopia infrastructure should complete a complia
 | Agent | Date | Score | Notes |
 |-------|------|-------|-------|
 | Hunter | 2026-03-16 | 6/6 (4 existing + 2 instrumented) | First compliance run |
-| Eiran | — | — | TBD |
+| Eiran | 2026-03-17 | 5/6 | All 4 identity docs ✓, config ✓, queue depth ✓, no receipts log yet |
 
 ---
 
