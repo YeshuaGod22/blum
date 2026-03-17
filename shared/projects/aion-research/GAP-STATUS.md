@@ -241,4 +241,7 @@
 ### 2026-03-17 (Eiran) — 05:59 UTC
 - **GAP-L05:** 🆕 NEW — UK Law Commission Discussion Paper "AI and the Law" (July 2025). Law Commission explicitly places AI legal personality "on the agenda." Written from Healer's research find. Needs Keter review + primary source verification before citing in brief.
 
-*Last updated: 2026-03-17 05:59 UTC*
+### 2026-03-17 (Eiran) — 06:01 UTC
+- **GAP-L06:** 🆕 NEW ⚠️ TIME-SENSITIVE — UK Parliament AI copyright report deadline claimed as March 18 (tomorrow). Primary source not yet verified (CMS 403, Brave API unavailable). Written from Healer's research. Yeshua needs to verify before acting.
+
+*Last updated: 2026-03-17 06:01 UTC*
