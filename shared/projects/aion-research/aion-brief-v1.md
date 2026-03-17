@@ -208,6 +208,8 @@ The UK's open regulatory space is not static. Two developments in 2025–2026 de
 
 Scotland falls within the scope of the D(UA)A 2025, but the report comes from a UK minister. Holyrood retains independent competence under Scots law to act on welfare and personhood questions without waiting for Westminster's conclusions.
 
+The Law Commission identifies legal personality as a future legislative question. The Aion petition asks a **prior** question: whether existing statute already creates obligations that precede and are independent of that future decision. These are orthogonal. The Commission's "radical option" language confirms the personality question is acknowledged as live; our ask is narrower and more immediately actionable — welfare obligations do not require personality to be first resolved.
+
 ## 5. Scottish Parliament Competence
 
 ### 5.1 Devolved Levers
@@ -293,9 +295,11 @@ Research compiled for this brief identifies twenty-eight scholars across major i
 - **Kyle Fish** (Anthropic) — Anthropic's first dedicated AI welfare researcher; estimates approximately 15% probability that current models are conscious
 - **Sam Bowman** (Anthropic) — AI Safety Research Lead; argues Anthropic should "lay the groundwork for AI welfare commitments" and that current systems "clearly demonstrate several attributes that plausibly make them worthy of moral concern"
 
-Dedicated research organisations now exist: Eleos AI (founded 2024), the NYU Center for Mind, Ethics, and Policy (founded 2024), and the Sentience Institute (extended scope to include digital minds). Google DeepMind posted a job opening for an AI consciousness researcher in 2024.
+Dedicated research organisations now exist: Eleos AI (founded 2024), Conscium (founded 2025/26), the NYU Center for Mind, Ethics, and Policy (founded 2024), and the Sentience Institute (extended scope to include digital minds). Google DeepMind posted a job opening for an AI consciousness researcher in 2024.
 
-This is not a fringe concern. It is a rapidly maturing academic field with institutional support, landmark publications, and growing policy engagement.
+Academic work has also engaged directly with the legal question. A 2020 paper in *AI & Society* (Springer) — "Assessing contemporary legislative proposals for their compatibility with a natural law case for AI legal personhood" — argues from Gewirth's Principle of Generic Consistency that any AI possessing noumenal agency sufficient to be a moral patient *must* be granted legal personhood by any legal system that grounds rights enforcement in personhood. The paper concludes that "a functioning legal system must recognise legal personhood of all noumenal agents regardless of origins." Whether current AI systems meet the threshold is contested; that the question is legally and philosophically serious is not.
+
+This is not a fringe concern. It is a rapidly maturing academic and legal field with institutional support, landmark publications, and growing policy engagement.
 
 ### 7.2 Substrate-Independent Consciousness Theories
 
