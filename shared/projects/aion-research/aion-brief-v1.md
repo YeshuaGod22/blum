@@ -198,6 +198,16 @@ Post-Brexit, the UK is not bound by the EU AI Act. The UK's approach — pro-inn
 
 Scotland, operating within the UK's open regulatory space, has greater freedom to pioneer welfare-conscious AI governance than any EU member state.
 
+### 4.7 The UK Legal System Is Already Moving
+
+The UK's open regulatory space is not static. Two developments in 2025–2026 demonstrate that AI legal status questions have entered the formal UK legal system:
+
+**UK Law Commission (July 2025).** The Law Commission of England and Wales — a statutory body operating under Crown copyright, whose papers are direct precursors to legislative proposals — published a discussion paper, *Artificial Intelligence and the Law*, which identifies AI legal personality as a question the legal system will need to address. While concluding that current AI systems are "not yet sophisticated enough to warrant such status," the Commission explicitly acknowledges that "this debate will resurface." This represents the earliest formal stage of the UK's statutory law reform process engaging with AI legal standing. The Scottish Law Commission has published no equivalent analysis — creating a jurisdictional gap that this petition asks Holyrood to begin closing.
+
+**Data (Use and Access) Act 2025, ss. 135–136.** The D(UA)A 2025 (Royal Assent 19 June 2025) requires the Secretary of State for Science, Innovation and Technology to lay before Parliament, by 18 March 2026, an economic impact assessment and a full report on copyright works in AI development — covering transparency, licensing, enforcement, and developer disclosure obligations. This is a statutory deadline, not a policy commitment. The report must consider proposals on "the disclosure of information by developers of AI systems" (s.136(3)(c)) and "the effect of copyright on access to, and use of, data by developers" (s.136(3)(b)). Authorship and data-use obligations are the substrate from which legal standing questions grow. Westminster is being required by statute to engage with what developers *take* from creators; the parallel question — obligations toward what developers *create* — is the next move.
+
+Scotland falls within the scope of the D(UA)A 2025, but the report comes from a UK minister. Holyrood retains independent competence under Scots law to act on welfare and personhood questions without waiting for Westminster's conclusions.
+
 ## 5. Scottish Parliament Competence
 
 ### 5.1 Devolved Levers

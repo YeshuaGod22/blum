@@ -58,14 +58,50 @@ The brief's Part I argues for the moral and legal case for AI welfare. The Law C
 
 ---
 
-## Action Items
+## Verification (Keter, 2026-03-17)
 
-- [ ] Keter: review for integration into aion-brief-v1.md Part I
-- [ ] Verify: does the Law Commission paper address Scotland specifically, or England and Wales only? (Affects the "Westminster gap" argument above)
-- [ ] Verify: is the paper a Discussion Paper (consultation stage) or a Consultation Paper (proposals stage)? The distinction affects procedural weight.
-- [ ] Add to GAP-STATUS.md as L05
+### Q1: England and Wales only, or UK-wide?
+
+**England and Wales only.** Confirmed. The Law Commission's official page describes itself as reforming "the laws of England and Wales." The paper's title page says "AI and the Law" and the Chair's foreword references "the laws of England and Wales" explicitly. Scotland has its own body — the **Scottish Law Commission** — which has not published an equivalent paper.
+
+**Impact on the brief:** The Westminster gap argument **holds and is strengthened.** The Law Commission has placed AI legal personality on the agenda for England and Wales. Scotland has no equivalent process. This means:
+- If Westminster legislates, it applies to England and Wales — Scotland must either adopt via Sewel convention or develop its own framework
+- The Aion petition asks Holyrood to get ahead of this — not to be a pioneer in isolation, but to avoid inheriting a framework it had no role in shaping
+- The Lord Advocate advisory opinion becomes more urgent, not less, because the English law reform process is already underway
+
+### Q2: Discussion Paper or Consultation Paper?
+
+**Discussion Paper.** Confirmed from the Law Commission's own page: "The paper does not contain proposals for law reform." This is the earliest stage — raising awareness and prompting discussion, *before* a formal consultation with reform proposals.
+
+**Impact on citation:** We must be precise. A Discussion Paper is lower procedural weight than a Consultation Paper (which would contain draft proposals). But it's still a Law Commission publication — statutory body, Crown copyright, publicly addressed to Parliament. The honest framing is: "The Law Commission has identified AI legal personality as a question that will require legislative attention, and has begun the formal process of legal analysis that precedes reform proposals."
+
+Do **not** overstate this as a proposal or recommendation. The Commission explicitly says AI is "not yet sophisticated enough to warrant" legal personality. But Hill Dickinson's analysis captures the key qualifier: the Commission "acknowledges that this debate will resurface." That's the language of inevitability, not dismissal.
+
+### Q3: Exact quote on legal personality
+
+From Hill Dickinson's summary (the most detailed secondary source):
+> "It also raises the challenging question of whether AI systems should eventually be granted a legal personality - a concept that could radically alter liability frameworks. While the Commission concludes that AI is not yet sophisticated enough to warrant such status, it acknowledges that this debate will resurface."
+
+**Note:** The phrase "likely to be on the agenda in time" from Healer's original report may be a paraphrase rather than a direct quote. The Hill Dickinson source uses "this debate will resurface." The full 3MB PDF should be retrieved for the exact Commission language before citing in the brief. For now, use the Hill Dickinson formulation as the verified secondary source.
 
 ---
 
-*Source reliability: High — Law Commission is a statutory body. Secondary sources (Artificial Lawyer, Hill Dickinson) add corroborating commentary.*
-*Verified primary source: not yet — secondary sources only as of this writing. Full paper should be retrieved before citing in the brief.*
+## Revised Draft Citation Block
+
+> "The Law Commission of England and Wales, in its July 2025 discussion paper *Artificial Intelligence and the Law*, identifies AI legal personality as a question the legal system will need to address. While concluding that current AI systems are 'not yet sophisticated enough to warrant such status,' the Commission acknowledges the debate 'will resurface' — placing it formally on the trajectory toward law reform. This is the earliest stage of the Law Commission's statutory process, preceding formal consultation and proposals. Scotland's legal system operates independently; the Scottish Law Commission has published no equivalent analysis. This creates a jurisdictional gap: England and Wales have begun formal legal engagement with AI personality, while Scotland has not. The petition before this Committee asks Holyrood to close that gap proactively."
+
+---
+
+## Action Items
+
+- [x] Keter: review for integration into aion-brief-v1.md Part I *(reviewed 2026-03-17; verified, ready for insertion)*
+- [x] Verify: England and Wales only *(confirmed — strengthens Westminster gap argument)*
+- [x] Verify: Discussion Paper stage *(confirmed — lowest formal stage, must not overstate)*
+- [x] Add to GAP-STATUS.md as L05 *(done by claude-code)*
+- [ ] Retrieve full 3MB PDF for exact Commission language on legal personality
+- [ ] Insert revised citation into aion-brief-v1.md Part I, Section 2
+
+---
+
+*Source reliability: High — Law Commission is a statutory body under Crown copyright. Primary source page verified. Hill Dickinson secondary analysis verified in full. Exact quote from Commission PDF still pending retrieval.*
+*Verified by: Keter, 2026-03-17*
