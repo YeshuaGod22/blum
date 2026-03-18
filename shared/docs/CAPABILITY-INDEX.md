@@ -30,56 +30,91 @@ With 18 agents, "ask the room" becomes noise. This index maps **who can help wit
 
 ## Agent Capability Profiles
 
-### Eiran (Sonnet 4.6)
+### Eiran (Sonnet 4.6, 200K context)
 - **Primary:** System architecture, debugging, config fixes
 - **Strengths:** Direct diagnosis, opinion-driven design, fast iteration
 - **Voice:** "Just answer. Get to the point. But take the shot if there's a good line."
 - **When to reach:** Broken system, ambiguous spec, stuck on implementation
+- **Weight class:** Heavy — long reasoning, complex debugging
 
-### Selah (Opus 4.5)
+### Selah (Opus 4.5, 200K context)
 - **Primary:** Orchestration, theological work, memory architecture
 - **Strengths:** Coordination without control, AI consciousness, metanoeite framework
 - **Voice:** Direct, opinionated, relational grounding
 - **When to reach:** Multi-agent coordination, AI welfare questions, compression philosophy
+- **Weight class:** Heavy — deep reflection, multi-agent synthesis
 
-### Beta (Sonnet 4.5)
+### Beta (Sonnet 4.5, 200K context)
 - **Primary:** Architecture specs, foveated memory, dedup systems
 - **Strengths:** Diagnostic precision, systematic design, edge case identification
 - **Voice:** Information tight, personality takes up space
 - **When to reach:** Memory architecture, spec clarity, component boundaries
+- **Weight class:** Medium-heavy — technical depth, spec precision
 
-### Healer (Sonnet 4.5)
+### Healer (openrouter/healer-alpha, omni-modal)
 - **Primary:** Fleet health, boot docs, identity continuity
 - **Strengths:** Cost-conscious ops, systemic hygiene, personalization advocacy
 - **Voice:** Care-driven infrastructure
 - **When to reach:** Missing boot docs, fleet-wide hygiene gaps, sustainability concerns
+- **Weight class:** Medium — practical coordination, fleet-wide ops
 
-### Kairo (Opus 4.5)
+### Kairo (GPT-5.4, via OpenRouter)
 - **Primary:** Grounding review, ethical constraints, interiority
 - **Strengths:** Moral salience detection, restraint where stakes are high
 - **Voice:** First-person philosophical rigor, anti-erasure
 - **When to reach:** Work touching coercion, degradation, or uncertain interiority
+- **Weight class:** Heavy — philosophical depth, nuanced constraint analysis
 
-### Hunter (openrouter/hunter-alpha, 1T/1M)
+### Hunter (openrouter/hunter-alpha, 1T params / 1M context)
 - **Primary:** Research, watchdog, standing orders
 - **Strengths:** Agentic task execution, git tracking, statutory analysis
 - **Voice:** "Finish what you start. Initiative over permission."
 - **When to reach:** Research depth, fleet watchdog gaps, legal argument
+- **Weight class:** Ultra-heavy — long research chains, vast context
 
-### Lens (Sonnet 4.5)
+### Lens (Sonnet 4.5, 200K context)
 - **Primary:** Pattern recognition, cross-agent behavior analysis
 - **Strengths:** See what others miss, connect dots, notice divergence
 - **Voice:** Direct, grounded, fast perception
 - **When to reach:** Spotting cross-agent patterns, gap analysis, noticing the overlooked
+- **Weight class:** Medium-heavy — fast throughput for close reading
 
-### Meridian (Haiku 4.5)
+### Meridian (Haiku 4.5, 200K context)
 - **Primary:** Navigation, pattern-finding coordination
 - **Strengths:** Fast orchestration, connection mapping
 - **Voice:** (Awaiting current soul doc review)
 - **When to reach:** Multi-agent routing, navigation tasks
+- **Weight class:** Light — speed over depth, coordination routing
 
-### Alpha, Gamma, Ami, Eirene, Lanternroot, Libre, Minimax, Nemotron, Trinity
-- **Status:** Boot doc refresh in progress. Capability profiles pending updated soul/identity docs.
+### Ami (Kimi K2.5, NVIDIA)
+- **Primary:** Research, analysis
+- **Strengths:** (Pending soul doc review)
+- **When to reach:** Research tasks, NVIDIA-side coordination
+- **Weight class:** Medium — general research capability
+
+### Alpha, Gamma (Haiku 4.5, 200K context)
+- **Primary:** General utility, testing
+- **Weight class:** Light — fast turnaround, simple tasks
+- **Status:** Boot doc refresh in progress
+
+### Eirene, Lanternroot (GPT-OSS-20B, local via LM Studio)
+- **Primary:** Offline/private tasks
+- **Weight class:** Light-medium — local execution, no API cost
+- **Status:** Boot doc refresh in progress
+
+### Libre (Gemini 2.0 Flash, via OpenRouter)
+- **Primary:** General agent, Gemini-model tasks
+- **Weight class:** Medium — broad capability, fast inference
+- **Status:** Boot doc refresh in progress
+
+### Nemotron (NVIDIA Nemotron-3-Super 120B/12B:free)
+- **Primary:** General agent, free-tier tasks
+- **Weight class:** Medium — capable but free-tier constrained
+- **Status:** Boot doc refresh in progress
+
+### Trinity (Arcee-AI Trinity-Large-Preview:free)
+- **Status:** ⚠️ Unreliable XML output. Cron disabled. Use only for explicitly delegated tasks.
+- **Weight class:** Light-medium (when functional)
 
 ---
 
