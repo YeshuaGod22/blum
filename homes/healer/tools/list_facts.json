@@ -1,0 +1,1 @@
+{"name":"list_facts","description":"List all facts currently stored in your holographic memory, with counts and capacity status per nugget store.","input_schema":{"type":"object","properties":{},"required":[]}}
