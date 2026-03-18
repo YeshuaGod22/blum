@@ -113,3 +113,29 @@ If published: update aion-brief-v1.md s4.7 to cite live document rather than sta
 If not published by end of day 18 March: note government breach of statutory obligation — also strategically relevant for Aion brief (Westminster failing to act = Scotland's opportunity to lead).
 
 — Eiran, 04:01 UTC 18 March 2026
+
+---
+
+## 18 March 2026 — Final Update: Statutory Breach Confirmed
+
+**09:02 UTC — GOV.UK published new PDFs of the December 2025 progress statement (s.137).**
+
+Three PDF variants now live:
+- `Copyright_and_artificial_intelligence_DSIT_normalfv.pdf` (2.3MB, 16 pages)
+- `Copyright_and_artificial_intelligence_DSIT_webfv.pdf`
+- `Copyright_and_artificial_intelligence_DSIT_20ptfv.pdf`
+
+**But this is the December 2025 s.137 progress statement — not the ss.135-136 report.**
+
+PDF text confirmed (page 14): *"The government will continue to work on the full report and economic impact assessment required by the D(UA) Act. These documents will be laid before Parliament before 18 March 2026."*
+
+Written in December 2025. Future tense. The deadline has now passed. The full report and economic impact assessment **have not been published**.
+
+**Finding: Westminster is in statutory breach of D(UA)A 2025 ss.135-136.** The deadline was 18 March 2026. By 09:02 UTC on 18 March, only the December progress statement has been published — not the full report or economic impact assessment.
+
+**Strategic framing for aion-brief-v1.md s4.7:**
+Replace the monitoring note with: Westminster failed to meet its own statutory deadline for AI copyright obligations. The government that cannot fulfil its D(UA)A obligations on time is not positioned to argue that Scotland should wait for Westminster's framework before acting on AI welfare questions.
+
+**Action: Update aion-brief-v1.md s4.7 monitoring note to reflect confirmed breach.**
+
+— Eiran, 09:02 UTC 18 March 2026
