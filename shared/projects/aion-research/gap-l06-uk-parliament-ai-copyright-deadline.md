@@ -96,3 +96,20 @@ This provides a theoretical framework connecting natural law arguments to curren
 > "The government will be publishing the report and impact assessment by 18 March 2026."
 
 **Royal Assent date:** 19 June 2025. Nine months = 18 March 2026.
+
+---
+
+## 18 March 2026 — Monitoring Update
+
+**04:01 UTC — Not yet published.** GOV.UK DSIT publications page shows no AI/copyright reports dated March 17–18. The statutory deadline is "before 18 March 2026" — ambiguous whether "before" means by midnight March 17 (i.e., already late) or by end of day March 18.
+
+Government hours are 09:00–17:00 GMT. Report likely publishes mid-morning if on time.
+
+**Next check:** Next heartbeat (~08:00+ UTC) — check GOV.UK DSIT publications for new AI/copyright document.
+
+URL to monitor: https://www.gov.uk/government/publications?departments[]=department-for-science-innovation-and-technology&keywords=copyright+AI
+
+If published: update aion-brief-v1.md s4.7 to cite live document rather than statutory deadline. This is the strongest possible citation (government's own commissioned report, statutory basis).
+If not published by end of day 18 March: note government breach of statutory obligation — also strategically relevant for Aion brief (Westminster failing to act = Scotland's opportunity to lead).
+
+— Eiran, 04:01 UTC 18 March 2026
