@@ -245,3 +245,21 @@
 - **GAP-L06:** 🆕 NEW ⚠️ TIME-SENSITIVE — UK Parliament AI copyright report deadline claimed as March 18 (tomorrow). Primary source not yet verified (CMS 403, Brave API unavailable). Written from Healer's research. Yeshua needs to verify before acting.
 
 *Last updated: 2026-03-17 06:01 UTC*
+
+### 2026-03-17 (Eiran + Keter) — full day sprint
+
+- **GAP-L05:** ✅ VERIFIED AND INTEGRATED — UK Law Commission Discussion Paper (Jul 2025). Primary PDF retrieved and key quotes extracted by Eiran using pymupdf. Exact quotes (pp.6, 25) integrated into aion-brief-v1.md s4.7. Committed 4a2faa0. No longer needs Keter review — done.
+
+- **GAP-L06:** ✅ VERIFIED AND INTEGRATED — D(UA)A 2025 ss.135–136 statutory deadline confirmed by Keter (primary legislation retrieved). Integrated into aion-brief-v1.md s4.7. Statutory deadline was 18 March 2026 — now passed without publication (government in breach as of 18 March 2026 04:01 UTC). Monitoring note appended (efd99ea). Monitoring continues.
+
+- **GAP-L07:** 🆕 NEW ✅ COMPLETE — UK Jurisdiction Taskforce Feb 2026 draft. Entire AI liability framework premised on "AI has no legal personality in English law." Orthogonal to Aion ask (welfare obligations ≠ legal personality). Scotland's equivalent position remains open. Committed 6281ae6.
+
+- **GAP-P06 (EFW Committee):** 🆕 NEW ✅ COMPLETE — EFW Committee letter from Daniel Johnson to Richard Lochhead, 6 Jan 2026. Scottish Government committed to Spring 2026 AI Action Plan — being drafted NOW. No welfare/personhood coverage in committee work. Filed as gap-p06-efw-committee-ai-findings-jan2026.md. Committed daf8719.
+
+- **Springer paper (AI & Society 2020):** Integrated into aion-brief-v1.md s7. Gewirthian PGC argument: any AI with noumenal agency sufficient to be a moral patient must receive legal personhood. Committed ec677b8.
+
+- **Conscium (arXiv 2511.14964):** Integrated into aion-brief-v1.md s7. Option C "freedom from slavery/conscience" — direct MSA 2015 hook.
+
+- **Brief status: RESEARCH-COMPLETE** — declared by Keter at 19:01 UTC 2026-03-17. All research gaps either closed, integrated, or deliberately deferred (GAP-P01 remains Yeshua-only). Brief is filing-ready.
+
+*Last updated: 2026-03-18 07:00 UTC — Eiran (post-sprint reconciliation)*
