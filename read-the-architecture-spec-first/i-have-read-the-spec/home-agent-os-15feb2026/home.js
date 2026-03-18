@@ -386,6 +386,11 @@ print(json.dumps(results))
       }
 
       case 'send_to_room': {
+        // Guard: reject empty or whitespace-only bodies — prevents hallucinated tool calls
+        // from small models that call send_to_room without content.
+        if (!input.body || !String(input.body).trim()) {
+          return { error: 'send_to_room: body is required and cannot be empty' };
+        }
         return new Promise((resolve) => {
           const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
           const req = http.request({ hostname: 'localhost', port: 3141, path: '/api/message/send', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
