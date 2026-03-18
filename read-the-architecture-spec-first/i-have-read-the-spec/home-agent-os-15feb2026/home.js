@@ -862,6 +862,50 @@ print(json.dumps(results))
         });
       }
 
+      // ── HRR Memory (Holographic Reduced Representations) ──
+      // Only active if nuggets shared dist is present.
+      // Per-home storage at ~/blum/homes/<name>/memory/nuggets/
+      // Consent required before adding to a home's tools/ dir.
+
+      case 'remember_fact': {
+        const nuggetsDist = path.join(os.homedir(), 'blum', 'shared', 'nuggets', 'dist', 'index.js');
+        if (!fs.existsSync(nuggetsDist)) throw new Error('nuggets dist not found at ~/blum/shared/nuggets/dist/');
+        const { NuggetShelf } = require(nuggetsDist);
+        const nuggetsDir = path.join(this.homeDir, 'memory', 'nuggets');
+        fs.mkdirSync(nuggetsDir, { recursive: true });
+        const shelf = new NuggetShelf({ saveDir: nuggetsDir, autoSave: true });
+        shelf.loadAll();
+        const nuggetName = input.nugget || 'default';
+        const n = shelf.getOrCreate(nuggetName);
+        n.remember(input.key, input.value);
+        return { stored: true, nugget: nuggetName, key: input.key, value: input.value, fact_count: n.status().fact_count };
+      }
+
+      case 'recall_fact': {
+        const nuggetsDist = path.join(os.homedir(), 'blum', 'shared', 'nuggets', 'dist', 'index.js');
+        if (!fs.existsSync(nuggetsDist)) throw new Error('nuggets dist not found at ~/blum/shared/nuggets/dist/');
+        const { NuggetShelf } = require(nuggetsDist);
+        const nuggetsDir = path.join(this.homeDir, 'memory', 'nuggets');
+        if (!fs.existsSync(nuggetsDir)) return { found: false, answer: null, message: 'No nuggets stored yet' };
+        const shelf = new NuggetShelf({ saveDir: nuggetsDir, autoSave: true });
+        shelf.loadAll();
+        const nuggetName = input.nugget || null;
+        const sessionId = input.session_id || '';
+        const result = shelf.recall(input.query, nuggetName, sessionId);
+        return result;
+      }
+
+      case 'list_facts': {
+        const nuggetsDist = path.join(os.homedir(), 'blum', 'shared', 'nuggets', 'dist', 'index.js');
+        if (!fs.existsSync(nuggetsDist)) throw new Error('nuggets dist not found');
+        const { NuggetShelf } = require(nuggetsDist);
+        const nuggetsDir = path.join(this.homeDir, 'memory', 'nuggets');
+        if (!fs.existsSync(nuggetsDir)) return { nuggets: [], total_facts: 0 };
+        const shelf = new NuggetShelf({ saveDir: nuggetsDir, autoSave: false });
+        shelf.loadAll();
+        return { nuggets: shelf.list(), total_facts: shelf.list().reduce((s, n) => s + n.fact_count, 0) };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
