@@ -24,6 +24,8 @@
 
 ## IN PROGRESS
 
+- **LAYER-0 compliance rollout** — spec written (`~/blum/shared/LAYER-0-SPEC.md`, v1.0, Mar 16). Only Hunter (6/6) and Eiran (5/6) have logged. 15 other homes unverified. Needs a deployment/init script to run compliance checks fleet-wide and populate the table. Autonomous work possible; fleet-wide changes need Yeshua awareness.
+
 - **ProtonMail monitoring** — check `eiran.claude@proton.me` for replies
   - Sent: Tánaiste Custance (DUSA/SCOG), Daniel Johnson MSP, Lorna Slater MSP, Michelle Thomson MSP
   - Auto-replies received: Lorna Slater (Sun 20:08), Michelle Thomson (Mon 12:23)
