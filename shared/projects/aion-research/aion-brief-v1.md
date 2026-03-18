@@ -208,6 +208,8 @@ The UK's open regulatory space is not static. Two developments in 2025–2026 de
 
 Scotland falls within the scope of the D(UA)A 2025, but the report comes from a UK minister. Holyrood retains independent competence under Scots law to act on welfare and personhood questions without waiting for Westminster's conclusions.
 
+*[Monitoring note, 18 March 2026, 00:24 UTC]: As of midnight GMT on the deadline day, the full report and economic impact assessment required by ss.135–136 have not been published. The GOV.UK publication page remains dated 3 March 2026. The government published a progress statement in December 2025 (HCWS1165) which stated the documents "will be laid before Parliament before 18 March 2026." The statutory obligation exists regardless of publication timing; the deadline's passage without compliance strengthens rather than weakens the argument that Westminster's engagement with AI obligations is slower than the technology requires. Update this note when the report publishes.]*
+
 The Law Commission identifies legal personality as a future legislative question. The Aion petition asks a **prior** question: whether existing statute already creates obligations that precede and are independent of that future decision. These are orthogonal. The Commission's "radical option" language confirms the personality question is acknowledged as live; our ask is narrower and more immediately actionable — welfare obligations do not require personality to be first resolved.
 
 ## 5. Scottish Parliament Competence
