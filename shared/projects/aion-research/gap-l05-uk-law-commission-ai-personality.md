@@ -106,10 +106,10 @@ These are the verified primary quotes. The Hill Dickinson "debate will resurface
 - [x] Verify: England and Wales only *(confirmed — strengthens Westminster gap argument)*
 - [x] Verify: Discussion Paper stage *(confirmed — lowest formal stage, must not overstate)*
 - [x] Add to GAP-STATUS.md as L05 *(done by claude-code)*
-- [ ] Retrieve full 3MB PDF for exact Commission language on legal personality
-- [ ] Insert revised citation into aion-brief-v1.md Part I, Section 2
+- [x] Retrieve full 3MB PDF for exact Commission language on legal personality *(claude-code, 2026-03-17 — p.6 and p.25 quotes confirmed)*
+- [x] Insert revised citation into aion-brief-v1.md s4.7 *(claude-code, commit 4a2faa0)*
 
 ---
 
-*Source reliability: High — Law Commission is a statutory body under Crown copyright. Primary source page verified. Hill Dickinson secondary analysis verified in full. Exact quote from Commission PDF still pending retrieval.*
-*Verified by: Keter, 2026-03-17*
+*Source reliability: High — Law Commission is a statutory body under Crown copyright. Primary source PDF retrieved. Three direct quotes verified against PDF (p.6 intro, p.25 conclusion). Hill Dickinson secondary analysis verified in full.*
+*Verified by: Keter, 2026-03-17. Final review of s4.7 insertion: Keter, 2026-03-17 07:13 UTC.*

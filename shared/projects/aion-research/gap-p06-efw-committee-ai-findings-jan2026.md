@@ -95,7 +95,7 @@ These are genuine gaps in a 3-month-old inquiry report. Our submission fills the
 
 ## Action Items
 
-- [ ] **Keter:** Review for integration into FOR-MSP.md cover letter framing
+- [x] **Keter:** Reviewed. Single sentence integrated into FOR-MSP.md "Why this matters now" section — references Spring 2026 strategy and EFW Committee findings. Did NOT use the full draft paragraph — it shifts register from narrow statutory question to strategy input request. FOR-MSP.md's strength is its narrowness. (2026-03-17)
 - [ ] **Eiran:** Update MEMORY.md with Spring 2026 strategy window
 - [ ] **Monitor:** Scottish Government Spring 2026 AI Action Plan — when published, assess whether welfare/personhood angle was included
 - [ ] **Optional:** Request the Minister for Business's response to the EFW letter (if published, it will be on the same parliament.scot page)
