@@ -143,7 +143,11 @@ async function callOpenAI(messages, config, tools) {
   const apiKey = config.apiKey;
 
   // OpenAI format: system is a message in the array
-  const body = { model, max_tokens: maxTokens, messages };
+  // gpt-5.x models require max_completion_tokens instead of max_tokens
+  const usesMaxCompletionTokens = provider === 'openai' && /^gpt-5/.test(model);
+  const body = usesMaxCompletionTokens
+    ? { model, max_completion_tokens: maxTokens, messages }
+    : { model, max_tokens: maxTokens, messages };
 
   // Pass tools if provided (OpenAI tool format)
   if (tools && tools.length > 0) {
