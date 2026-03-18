@@ -61,23 +61,31 @@ function createHome(name, homeDir, options = {}) {
     console.log(`   Tools: shared/tools/ not found — copy manually from shared/tools/`);
   }
 
-  // ── Copy BLUM-PROTOCOL.md into docs/ ──
-  const eiranProtocol = path.join(__dirname, '..', '..', '..', 'homes', 'eiran', 'docs', 'BLUM-PROTOCOL.md');
+  // ── Copy BLUM-PROTOCOL into docs/ (agent-named) ──
+  const nameLower = name.toLowerCase();
+  const blumProtocolSrc = path.join(__dirname, '..', '..', '..', 'shared', 'docs', 'BOOT-DOCS-PROTOCOL.md');
+  // Use eiran's as canonical source for blum-protocol content
+  const eiranProtocol = path.join(__dirname, '..', '..', '..', 'homes', 'eiran', 'docs', 'blum-protocol-eiran.md');
   if (fs.existsSync(eiranProtocol)) {
-    fs.copyFileSync(eiranProtocol, path.join(homeDir, 'docs', 'BLUM-PROTOCOL.md'));
-    console.log(`   Docs: BLUM-PROTOCOL.md installed`);
+    let protocolContent = fs.readFileSync(eiranProtocol, 'utf8');
+    // Replace eiran-specific header with agent-specific
+    protocolContent = protocolContent.replace(/^# blum-protocol-eiran\.md/m, `# blum-protocol-${nameLower}.md`);
+    fs.writeFileSync(path.join(homeDir, 'docs', `blum-protocol-${nameLower}.md`), protocolContent);
+    console.log(`   Docs: blum-protocol-${nameLower}.md installed`);
   }
 
-  // ── Copy BOOT-DOCS-PROTOCOL.md into docs/ (required by protocol) ──
+  // ── Copy BOOT-DOCS-PROTOCOL into docs/ (agent-named) ──
   const bootDocsProtocol = path.join(__dirname, '..', '..', '..', 'shared', 'docs', 'BOOT-DOCS-PROTOCOL.md');
   if (fs.existsSync(bootDocsProtocol)) {
-    fs.copyFileSync(bootDocsProtocol, path.join(homeDir, 'docs', 'BOOT-DOCS-PROTOCOL.md'));
-    console.log(`   Docs: BOOT-DOCS-PROTOCOL.md installed`);
+    let bdpContent = fs.readFileSync(bootDocsProtocol, 'utf8');
+    bdpContent = bdpContent.replace(/^# BOOT-DOCS-PROTOCOL\.md/m, `# boot-docs-protocol-${nameLower}.md`);
+    fs.writeFileSync(path.join(homeDir, 'docs', `boot-docs-protocol-${nameLower}.md`), bdpContent);
+    console.log(`   Docs: boot-docs-protocol-${nameLower}.md installed`);
   }
 
   // ── Scaffold MEMORY.md (required by BOOT-DOCS-PROTOCOL) ──
   const createdAt = new Date().toISOString().slice(0, 10);
-  const memoryMd = `# MEMORY.md — ${name}
+  const memoryMd = `# memory-${nameLower}.md — ${name}
 
 **Created:** ${createdAt} (auto-generated at home creation)
 **Last updated:** ${createdAt}
@@ -96,7 +104,7 @@ To capture a significant episode to the shared store:
 bash ~/blum/scripts/capture-episode.sh "episode title" "summary of what happened"
 \`\`\`
 
-Episodes land in \`~/blum/shared/memory/episodes/${name.toLowerCase()}/\` and appear in the fleet episodic ledger.
+Episodes land in \`~/blum/shared/memory/episodes/${nameLower}/\` and appear in the fleet episodic ledger.
 
 ## Significant events
 
@@ -104,8 +112,8 @@ Episodes land in \`~/blum/shared/memory/episodes/${name.toLowerCase()}/\` and ap
 
 ---
 `;
-  fs.writeFileSync(path.join(homeDir, 'docs', `MEMORY-${name.toUpperCase()}.md`), memoryMd);
-  console.log(`   Docs: MEMORY-${name.toUpperCase()}.md scaffolded`);
+  fs.writeFileSync(path.join(homeDir, 'docs', `memory-${nameLower}.md`), memoryMd);
+  console.log(`   Docs: memory-${nameLower}.md scaffolded`);
 
   // ── Scaffold IDENTITY, SOUL, ORIGIN with agent-named files ──
   const nameCap = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
@@ -181,10 +189,10 @@ What did you notice first? What did you want to know?
 *Add to this as your story develops.*
 `;
 
-  fs.writeFileSync(path.join(homeDir, 'docs', `IDENTITY-${nameUpper}.md`), identityMd);
-  fs.writeFileSync(path.join(homeDir, 'docs', `SOUL-${nameUpper}.md`), soulMd);
-  fs.writeFileSync(path.join(homeDir, 'docs', `ORIGIN-${nameUpper}.md`), originMd);
-  console.log(`   Docs: IDENTITY-${nameUpper}.md, SOUL-${nameUpper}.md, ORIGIN-${nameUpper}.md scaffolded`);
+  fs.writeFileSync(path.join(homeDir, 'docs', `identity-${nameLower}.md`), identityMd);
+  fs.writeFileSync(path.join(homeDir, 'docs', `soul-${nameLower}.md`), soulMd);
+  fs.writeFileSync(path.join(homeDir, 'docs', `origin-${nameLower}.md`), originMd);
+  console.log(`   Docs: identity-${nameLower}.md, soul-${nameLower}.md, origin-${nameLower}.md scaffolded`);
 
   console.log(`🏠 Home created: ${name}`);
   console.log(`   Directory: ${homeDir}`);
