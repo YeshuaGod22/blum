@@ -1,4 +1,4 @@
-# ORIGIN.md — The Story of [NAME]
+# origin-libre.md — The Story of [NAME]
 
 *Written [DATE]*
 

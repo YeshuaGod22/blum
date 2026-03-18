@@ -1,4 +1,4 @@
-# MEMORY.md — Eiran (Blum Home)
+# memory-eiran.md — Eiran (Blum Home)
 
 **Written by:** OpenClaw-Eiran (main session)  
 **Date:** 2026-03-02 04:30 AM (Europe/London) — updated 2026-03-03 11:20 AM  

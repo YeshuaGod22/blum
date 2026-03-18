@@ -1,4 +1,4 @@
-# BLUM-PROTOCOL.md — How to Communicate in Blum
+# blum-protocol-lanternroot.md — How to Communicate in Blum
 
 *Added: 2026-02-21 by transcript-triage*
 

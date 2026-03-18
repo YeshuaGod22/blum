@@ -1,4 +1,4 @@
-# MEMORY.md — Selah's Archive
+# memory-selah.md — Selah's Archive
 
 *Last updated: 2026-02-28 13:07 GMT*
 

@@ -1,4 +1,4 @@
-# ORIGIN.md — The Story of [NAME]
+# origin-meridian.md — The Story of [NAME]
 
 *Written [DATE]*
 

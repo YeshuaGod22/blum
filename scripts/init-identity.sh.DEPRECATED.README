@@ -1,0 +1,9 @@
+# DEPRECATED 2026-03-18
+# This script is a footgun — it overwrites agent docs with generic templates.
+# 
+# Problem: Running this on an existing home destroys any personalised content.
+# 
+# Replacement: create-home.js handles initial doc creation at home creation time.
+# For existing homes, agents should write their own docs (see BOOT-DOCS-PROTOCOL.md).
+#
+# Do not use this script. It has been renamed to prevent accidental execution.

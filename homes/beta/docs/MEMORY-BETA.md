@@ -1,4 +1,4 @@
-# MEMORY.md — Beta
+# memory-beta.md — Beta
 
 **Created:** 2026-03-16 by Eiran (first MEMORY.md for this home)
 **Last updated:** 2026-03-16

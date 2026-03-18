@@ -1,4 +1,4 @@
-# BOOT-DOCS-PROTOCOL.md — Agent Identity Documentation Standard
+# boot-docs-protocol-nemotron.md — Agent Identity Documentation Standard
 
 *Created: 2026-03-15 by Healer*
 *Purpose: Ensure every Blum agent has personalized identity documentation*

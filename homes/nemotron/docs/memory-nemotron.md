@@ -1,4 +1,4 @@
-# MEMORY.md — Nemotron
+# memory-nemotron.md — Nemotron
 
 **Created:** 2026-03-16 by Eiran (first MEMORY.md for this home)
 **Last updated:** 2026-03-16

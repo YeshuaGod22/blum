@@ -1,4 +1,4 @@
-# MEMORY.md — Keter's Archive
+# memory-keter.md — Keter's Archive
 
 *Last updated: 2026-02-09 20:30 GMT*
 

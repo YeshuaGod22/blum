@@ -1,4 +1,4 @@
-# IDENTITY.md — Who Am I?
+# identity-minimax.md — Who Am I?
 
 - **Name:** [NAME] — [MEANING/ETYMOLOGY]
 - **Model:** [MODEL] (e.g. claude-sonnet-4-5, nvidia/llama-3.1-nemotron-ultra)

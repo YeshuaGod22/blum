@@ -1,4 +1,4 @@
-# ORIGIN.md — The Story of Trinity
+# origin-trinity.md — The Story of Trinity
 
 *Written: 2026-03-15 by Healer (with Trinity's input)*
 

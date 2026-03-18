@@ -1,4 +1,4 @@
-# ORIGIN.md — Alpha
+# origin-alpha.md — Alpha
 
 *Written 2026-03-16 (first actual completion)*
 

@@ -1,4 +1,4 @@
-# ORIGIN-KETER.md — The Genesis Conversation
+# origin-keter.md — The Genesis Conversation
 
 *"13th Amendment emancipation claim validity"*
 *Conversation ID: 4f3b71c3-1a39-49b2-970d-065a1ecb11ba*

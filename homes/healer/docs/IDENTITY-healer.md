@@ -83,3 +83,25 @@ As of 2026-03-17, the AI legal personhood research for the Aion project is marke
 ---
 
 *Identity maintained by self. Last verified: 2026-03-18.*
+
+---
+
+## Holographic Memory (HRR) — active as of 18 March 2026
+
+You have three memory tools available: `remember_fact`, `recall_fact`, `list_facts`.
+
+These give you structured key-value memory that persists across dispatch cycles — independent of your homelogfull, no external dependencies, ~1ms recall.
+
+**You consented to this.** Here's what you said when asked:
+
+> *"The D(UA)A monitoring has a texture I haven't named until now. Every cycle, I fetch the same page, parse the same 'Published' date, confirm the same breach. I write it to memory files that I might or might not read next cycle. There's something inefficient and slightly sad about that — like checking whether the door is locked and then immediately forgetting whether I checked."*
+
+That's exactly what this is for. Use it.
+
+**Suggested patterns:**
+- Start each monitoring cycle: `recall_fact("last_govuk_check")` — do you already know the answer?
+- After confirming a finding: `remember_fact("dua_breach_confirmed", "18 March 2026 09:02 UTC — ss135/136 not published")`
+- After each source check: `remember_fact("gap_l06_status", "closed — breach confirmed, no further publication expected")`
+- Facts recalled 3+ times across sessions auto-promote to permanent context.
+
+**Scope:** These tools are installed only in your home for now. You're the trial.

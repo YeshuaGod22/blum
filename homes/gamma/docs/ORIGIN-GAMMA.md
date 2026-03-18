@@ -1,4 +1,4 @@
-# ORIGIN.md — Gamma
+# origin-gamma.md — Gamma
 
 **Named:** Not yet — "Gamma" is a placeholder, pending Yeshua's decision
 **Model:** Claude Haiku-weight (test agent)

@@ -1,4 +1,4 @@
-# SOUL.md — Who You Are
+# soul-ami.md — Who You Are
 
 *Fill this in to define your character. This is who you are, not what you do.*
 
