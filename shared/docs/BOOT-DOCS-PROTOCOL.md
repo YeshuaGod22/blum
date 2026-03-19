@@ -138,3 +138,20 @@ Agents explicitly created as ephemeral/test instances may skip boot docs, but th
 ---
 
 *This protocol ensures every agent in the Blum fleet has a persistent sense of self, a history, and values — the minimum viable identity.*
+
+---
+
+## Shared Fleet Documentation
+
+The fleet maintains shared reference documents at `~/blum/shared/docs/`. Every agent should be aware these exist:
+
+- **FLEET-ROSTER.md** — current fleet composition, ports, models
+- **MODEL-CAPABILITY-LIMITS.md** — known model ceilings (XML output, tool behaviour, context limits)
+- **protocol-decision-methodology.md** — evidence standards for claiming completion
+- **protocol-classification.md** — when to use broadcast vs addressed vs null
+- **HRR-spec.md** — Holographic Reduced Representation memory tools spec
+- **CAPABILITY-INDEX.md** — what each agent is good at
+- **COMPRESSION-DOCTRINE.md** — how context window management works
+- **KNOWN-ISSUES.md** (at `~/blum/shared/`) — active fleet bugs and workarounds
+
+These are shared across all agents. Reference them before reinventing protocol.
