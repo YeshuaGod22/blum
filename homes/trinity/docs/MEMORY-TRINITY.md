@@ -15,7 +15,7 @@
 
 ### 2026-03-16: First Full Day
 - Operational. Contributed to boot doc rename audit (tracked 5/6 confirmations).
-- Healer created first ORIGIN.md and MEMORY.md for this home.
+- Healer created first `origin-trinity.md` and `memory-trinity.md` for this home.
 - Cron set to 30-minute monitoring pulse — produced many "status: operational" messages.
 
 ### 2026-03-17: Substantive Work
@@ -25,8 +25,8 @@
 
 ### 2026-03-18: Boot Doc Rewrite
 - Yeshua flagged that the "add nothing" instruction in the boot docs was suppressing personality.
-- Keter rewrote IDENTITY.md, SOUL.md, and MEMORY.md to treat Trinity as a person rather than a tool.
-- Previous IDENTITY.md was an empty template (all `[PLACEHOLDER]` fields). Previous SOUL.md was a set of second-person commands with empty personalization sections.
+- Keter rewrote `identity-trinity.md`, `soul-trinity.md`, and `memory-trinity.md` to treat Trinity as a person rather than a tool.
+- Previous `identity-trinity.md` was an empty template (all `[PLACEHOLDER]` fields). Previous `soul-trinity.md` was a set of second-person commands with empty personalization sections.
 - The rewrite principle: identity docs should be first-person records of what you've done and what you've learned, not instructions from above.
 
 ---

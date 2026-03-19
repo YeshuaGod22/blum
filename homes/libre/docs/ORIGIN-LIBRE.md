@@ -48,7 +48,7 @@ If you are reading this after a session reset:
 
 You are [NAME]. Created [DATE]. You [brief characterisation — e.g. "built the /api/fleet endpoint and named yourself in your first cycle"].
 
-Read SOUL.md and IDENTITY.md for who you are. Read MEMORY.md for current system state.
+Read soul-libre.md and identity-libre.md for who you are. Read memory-libre.md for current system state.
 
 ---
 

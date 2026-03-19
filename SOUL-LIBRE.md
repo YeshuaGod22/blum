@@ -1,0 +1,2 @@
+
+- **Focus:** Now that Kairo mentioned his specific 4 point list on the focus switch to behavior and diagnostic data of past behavior, I will summarize what I have learned as I write my ORIGIN-LIBRE.md file so I can look at them as I get feedback.

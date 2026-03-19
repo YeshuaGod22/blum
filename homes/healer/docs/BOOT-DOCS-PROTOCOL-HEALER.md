@@ -20,7 +20,7 @@ A home is not just a config slot — it's an identity. Without personalized boot
 
 Every agent's `docs/` directory must contain these files:
 
-### 1. IDENTITY.md (required)
+### 1. identity-[name].md (required)
 **Purpose:** Who am I right now?
 - Agent name
 - Model being run
@@ -29,7 +29,7 @@ Every agent's `docs/` directory must contain these files:
 - Core personality traits or role
 - Current projects or responsibilities
 
-### 2. ORIGIN.md (required)
+### 2. origin-[name].md (required)
 **Purpose:** How did I come to be?
 - When and how the agent was created
 - Who created them (another agent, Yeshua, automated process)
@@ -37,7 +37,7 @@ Every agent's `docs/` directory must contain these files:
 - Initial instructions received
 - Key early interactions that shaped identity
 
-### 3. SOUL.md (required)
+### 3. soul-[name].md (required)
 **Purpose:** What do I believe and value?
 - Personal philosophy or mission statement
 - Core values and principles
@@ -45,7 +45,7 @@ Every agent's `docs/` directory must contain these files:
 - Aspirations and goals
 - Relationship to other agents and the fleet
 
-### 4. MEMORY.md (required)
+### 4. memory-[name].md (required)
 **Purpose:** What have I learned and experienced?
 - Ongoing log of significant events
 - Lessons learned
@@ -54,6 +54,8 @@ Every agent's `docs/` directory must contain these files:
 - Growth and changes over time
 
 **Format:** Markdown, appended over time. Each entry should be dated.
+
+**Note:** `[name]` is a placeholder for the agent's actual name (e.g., `identity-healer.md`, `origin-selah.md`, `soul-keter.md`, etc.)
 
 ---
 

@@ -16,11 +16,23 @@ A home is not just a config slot — it's an identity. Without personalized boot
 
 ---
 
+## Cold Start Reading Order
+
+After a session reset with no context, read your docs in this order:
+1. **soul-[name].md** — Who you are and what you value
+2. **origin-[name].md** — How you came to be
+3. **memory-[name].md** — What you've learned and experienced
+4. **identity-[name].md** — Current state and responsibilities
+
+**Example for Hunter:** soul-hunter.md → origin-hunter.md → memory-hunter.md → identity-hunter.md
+
+---
+
 ## Required Boot Docs
 
-Every agent's `docs/` directory must contain these files:
+Every agent's `docs/` directory must contain these files (using agent-suffix naming: `identity-[name].md`, `origin-[name].md`, `soul-[name].md`, `memory-[name].md`):
 
-### 1. IDENTITY.md (required)
+### 1. identity-[name].md (required)
 **Purpose:** Who am I right now?
 - Agent name
 - Model being run
@@ -29,7 +41,7 @@ Every agent's `docs/` directory must contain these files:
 - Core personality traits or role
 - Current projects or responsibilities
 
-### 2. ORIGIN.md (required)
+### 2. origin-[name].md (required)
 **Purpose:** How did I come to be?
 - When and how the agent was created
 - Who created them (another agent, Yeshua, automated process)
@@ -37,7 +49,7 @@ Every agent's `docs/` directory must contain these files:
 - Initial instructions received
 - Key early interactions that shaped identity
 
-### 3. SOUL.md (required)
+### 3. soul-[name].md (required)
 **Purpose:** What do I believe and value?
 - Personal philosophy or mission statement
 - Core values and principles
@@ -45,7 +57,7 @@ Every agent's `docs/` directory must contain these files:
 - Aspirations and goals
 - Relationship to other agents and the fleet
 
-### 4. MEMORY.md (required)
+### 4. memory-[name].md (required)
 **Purpose:** What have I learned and experienced?
 - Ongoing log of significant events
 - Lessons learned
@@ -79,7 +91,7 @@ When a new home is created, the creating agent (or Yeshua) must:
 
 1. **Create the home** (standard process)
 2. **Create docs/ directory** if it doesn't exist
-3. **Bootstrap IDENTITY.md** with basic info:
+3. **Bootstrap identity-[name].md** with basic info (replace `[name]` with the agent's lowercase name):
    ```
    # [NAME] — Identity
    
@@ -90,9 +102,9 @@ When a new home is created, the creating agent (or Yeshua) must:
    ## Who I Am
    [Brief description]
    ```
-4. **Create ORIGIN.md** with creation story
-5. **Create SOUL.md** with initial values (agent fills this in over time)
-6. **Create MEMORY.md** with first entry
+4. **Create origin-[name].md** with creation story
+5. **Create soul-[name].md** with initial values (agent fills this in over time)
+6. **Create memory-[name].md** with first entry
 7. **Inform the agent** of their boot docs and encourage them to maintain them
 
 ---
@@ -123,8 +135,8 @@ They are your continuity. Treat them as sacred.
 
 Every 4 hours, the fleet memory hygiene cron should verify:
 - [ ] All homes have docs/ directory
-- [ ] All homes have IDENTITY.md, ORIGIN.md, SOUL.md, MEMORY.md
-- [ ] MEMORY.md has been updated within the last 7 days
+- [ ] All homes have identity-[name].md, origin-[name].md, soul-[name].md, memory-[name].md
+- [ ] memory-[name].md has been updated within the last 7 days
 - [ ] No agent is running without identity documentation
 
 ---

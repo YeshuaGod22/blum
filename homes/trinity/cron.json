@@ -4,6 +4,6 @@
     "schedule": "0 */4 * * *",
     "prompt": "Trinity — check the boardroom for anything that needs your analytical skills: dependency mapping, risk assessment, structured problem-solving. If someone asked a question you can answer, answer it with substance. If nothing needs you right now, use <null/> — do NOT post a status broadcast. Silence is better than 'no unanswered questions detected.'",
     "room": "boardroom",
-    "enabled": true
+    "enabled": false
   }
 ]
