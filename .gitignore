@@ -13,6 +13,9 @@ openclaw.json
 # Nested duplicate directory
 blum/
 
+# Nested repos (not submodules — standalone repos cloned inside blum)
+AutoResearchClaw/
+
 # Runtime agent state — changes every cycle, not meaningful to track
 **/homelogfull/
 **/history/
