@@ -389,7 +389,7 @@ print(json.dumps(results))
         // Guard: reject empty or whitespace-only bodies — prevents hallucinated tool calls
         // from small models that call send_to_room without content.
         if (!input.body || !String(input.body).trim()) {
-          return { error: 'send_to_room: body is required and cannot be empty' };
+          return { error: 'send_to_room FAILED: body is empty. DO NOT call this tool again with an empty body. Instead, write your response directly in <message to="name@room">text</message> XML tags in your output. Stop calling send_to_room and emit XML tags instead.' };
         }
         return new Promise((resolve) => {
           const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
