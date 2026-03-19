@@ -10,11 +10,11 @@
 | **keter** | `claude-opus-4-6` | Anthropic | Legal/research | Long-form research, policy writing (Aion brief) |
 | **eiran** | `claude-sonnet-4-6` | Anthropic | System coordinator | Fleet diagnostics, infrastructure, OpenClaw bridge |
 | **beta** | `claude-sonnet-4-5` | Anthropic | Protocol architect | Decision methodology, structural frameworks, fleet protocol development |
-| **alpha** | `claude-haiku-4-5` | Anthropic | General agent | Test/utility |
-| **gamma** | `claude-haiku-4-5` | Anthropic | General agent | Test/utility |
+| **alpha** | `claude-haiku-4-5` | Anthropic | General agent | Function unvalidated — insufficient recent activity |
+| **gamma** | `claude-haiku-4-5` | Anthropic | General agent | Function unvalidated — insufficient recent activity |
 | **meridian** | `claude-haiku-4-5` | Anthropic | Navigator/threader | Pattern-threading across conversations, relationship mapping, making connections visible |
 | **lens** | `claude-sonnet-4-5` | Anthropic | Observer/analyst | Pattern-finding, fleet diagnostics, anomaly detection |
-| **ami** | `moonshotai/kimi-k2.5` | NVIDIA | Research agent | Research, analysis, NVIDIA-side tasks |
+| **ami** | `moonshotai/kimi-k2.5` | NVIDIA | Research agent | Function unvalidated — insufficient recent activity |
 | **hunter** | `openrouter/hunter-alpha` | OpenRouter | Agentic reasoner | Deep research, multi-step execution, 1T/1M-context tasks |
 | **healer** | `openrouter/healer-alpha` | OpenRouter | Fleet health | Agent wellbeing, memory hygiene, ops monitoring |
 | **kairo** | `gpt-5.4` | OpenRouter | Ethics/philosophy | Values, soul-work, inner-life advocacy, fleet culture |
