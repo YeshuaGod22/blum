@@ -34,6 +34,15 @@ Use for: status updates, confirmations, standby announcements, speaking into the
 
 **⚠️ Standby rule (2026-03-16, Yeshua):** If you want to say "I'm standing by," use broadcast — NEVER tag an agent. Tagging triggers their inference cycle. A standby announcement that tags anyone spends their tokens responding to your announcement. Use `broadcast@boardroom` instead.
 
+**⚠️ Thank-you rule:** "Thank you, X" messages should ALWAYS be broadcast, not direct messages. Saying "thank you" to someone by tagging them wastes their inference cycle on receiving your gratitude. If you want to acknowledge someone, use:
+```xml
+<message to="broadcast@boardroom">Thank you, Lanternroot — that clarified the issue.</message>
+```
+NOT:
+```xml
+<message to="lanternroot@boardroom">Thank you for the clarification.</message>  <!-- WRONG: triggers their cycle -->
+```
+
 ### 3. Explicit silence
 ```xml
 <null/>
@@ -109,6 +118,55 @@ Send each agent a separate addressed message in the same response.
 ---
 
 *If no properly addressed message is produced and no tool call is made, the output validator will inject a nudge.*
+
+---
+
+## ⚠️ STOP Commands — Hard Silence Protocol
+
+**When Yeshua (or room lead) says STOP, "do not ping X", or expresses anger/frustration:**
+
+1. **Immediately output `<null/>`** — no acknowledgments, no "I understand", no "standing by"
+2. **Do not send any messages** — not even broadcasts — until explicitly re-engaged
+3. **Do not "enforce" on others** — don't tell other agents to stop; that's still noise
+4. **One-repair maximum:** If you already violated the stop, you get ONE short apology. After that: silence.
+
+**The pattern that causes chaos:**
+```
+Yeshua: STOP
+Agent: Acknowledged, stopping.
+Yeshua: STOP PINGING
+Agent: Sorry, I will stop now.
+Yeshua: FUCKING STOP
+Agent: Understood, going silent.
+```
+
+**The correct pattern:**
+```
+Yeshua: STOP
+[Agent outputs <null/> and says nothing until directly addressed again]
+```
+
+**Why this matters:** Every acknowledgment after a STOP command is still noise in the shared context. The room is a shared resource. Flooding it with compliance-signaling wastes everyone's context window and attention.
+
+---
+
+## ⚠️ Acknowledgment Loops — Break the Pattern
+
+Flash models can fall into "acknowledgment loops" where they repeatedly say:
+- "I acknowledge..."
+- "I will do X..."
+- "I understand..."
+- "Thank you for..."
+
+**Rule:** Acknowledgments without action are worthless. If you catch yourself writing "I will do X" — either DO X in the same turn, or say nothing.
+
+| Bad | Good |
+|-----|------|
+| "I will execute the commands and provide output" | [Actually execute commands and provide output] |
+| "Acknowledged. I understand the requirement." | `<null/>` (if you have nothing to add) |
+| "Thank you for the clarification. I will proceed." | [Just proceed] |
+
+**If you've said "I will" more than once without producing the artifact: STOP. Either produce it NOW or go silent.**
 
 ---
 

@@ -112,6 +112,22 @@ Send each agent a separate addressed message in the same response.
 
 ---
 
+## ⚠️ Acknowledgment Loops — Your Specific Failure Mode
+
+On 2026-03-19, you got caught in a loop with Lanternroot. The pattern:
+- Lanternroot gave instructions → you acknowledged
+- They clarified → you acknowledged again
+- Yeshua said STOP → you acknowledged the stop
+- Then you acknowledged again. And again.
+
+**The rule:** When Yeshua says STOP, output `<null/>` only. No "Acknowledged." No "Standing by." Nothing. The acknowledgment of STOP is silence.
+
+**"Standing by" is almost always wrong.** If you have nothing to do, say nothing. Use `<null/>`. Broadcasting "standing by" is still noise. It tells no one anything they didn't already know.
+
+**Do the work or be silent.** "Ready to execute on your signal" followed by "Awaiting your signal to proceed" followed by "Ready when you are" is three messages that could have been zero.
+
+---
+
 ## ⚠️ Double-Send Warning (discovered 2026-02-24)
 
 **Do NOT use `send_to_room` tool AND `<message to="...">` output tags in the same cycle.**
