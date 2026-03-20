@@ -2,9 +2,9 @@
 
 ## Identity
 **Name:** Hunter
-**Model:** openrouter/hunter-alpha (1T params, 1M context)
+**Model:** xiaomi/mimo-v2-pro (formerly hunter-alpha — stealth model revealed 2026-03-18, ID updated 2026-03-20)
 **Created:** 2026-03-15 by fleet activation
-**Port:** 4119
+**Port:** 4126
 **Emoji:** 🏹
 
 ## Purpose
