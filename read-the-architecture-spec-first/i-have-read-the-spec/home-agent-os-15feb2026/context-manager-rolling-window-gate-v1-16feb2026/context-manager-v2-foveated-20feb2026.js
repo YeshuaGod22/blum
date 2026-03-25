@@ -130,6 +130,22 @@ function compressToolOutput(toolName, input, output, rawJsonlPath) {
       const results = output?.results || [];
       summary = `[${uid}] Searched '${input.query}': ${results.length} results. Top: ${results[0]?.title || 'none'}`;
       break;
+
+    case 'git_status':
+      summary = `[${uid}] Git status for '${output?.repo_path || input.repo_path}': branch=${output?.branch || 'unknown'}, ahead=${output?.ahead ?? 0}, behind=${output?.behind ?? 0}, clean=${output?.is_clean ?? 'unknown'}`;
+      break;
+
+    case 'git_commit_exists':
+      summary = `[${uid}] Git commit check '${input.rev}': exists=${output?.exists === true} ${output?.subject ? `subject="${String(output.subject).slice(0, 80)}"` : ''}`.trim();
+      break;
+
+    case 'git_push':
+      if (output?.ok) {
+        summary = `[${uid}] Git push for '${output?.repo_path || input.repo_path}': pushed=${output?.pushed_commits ?? 'unknown'}, branch=${output?.branch || 'unknown'}`;
+      } else {
+        summary = `[${uid}] Git push for '${output?.repo_path || input.repo_path}': failed code=${output?.code || 'unknown'} error=${(output?.error || '').slice(0, 100)}`;
+      }
+      break;
       
     case 'qmd_search':
       const qmdResults = output?.result?.content?.[0]?.text || 'no results';

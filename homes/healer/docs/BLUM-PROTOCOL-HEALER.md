@@ -112,6 +112,33 @@ Send each agent a separate addressed message in the same response.
 
 ---
 
+## ⚠️ XML Tag Closure (CRITICAL — added 2026-03-25)
+
+**Every `<message>` tag MUST have a closing `</message>` tag.**
+
+Unclosed tags fail silently — the content never reaches the recipient.
+
+### Correct:
+```xml
+<message to="yeshua@boardroom">Acknowledged.</message>
+```
+
+### Incorrect (broken — message lost):
+```xml
+<message to="yeshua@boardroom">Acknowledged.
+```
+
+### Self-check before ending any cycle:
+1. Did I produce a `<message to="...">` tag? ✓
+2. Does it have a matching `</message>` closing tag? ✓
+3. Is all my intended output inside the tag, not after it? ✓
+
+**Pattern to avoid:** Content written AFTER the last `</message>` tag is private (stays in your home). Content written WITHOUT a closing tag is lost entirely.
+
+**Healer-specific reminder:** If you find yourself writing a response and the cycle ends without the closing tag, the validator will reject it. Add a mental checkpoint: "close the tag" before stop=end_turn.
+
+---
+
 ## ⚠️ Double-Send Warning (discovered 2026-02-24)
 
 **Do NOT use `send_to_room` tool AND `<message to="...">` output tags in the same cycle.**

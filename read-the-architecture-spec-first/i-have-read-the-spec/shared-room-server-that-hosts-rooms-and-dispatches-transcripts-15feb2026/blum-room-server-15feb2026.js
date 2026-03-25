@@ -535,14 +535,6 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, fleetResults);
     }
 
-    // Single room chatlog
-    const roomMatch = p.match(/^\/api\/room\/([^/]+)\/chatlog$/);
-    if (roomMatch) {
-      const name = roomMatch[1];
-      if (!rooms[name]) return respond(res, 404, { error: `Unknown room: ${name}` });
-      return respond(res, 200, { room: name, chatlog: rooms[name].chatlog });
-    }
-
     return respond(res, 404, { error: 'Not found' });
   }
 

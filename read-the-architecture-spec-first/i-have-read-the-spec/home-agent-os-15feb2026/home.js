@@ -50,7 +50,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
 // ── Modules (swappable) ───────────────────
@@ -96,6 +96,54 @@ async function findAgentPort(name) {
   return results.find(p => p !== null) || null;
 }
 
+function makeToolOk(code, extra = {}) {
+  return { ok: true, code, ...extra };
+}
+
+function makeToolError(code, message, extra = {}) {
+  return { ok: false, code, error: message, ...extra };
+}
+
+function summariseForLog(value, maxLen = 240) {
+  if (value == null) return '';
+  const raw = typeof value === 'string' ? value : JSON.stringify(value);
+  return raw.replace(/\s+/g, ' ').slice(0, maxLen);
+}
+
+function summariseToolInput(input) {
+  if (!input || typeof input !== 'object') return '';
+  const out = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (/token|key|secret|password|authorization/i.test(k)) {
+      out[k] = '[redacted]';
+    } else if (typeof v === 'string') {
+      out[k] = v.slice(0, 120);
+    } else {
+      out[k] = v;
+    }
+  }
+  return summariseForLog(out);
+}
+
+function getToolStatus(result) {
+  if (result && typeof result === 'object') {
+    if (typeof result.ok === 'boolean') {
+      return { ok: result.ok, code: result.code || (result.ok ? 'ok' : 'error') };
+    }
+    if (result.error) return { ok: false, code: result.code || 'error' };
+  }
+  return { ok: true, code: 'ok' };
+}
+
+function buildGitEnv() {
+  return {
+    ...process.env,
+    // Prevent non-interactive git commands from hanging on username/password prompts.
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: 'echo',
+  };
+}
+
 // ── Home State ────────────────────────────
 class Home {
   constructor(homeDir) {
@@ -107,6 +155,9 @@ class Home {
     this.opsLogPath = path.join(homeDir, 'ops.log');
     this.queue = [];
     this.processing = false;
+    this._activeSendToRoomDedup = null;
+    this._processedDispatchIds = this._loadProcessedDispatchIds();
+    this._inFlightDispatchIds = new Set();
 
     // Ensure history directory exists
     if (!fs.existsSync(this.historyDir)) {
@@ -147,6 +198,28 @@ class Home {
       path.join(this.historyDir, `${room}.json`),
       JSON.stringify(history, null, 2)
     );
+  }
+
+  _loadProcessedDispatchIds() {
+    const seen = new Set();
+    const homelogPath = path.join(this.homeDir, 'homelogfull', 'homelogfull.jsonl');
+    if (!fs.existsSync(homelogPath)) return seen;
+
+    try {
+      const lines = fs.readFileSync(homelogPath, 'utf-8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.dispatchId) seen.add(entry.dispatchId);
+        } catch {
+          // Ignore malformed history lines and keep loading the rest.
+        }
+      }
+    } catch (e) {
+      this.log(`dispatch-dedup:load_error error=${e.message}`);
+    }
+
+    return seen;
   }
 
   log(entry) {
@@ -263,6 +336,49 @@ class Home {
 
   async _executeTool(name, input) {
     const expandPath = (p) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
+    const resolveRepoPath = (repoPath) => expandPath(repoPath || path.join(os.homedir(), 'blum'));
+    const ensureDirectory = (dirPath) => {
+      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+        return makeToolError('working_dir_not_found', `Working directory not found: ${dirPath}`, { path: dirPath });
+      }
+      return null;
+    };
+    const runGit = (repoPath, args) => {
+      const cwd = resolveRepoPath(repoPath);
+      const dirError = ensureDirectory(cwd);
+      if (dirError) return dirError;
+      try {
+        const stdout = execFileSync('/usr/bin/git', args, {
+          cwd,
+          env: buildGitEnv(),
+          timeout: 30000,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        return makeToolOk('git_ok', { repo_path: cwd, stdout: stdout.slice(0, 8000), exit_code: 0 });
+      } catch (e) {
+        if (e && e.code === 'ETIMEDOUT') {
+          return makeToolError('command_timed_out', `Git command timed out after 30000ms: git ${args.join(' ')}`, {
+            repo_path: cwd,
+            stdout: e.stdout || '',
+            stderr: e.stderr || '',
+            exit_code: e.status || 124,
+          });
+        }
+        const stderr = (e.stderr || e.message || '').toString();
+        let code = 'git_error';
+        if (/not a git repository/i.test(stderr)) code = 'not_a_git_repo';
+        else if (/could not read Username|authentication failed|fatal: Authentication failed/i.test(stderr)) code = 'auth_required';
+        else if (/no upstream configured|has no upstream branch/i.test(stderr)) code = 'no_upstream';
+        else if (/Everything up-to-date/i.test(stderr)) code = 'nothing_to_push';
+        return makeToolError(code, stderr.trim() || `git ${args.join(' ')} failed`, {
+          repo_path: cwd,
+          stdout: (e.stdout || '').toString().slice(0, 8000),
+          stderr: stderr.slice(0, 8000),
+          exit_code: e.status || 1,
+        });
+      }
+    };
 
     switch (name) {
 
@@ -293,15 +409,122 @@ class Home {
         const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath'];
         const cmd = input.command.trim();
         const first = cmd.split(/\s+/)[0].split('/').pop();
-        if (!allowlist.includes(first)) return { error: `Command not in allowlist: ${first}` };
-        if (/rm\s+-rf|sudo|mkfs|shutdown|reboot|dd\s+if/.test(cmd)) return { error: 'Blocked: destructive command' };
+        if (!allowlist.includes(first)) return makeToolError('command_not_allowed', `Command not in allowlist: ${first}`, { command: cmd });
+        if (/rm\s+-rf|sudo|mkfs|shutdown|reboot|dd\s+if/.test(cmd)) return makeToolError('destructive_command_blocked', 'Blocked: destructive command', { command: cmd });
         try {
           const cwd = input.working_dir ? expandPath(input.working_dir) : os.homedir();
-          const stdout = execSync(cmd, { cwd, timeout: 30000, encoding: 'utf-8', stdio: ['pipe','pipe','pipe'] });
-          return { stdout: stdout.slice(0, 8000), exit_code: 0 };
+          const dirError = ensureDirectory(cwd);
+          if (dirError) return dirError;
+          const env = first === 'git' ? buildGitEnv() : { ...process.env };
+          const stdout = execSync(cmd, { cwd, env, timeout: 30000, encoding: 'utf-8', stdio: ['pipe','pipe','pipe'] });
+          return makeToolOk('shell_exec_ok', { stdout: stdout.slice(0, 8000), exit_code: 0, command: cmd, working_dir: cwd });
         } catch(e) {
-          return { stdout: e.stdout || '', stderr: e.stderr || e.message, exit_code: e.status || 1 };
+          if (e && e.code === 'ETIMEDOUT') {
+            return makeToolError('command_timed_out', `Command timed out after 30000ms: ${cmd}`, {
+              stdout: e.stdout || '',
+              stderr: `Command timed out after 30000ms: ${cmd}`,
+              exit_code: e.status || 124,
+              command: cmd,
+            });
+          }
+          let code = 'command_failed';
+          const stderr = (e.stderr || e.message || '').toString();
+          if (/could not read Username|authentication failed|fatal: Authentication failed/i.test(stderr)) code = 'auth_required';
+          if (/not a git repository/i.test(stderr)) code = 'not_a_git_repo';
+          return makeToolError(code, stderr || 'Command failed', {
+            stdout: (e.stdout || '').toString().slice(0, 8000),
+            stderr: stderr.slice(0, 8000),
+            exit_code: e.status || 1,
+            command: cmd,
+          });
         }
+      }
+
+      case 'git_status': {
+        const repoPath = resolveRepoPath(input.repo_path);
+        const statusResult = runGit(repoPath, ['status', '--short', '--branch']);
+        if (!statusResult.ok) return statusResult;
+        const lines = statusResult.stdout.split('\n').filter(Boolean);
+        const branchLine = lines[0] || '';
+        let branch = null;
+        let upstream = null;
+        let ahead = 0;
+        let behind = 0;
+        const branchMatch = branchLine.match(/^##\s+([^\.\s]+)(?:\.\.\.([^\s]+))?(?:\s+\[(.*)\])?/);
+        if (branchMatch) {
+          branch = branchMatch[1] || null;
+          upstream = branchMatch[2] || null;
+          const counts = branchMatch[3] || '';
+          const aheadMatch = counts.match(/ahead\s+(\d+)/);
+          const behindMatch = counts.match(/behind\s+(\d+)/);
+          ahead = aheadMatch ? Number(aheadMatch[1]) : 0;
+          behind = behindMatch ? Number(behindMatch[1]) : 0;
+        }
+        return makeToolOk('git_status_ok', {
+          repo_path: repoPath,
+          branch,
+          upstream,
+          ahead,
+          behind,
+          is_clean: lines.length <= 1,
+          status: statusResult.stdout.slice(0, 8000),
+        });
+      }
+
+      case 'git_commit_exists': {
+        const repoPath = resolveRepoPath(input.repo_path);
+        const verify = runGit(repoPath, ['rev-parse', '--verify', `${input.rev}^{commit}`]);
+        if (!verify.ok) {
+          if (verify.code === 'git_error') {
+            return makeToolOk('git_commit_missing', { repo_path: repoPath, rev: input.rev, exists: false });
+          }
+          return verify;
+        }
+        const commitHash = verify.stdout.trim();
+        const details = runGit(repoPath, ['log', '-1', '--format=%H%n%s', commitHash]);
+        if (!details.ok) return details;
+        const [hash, ...subjectParts] = details.stdout.trim().split('\n');
+        return makeToolOk('git_commit_exists', {
+          repo_path: repoPath,
+          rev: input.rev,
+          exists: true,
+          commit: hash || commitHash,
+          subject: subjectParts.join('\n').trim(),
+        });
+      }
+
+      case 'git_push': {
+        const repoPath = resolveRepoPath(input.repo_path);
+        const status = await this._executeTool('git_status', { repo_path: repoPath });
+        if (!status.ok) return status;
+        if (!status.upstream) {
+          return makeToolError('no_upstream', `No upstream configured for branch ${status.branch || '(unknown)'}`, {
+            repo_path: repoPath,
+            branch: status.branch,
+          });
+        }
+        if ((status.ahead || 0) === 0) {
+          return makeToolError('nothing_to_push', `Branch ${status.branch || '(unknown)'} is not ahead of ${status.upstream}`, {
+            repo_path: repoPath,
+            branch: status.branch,
+            upstream: status.upstream,
+          });
+        }
+        const pushResult = runGit(repoPath, ['push', '--porcelain']);
+        if (!pushResult.ok) return pushResult;
+        const postStatus = await this._executeTool('git_status', { repo_path: repoPath });
+        return makeToolOk('git_push_ok', {
+          repo_path: repoPath,
+          branch: status.branch,
+          upstream: status.upstream,
+          pushed_commits: status.ahead,
+          stdout: pushResult.stdout.slice(0, 8000),
+          post_status: postStatus.ok ? {
+            ahead: postStatus.ahead,
+            behind: postStatus.behind,
+            is_clean: postStatus.is_clean,
+          } : null,
+        });
       }
 
       case 'web_search': {
@@ -391,6 +614,19 @@ print(json.dumps(results))
         if (!input.body || !String(input.body).trim()) {
           return { error: 'send_to_room FAILED: body is empty. DO NOT call this tool again with an empty body. Instead, write your response directly in <message to="name@room">text</message> XML tags in your output. Stop calling send_to_room and emit XML tags instead.' };
         }
+        const dedupKey = JSON.stringify({
+          room: input.room || '',
+          recipient: input.recipient || null,
+          body: String(input.body).trim(),
+        });
+        if (this._activeSendToRoomDedup?.has(dedupKey)) {
+          return {
+            ok: true,
+            deduped: true,
+            note: 'send_to_room duplicate suppressed for this cycle',
+          };
+        }
+        this._activeSendToRoomDedup?.add(dedupKey);
         return new Promise((resolve) => {
           const payload = JSON.stringify({ from: this.config.name, room: input.room, body: input.body, to: input.recipient || null });
           const req = http.request({ hostname: 'localhost', port: 3141, path: '/api/message/send', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
@@ -962,35 +1198,50 @@ print(json.dumps(results))
     };
     this.log(`process:start room=${room} cycleId=${cycleId} dispatchId=${dispatchId}`);
 
-    // ── 0. PAUSE flag check ──
-    // Check ~/blum/shared/PAUSE before doing anything else.
-    // If the file contains "1", all non-essential inference is suspended.
-    // Set to "1" to emergency-stop coordination spirals.
-    // Set to "0" or delete to resume.
-    try {
-      const pausePath = require('path').join(require('os').homedir(), 'blum', 'shared', 'PAUSE');
-      const fs = require('fs');
-      if (fs.existsSync(pausePath)) {
-        const pauseVal = fs.readFileSync(pausePath, 'utf-8').trim();
-        if (pauseVal === '1') {
-          this.log(`process:paused room=${room} reason=PAUSE_flag`);
-          return;
-        }
+    if (dispatchId) {
+      if (this._processedDispatchIds.has(dispatchId)) {
+        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dispatchId=${dispatchId} reason=already_processed`);
+        return;
       }
-    } catch (e) {
-      // PAUSE check failure is non-fatal — continue processing
-      this.log(`process:pause_check_error error=${e.message}`);
+      if (this._inFlightDispatchIds.has(dispatchId)) {
+        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dispatchId=${dispatchId} reason=in_flight`);
+        return;
+      }
+      this._inFlightDispatchIds.add(dispatchId);
     }
 
-    // ── 1. Blocked check ──
-    if (this.blocked.rooms.includes(room)) {
-      this.log(`process:blocked room=${room} reason=room_blocked`);
-      return;
-    }
-    if (dispatch.messages?.some(m => this.blocked.participants.includes(m.from))) {
-      this.log(`process:blocked room=${room} reason=participant_blocked`);
-      return;
-    }
+    let completed = false;
+    try {
+
+      // ── 0. PAUSE flag check ──
+      // Check ~/blum/shared/PAUSE before doing anything else.
+      // If the file contains "1", all non-essential inference is suspended.
+      // Set to "1" to emergency-stop coordination spirals.
+      // Set to "0" or delete to resume.
+      try {
+        const pausePath = require('path').join(require('os').homedir(), 'blum', 'shared', 'PAUSE');
+        const fs = require('fs');
+        if (fs.existsSync(pausePath)) {
+          const pauseVal = fs.readFileSync(pausePath, 'utf-8').trim();
+          if (pauseVal === '1') {
+            this.log(`process:paused room=${room} reason=PAUSE_flag`);
+            return;
+          }
+        }
+      } catch (e) {
+        // PAUSE check failure is non-fatal — continue processing
+        this.log(`process:pause_check_error error=${e.message}`);
+      }
+
+      // ── 1. Blocked check ──
+      if (this.blocked.rooms.includes(room)) {
+        this.log(`process:blocked room=${room} reason=room_blocked`);
+        return;
+      }
+      if (dispatch.messages?.some(m => this.blocked.participants.includes(m.from))) {
+        this.log(`process:blocked room=${room} reason=participant_blocked`);
+        return;
+      }
 
     // ── 2. Room membership check (with auto-join) ──
     if (!this.rooms[room]) {
@@ -1079,84 +1330,87 @@ print(json.dumps(results))
     let iteration = 0;
     // KI-001 fix: track bodies sent via send_to_room tool to avoid XML-tag duplicate
     const _toolDirectSends = new Set(); // Set of `${room}::${body}` strings
+    this._activeSendToRoomDedup = new Set();
 
     // Strip _meta from messages and tools before sending to nucleus
     const cleanTools = tools.map(t => { const { _meta, ...def } = t; return def; });
 
     this.log(`process:nucleus model=${this.config.model || 'default'} tools=${tools.length} cycleId=${cycleId}`);
 
-    while (iteration < MAX_TOOL_ITERATIONS) {
-      iteration++;
-      const iterationId = generateUID('iter');
-      const responseId = generateUID('resp');
+    try {
+      while (iteration < MAX_TOOL_ITERATIONS) {
+        iteration++;
+        const iterationId = generateUID('iter');
+        const responseId = generateUID('resp');
 
-      // Strip _meta from messages before each nucleus call
-      // Also sanitise surrogate chars — 4-byte emoji in content become lone surrogates
-      // in JSON.stringify output and Anthropic's parser rejects them.
-      const cleanMessages = sanitiseForJson(messages.map(m => { const { _meta, ...clean } = m; return clean; }));
-      // Retry once on 529 overload with 30s backoff
-      try {
-        response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
-      } catch (e529) {
-        if (e529.message && e529.message.includes('529')) {
-          this.log(`process:nucleus_529_retry cycleId=${cycleId} waiting 30s`);
-          await new Promise(r => setTimeout(r, 30000));
+        // Strip _meta from messages before each nucleus call
+        // Also sanitise surrogate chars — 4-byte emoji in content become lone surrogates
+        // in JSON.stringify output and Anthropic's parser rejects them.
+        const cleanMessages = sanitiseForJson(messages.map(m => { const { _meta, ...clean } = m; return clean; }));
+        // Retry once on 529 overload with 30s backoff
+        try {
           response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
-        } else {
-          throw e529;
+        } catch (e529) {
+          if (e529.message && e529.message.includes('529')) {
+            this.log(`process:nucleus_529_retry cycleId=${cycleId} waiting 30s`);
+            await new Promise(r => setTimeout(r, 30000));
+            response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
+          } else {
+            throw e529;
+          }
         }
-      }
 
-      this.log(`process:nucleus_iteration=${iteration} iterationId=${iterationId} responseId=${responseId} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
+        this.log(`process:nucleus_iteration=${iteration} iterationId=${iterationId} responseId=${responseId} stop=${response.stopReason} tool_calls=${response.toolCalls.length} text_length=${response.text.length}`);
 
-      // Record this iteration in the trace context
-      _traceContext.iterations.push({
-        iterationId,
-        number: iteration,
-        responseId,
-        stopReason: response.stopReason,
-        toolCalls: response.toolCalls.map(tc => ({ apiId: tc.id, name: tc.name, status: 'pending', error: null, resultLength: null })),
-        textLength: response.text.length,
-      });
+        // Record this iteration in the trace context
+        _traceContext.iterations.push({
+          iterationId,
+          number: iteration,
+          responseId,
+          stopReason: response.stopReason,
+          toolCalls: response.toolCalls.map(tc => ({ apiId: tc.id, name: tc.name, status: 'pending', error: null, resultLength: null })),
+          textLength: response.text.length,
+        });
 
       // If no tool calls, we're done
-      if (response.stopReason !== 'tool_use' || response.toolCalls.length === 0) {
-        _traceContext.finalResponseId = responseId;
-        break;
-      }
-
-      // ── Execute tool calls ──
-      // The home executes tools. The nucleus never does.
-      const toolResults = [];
-      for (const tc of response.toolCalls) {
-        this.log(`tool:exec name=${tc.name} id=${tc.id} cycleId=${cycleId} iterationId=${iterationId}`);
-        let result;
-        try {
-          result = await this._executeTool(tc.name, tc.input);
-          const resultStr = (typeof result === 'object' && result !== null) ? JSON.stringify(result, null, 2) : String(result);
-          this.log(`tool:done name=${tc.name} id=${tc.id} result_length=${resultStr.length}`);
-          // KI-001 fix: track rooms where send_to_room was called; router suppresses all
-          // XML-tag sends to those rooms (body matching is unreliable — model generates
-          // tool body and XML content independently, they are never guaranteed identical).
-          if (tc.name === 'send_to_room' && tc.input?.room) {
-            _toolDirectSends.add(tc.input.room);
-          }
-          // Record outcome in trace
-          const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
-          const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
-          if (tcTrace) { tcTrace.status = 'ok'; tcTrace.resultLength = resultStr.length; }
-        } catch (err) {
-          result = `Error: ${err.message}`;
-          this.log(`tool:error name=${tc.name} id=${tc.id} error=${err.message}`);
-          // Record error in trace
-          const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
-          const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
-          if (tcTrace) { tcTrace.status = 'error'; tcTrace.error = err.message; }
+        if (response.stopReason !== 'tool_use' || response.toolCalls.length === 0) {
+          _traceContext.finalResponseId = responseId;
+          break;
         }
-        // Serialise result: objects (e.g. shell_exec returns {stdout, exit_code}) become JSON
-        let serialised = (typeof result === 'object' && result !== null)
-          ? JSON.stringify(result, null, 2)
-          : String(result);
+
+        // ── Execute tool calls ──
+        // The home executes tools. The nucleus never does.
+        const toolResults = [];
+        for (const tc of response.toolCalls) {
+          this.log(`tool:exec name=${tc.name} id=${tc.id} cycleId=${cycleId} iterationId=${iterationId} input=${summariseToolInput(tc.input)}`);
+          let result;
+          try {
+            result = await this._executeTool(tc.name, tc.input);
+            const resultStr = (typeof result === 'object' && result !== null) ? JSON.stringify(result, null, 2) : String(result);
+            const toolStatus = getToolStatus(result);
+            this.log(`tool:done name=${tc.name} id=${tc.id} ok=${toolStatus.ok} code=${toolStatus.code} result_length=${resultStr.length} preview=${summariseForLog(result)}`);
+            // KI-001 fix: track rooms where send_to_room was called; router suppresses all
+            // XML-tag sends to those rooms (body matching is unreliable — model generates
+            // tool body and XML content independently, they are never guaranteed identical).
+            if (tc.name === 'send_to_room' && tc.input?.room && !result?.error && !result?.deduped) {
+              _toolDirectSends.add(tc.input.room);
+            }
+            // Record outcome in trace
+            const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
+            const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
+            if (tcTrace) { tcTrace.status = 'ok'; tcTrace.resultLength = resultStr.length; }
+          } catch (err) {
+            result = `Error: ${err.message}`;
+            this.log(`tool:error name=${tc.name} id=${tc.id} error=${err.message}`);
+            // Record error in trace
+            const iterTrace = _traceContext.iterations[_traceContext.iterations.length - 1];
+            const tcTrace = iterTrace?.toolCalls.find(t => t.apiId === tc.id);
+            if (tcTrace) { tcTrace.status = 'error'; tcTrace.error = err.message; }
+          }
+          // Serialise result: objects (e.g. shell_exec returns {stdout, exit_code}) become JSON
+          let serialised = (typeof result === 'object' && result !== null)
+            ? JSON.stringify(result, null, 2)
+            : String(result);
 
         // Tool result size guard — ephemeral tool results must not overflow context.
         // Under the context assembly model, tool results are temporary scaffolding;
@@ -1171,31 +1425,34 @@ print(json.dumps(results))
           this.log(`tool:truncated name=${tc.name} id=${tc.id} original=${originalLength} truncated=${MAX_TOOL_RESULT_BYTES}`);
         }
 
-        toolResults.push({ id: tc.id, result: serialised });
-      }
-
-      // ── Append assistant message + tool results to conversation ──
-      // For Anthropic: the assistant message must contain the original content blocks
-      // (text + tool_use), then we add tool_result messages.
-      if (response._contentBlocks) {
-        // Anthropic format: assistant message with raw content blocks
-        messages.push({ role: 'assistant', content: response._contentBlocks });
-        // Each tool result is a separate user message with tool_result content
-        const toolResultBlocks = toolResults.map(tr => ({
-          type: 'tool_result',
-          tool_use_id: tr.id,
-          content: tr.result,
-        }));
-        messages.push({ role: 'user', content: toolResultBlocks });
-      } else {
-        // OpenAI format: simpler — append assistant content + tool results as text
-        messages.push({ role: 'assistant', content: response.text });
-        for (const tr of toolResults) {
-          messages.push({ role: 'user', content: `[Tool result for ${tr.id}]: ${tr.result}` });
+          toolResults.push({ id: tc.id, result: serialised });
         }
-      }
 
-      this.log(`process:tool_loop iteration=${iteration} messages_now=${messages.length}`);
+        // ── Append assistant message + tool results to conversation ──
+        // For Anthropic: the assistant message must contain the original content blocks
+        // (text + tool_use), then we add tool_result messages.
+        if (response._contentBlocks) {
+          // Anthropic format: assistant message with raw content blocks
+          messages.push({ role: 'assistant', content: response._contentBlocks });
+          // Each tool result is a separate user message with tool_result content
+          const toolResultBlocks = toolResults.map(tr => ({
+            type: 'tool_result',
+            tool_use_id: tr.id,
+            content: tr.result,
+          }));
+          messages.push({ role: 'user', content: toolResultBlocks });
+        } else {
+          // OpenAI format: simpler — append assistant content + tool results as text
+          messages.push({ role: 'assistant', content: response.text });
+          for (const tr of toolResults) {
+            messages.push({ role: 'user', content: `[Tool result for ${tr.id}]: ${tr.result}` });
+          }
+        }
+
+        this.log(`process:tool_loop iteration=${iteration} messages_now=${messages.length}`);
+      }
+    } finally {
+      this._activeSendToRoomDedup = null;
     }
 
     if (iteration >= MAX_TOOL_ITERATIONS) {
@@ -1230,10 +1487,13 @@ print(json.dumps(results))
       const nudge = `[SYSTEM ALERT → ${myName}] Your last output was not delivered to the room. ` +
         `It contained no addressed <message> tag and no tool call.\n\n` +
         `The last message was from: ${senderAddress}\n\n` +
+        `Return ONLY one valid XML tag. Do not summarize, explain, narrate, or include debug headers.\n` +
+        `Do not use arrow notation like "→ [name@room]:" and do not output prose outside the tag.\n` +
         `To reply:    <message to="${senderAddress}">your text</message>\n` +
         `To the room: <message to="broadcast@${room}">your text</message>\n` +
         `  (broadcast puts your message in the room chatlog without triggering any agent to respond)\n` +
         `To explicitly stay silent: <null/>\n\n` +
+        `If you open <message ...>, you MUST close it with </message>.\n\n` +
         `Your full output was:\n---\n${truncated}\n---\n\n` +
         `Please respond now with a properly addressed message, a tool call, or <null/> to stay silent.`;
 
@@ -1363,10 +1623,17 @@ print(json.dumps(results))
       _traceContext,
       log: (entry) => this.log(entry),
     });
-    this.log(`process:routed cycleId=${cycleId} results=${JSON.stringify(routeResults)}`);
+      this.log(`process:routed cycleId=${cycleId} results=${JSON.stringify(routeResults)}`);
 
-    this.log(`process:done room=${room} cycleId=${cycleId}`);
-    return parsed;
+      this.log(`process:done room=${room} cycleId=${cycleId}`);
+      completed = true;
+      return parsed;
+    } finally {
+      if (dispatchId) {
+        this._inFlightDispatchIds.delete(dispatchId);
+        if (completed) this._processedDispatchIds.add(dispatchId);
+      }
+    }
   }
 }
 

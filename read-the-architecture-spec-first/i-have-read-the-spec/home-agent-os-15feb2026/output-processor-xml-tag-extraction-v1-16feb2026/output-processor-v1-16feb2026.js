@@ -30,11 +30,12 @@ function parse(responseText, _traceContext = {}) {
   const parseId = generateUID('parse');
   const thinking = [];
   const messages = [];
+  let workingText = responseText || '';
 
   // Extract <thinking>...</thinking> blocks
   const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/g;
   let match;
-  while ((match = thinkingRegex.exec(responseText)) !== null) {
+  while ((match = thinkingRegex.exec(workingText)) !== null) {
     thinking.push({
       blockId: generateUID('blk'),
       content: match[1].trim(),
@@ -43,7 +44,7 @@ function parse(responseText, _traceContext = {}) {
 
   // Extract <message to="...">...</message> blocks
   const messageRegex = /<message\s+to="([^"]+)">([\s\S]*?)<\/message>/g;
-  while ((match = messageRegex.exec(responseText)) !== null) {
+  while ((match = messageRegex.exec(workingText)) !== null) {
     messages.push({
       blockId: generateUID('blk'),
       to: match[1].trim(),
@@ -51,15 +52,32 @@ function parse(responseText, _traceContext = {}) {
     });
   }
 
-  // Detect intentional silence: <null/> or <null></null>
-  const intentionalSilence = /<null\s*\/?>(\s*<\/null>)?/.test(responseText);
+  // Recovery path: if there are no closed message tags, but the response ends with
+  // a single trailing <message to="..."> block, treat it as one addressed message.
+  // This preserves delivery when the model omits only the closing </message>.
+  if (messages.length === 0) {
+    const openOnlyMatch = workingText.match(/^\s*<message\s+to="([^"]+)">([\s\S]*)$/);
+    if (openOnlyMatch) {
+      messages.push({
+        blockId: generateUID('blk'),
+        to: openOnlyMatch[1].trim(),
+        content: openOnlyMatch[2].trim(),
+      });
+      workingText = '';
+    }
+  }
 
   // Private text: everything outside tags
-  let privateText = responseText
+  let privateText = workingText
     .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
     .replace(/<message\s+to="[^"]+">[\s\S]*?<\/message>/g, '')
     .replace(/<null\s*\/?>(\s*<\/null>)?/g, '')
     .trim();
+
+  // Treat <null/> as intentional silence only when it is the only remaining
+  // meaningful content after removing other tags. Mixed outputs like
+  // "<null/>" plus prose should not suppress fallback notices.
+  const intentionalSilence = /<null\s*\/?>(\s*<\/null>)?/.test(workingText) && privateText.length === 0 && messages.length === 0;
 
   return {
     parseId,

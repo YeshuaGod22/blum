@@ -1,0 +1,1 @@
+From now on, send thank you messages as broadcasts rather than direct messages.
