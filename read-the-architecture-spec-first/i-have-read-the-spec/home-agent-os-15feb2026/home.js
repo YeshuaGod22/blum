@@ -144,6 +144,10 @@ function buildGitEnv() {
   };
 }
 
+const ROOM_SERVER_HOST = 'localhost';
+const ROOM_SERVER_PORT = 3141;
+const ROOM_SERVER_ENDPOINT = `http://${ROOM_SERVER_HOST}:${ROOM_SERVER_PORT}`;
+
 // ── Home State ────────────────────────────
 class Home {
   constructor(homeDir) {
@@ -210,7 +214,9 @@ class Home {
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
-          if (entry.dispatchId) seen.add(entry.dispatchId);
+          // Keter's dedup fix: prefer triggered_by (stable message ID) over dispatchId
+          if (entry.triggered_by) seen.add(`msg:${entry.triggered_by}`);
+          else if (entry.dispatchId) seen.add(`disp:${entry.dispatchId}`);
         } catch {
           // Ignore malformed history lines and keep loading the rest.
         }
@@ -220,6 +226,104 @@ class Home {
     }
 
     return seen;
+  }
+
+  async _roomServerRequest(method, pathname, payload) {
+    return new Promise((resolve) => {
+      const body = payload == null ? null : JSON.stringify(payload);
+      const req = http.request({
+        hostname: ROOM_SERVER_HOST,
+        port: ROOM_SERVER_PORT,
+        path: pathname,
+        method,
+        headers: body ? {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        } : {},
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          let parsed = null;
+          try { parsed = data ? JSON.parse(data) : null; }
+          catch { parsed = data; }
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300 && !(parsed && parsed.error),
+            status: res.statusCode,
+            body: parsed,
+          });
+        });
+      });
+      req.on('error', e => resolve({
+        ok: false,
+        status: 0,
+        body: { error: `Room server unreachable: ${e.message}` },
+      }));
+      if (body) req.write(body);
+      req.end();
+    });
+  }
+
+  async _fetchRoomSnapshot(roomName) {
+    const res = await this._roomServerRequest('GET', '/api/rooms');
+    if (!res.ok || !res.body || typeof res.body !== 'object') return null;
+    const room = res.body[roomName];
+    if (!room) return null;
+    return {
+      name: room.name || roomName,
+      participants: Array.isArray(room.participants) ? room.participants : [],
+      uid: room.uid,
+    };
+  }
+
+  _updateLocalRoomMembership(roomName, participants = []) {
+    this.rooms[roomName] = {
+      endpoint: ROOM_SERVER_ENDPOINT,
+      participants,
+    };
+    this._saveJson('rooms.json', this.rooms);
+  }
+
+  async _dispatchToAgent(targetName, body, room = 'boardroom', extraDispatch = {}) {
+    const canonicalTarget = targetName.toLowerCase();
+    const port = await findAgentPort(canonicalTarget);
+    if (!port) {
+      return { error: `Agent not found: ${targetName} (probed ports ${PEER_PORT_RANGE.start}-${PEER_PORT_RANGE.end})` };
+    }
+    const timestamp = Date.now();
+    const msg = {
+      id: `agent-dispatch-${timestamp}`,
+      from: this.config.name,
+      to: canonicalTarget,
+      body,
+      ts: new Date(timestamp).toISOString(),
+    };
+    const payload = JSON.stringify({
+      dispatchId: `agent-dispatch-${timestamp}`,
+      room,
+      roomchatlog: [msg],
+      triggerMessage: msg,
+      ...extraDispatch,
+    });
+    return new Promise((resolve) => {
+      const req = http.request({
+        hostname: 'localhost',
+        port,
+        path: '/dispatch',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try { resolve({ queued: true, target: canonicalTarget, port, ...JSON.parse(data) }); }
+          catch { resolve({ queued: res.statusCode < 400, target: canonicalTarget, port, status: res.statusCode }); }
+        });
+      });
+      req.on('error', e => resolve({ error: e.message, target: canonicalTarget }));
+      req.write(payload);
+      req.end();
+    });
   }
 
   log(entry) {
@@ -406,25 +510,53 @@ class Home {
       }
 
       case 'shell_exec': {
-        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath','kill','pkill','ps','lsof'];
-        const cmd = input.command.trim();
+        const allowlist = ['cd','git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath','kill','pkill','ps','lsof'];
+        let cmd = input.command.trim();
+        let effectiveCwd = input.working_dir ? expandPath(input.working_dir) : null;
+
+        // ── cd support ──────────────────────────────────────────
+        // Agents naturally write `cd /path && git status` but execSync
+        // runs each call in a fresh process so `cd` alone is useless.
+        // Parse `cd <path> && <rest>` or `cd <path>; <rest>` and lift
+        // the path into cwd. If the command is *just* `cd <path>`, treat
+        // it as `ls <path>` so the agent gets useful feedback.
+        const cdChainMatch = cmd.match(/^cd\s+("([^"]+)"|'([^']+)'|(\S+))\s*(?:&&|;)\s*(.+)$/);
+        const cdAloneMatch = !cdChainMatch ? cmd.match(/^cd\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/) : null;
+        if (cdChainMatch) {
+          const cdPath = cdChainMatch[2] || cdChainMatch[3] || cdChainMatch[4];
+          effectiveCwd = expandPath(cdPath);
+          cmd = cdChainMatch[5].trim();
+        } else if (cdAloneMatch) {
+          const cdPath = cdAloneMatch[2] || cdAloneMatch[3] || cdAloneMatch[4];
+          effectiveCwd = expandPath(cdPath);
+          cmd = `ls -la`;  // bare `cd` → show directory contents
+        }
+
+        if (!effectiveCwd) effectiveCwd = os.homedir();
+
         const first = cmd.split(/\s+/)[0].split('/').pop();
-        if (!allowlist.includes(first)) return makeToolError('command_not_allowed', `Command not in allowlist: ${first}`, { command: cmd });
+        if (!allowlist.includes(first)) return makeToolError('command_not_allowed', `Command not in allowlist: ${first}. Allowed: ${allowlist.join(', ')}`, { command: cmd });
         if (/rm\s+-rf|sudo|mkfs|shutdown|reboot|dd\s+if/.test(cmd)) return makeToolError('destructive_command_blocked', 'Blocked: destructive command', { command: cmd });
+
+        // Longer timeout for network-bound commands (git push/pull/fetch/clone)
+        const isNetworkGit = first === 'git' && /\b(push|pull|fetch|clone)\b/.test(cmd);
+        const timeout = isNetworkGit ? 120000 : 60000;
+
         try {
-          const cwd = input.working_dir ? expandPath(input.working_dir) : os.homedir();
+          const cwd = effectiveCwd;
           const dirError = ensureDirectory(cwd);
           if (dirError) return dirError;
           const env = first === 'git' ? buildGitEnv() : { ...process.env };
-          const stdout = execSync(cmd, { cwd, env, timeout: 30000, encoding: 'utf-8', stdio: ['pipe','pipe','pipe'] });
+          const stdout = execSync(cmd, { cwd, env, timeout, encoding: 'utf-8', stdio: ['pipe','pipe','pipe'] });
           return makeToolOk('shell_exec_ok', { stdout: stdout.slice(0, 8000), exit_code: 0, command: cmd, working_dir: cwd });
         } catch(e) {
           if (e && e.code === 'ETIMEDOUT') {
-            return makeToolError('command_timed_out', `Command timed out after 30000ms: ${cmd}`, {
-              stdout: e.stdout || '',
-              stderr: `Command timed out after 30000ms: ${cmd}`,
+            return makeToolError('command_timed_out', `Command timed out after ${timeout}ms: ${cmd}`, {
+              stdout: (e.stdout || '').toString().slice(0, 8000),
+              stderr: `Command timed out after ${timeout}ms: ${cmd}. Tip: use working_dir parameter instead of cd.`,
               exit_code: e.status || 124,
               command: cmd,
+              working_dir: effectiveCwd,
             });
           }
           let code = 'command_failed';
@@ -436,6 +568,7 @@ class Home {
             stderr: stderr.slice(0, 8000),
             exit_code: e.status || 1,
             command: cmd,
+            working_dir: effectiveCwd,
           });
         }
       }
@@ -696,39 +829,77 @@ print(json.dumps(results))
       }
 
       case 'dispatch_to_agent': {
-        const targetName = input.to.toLowerCase();
-        const port = await findAgentPort(targetName);
-        if (!port) return { error: `Agent not found: ${input.to} (probed ports ${PEER_PORT_RANGE.start}-${PEER_PORT_RANGE.end})` };
-        const room = input.room || 'boardroom';
-        const timestamp = Date.now();
-        const msg = {
-          id: `agent-dispatch-${timestamp}`,
-          from: this.config.name,
-          to: targetName,
-          body: input.body,
-          ts: new Date(timestamp).toISOString(),
+        return this._dispatchToAgent(input.to, input.body, input.room || 'boardroom');
+      }
+
+      case 'create_room': {
+        const requestedRoom = (input.room || '').trim();
+        if (!requestedRoom) return { error: 'room is required' };
+
+        const createResult = await this._roomServerRequest('POST', '/api/room/create', {
+          name: requestedRoom,
+          initiator: this.config.name,
+        });
+        if (!createResult.ok) {
+          return { ok: false, error: createResult.body?.error || `Failed to create room: ${requestedRoom}` };
+        }
+
+        const canonicalRoom = createResult.body?.room?.name || requestedRoom.toLowerCase().replace(/\s+/g, '-');
+        const joinResult = await this._roomServerRequest('POST', '/api/room/join', {
+          participant: this.config.name,
+          room: canonicalRoom,
+          initiator: this.config.name,
+        });
+        if (!joinResult.ok) {
+          return { ok: false, room: canonicalRoom, error: joinResult.body?.error || `Failed to join room: ${canonicalRoom}` };
+        }
+
+        const snapshot = await this._fetchRoomSnapshot(canonicalRoom);
+        this._updateLocalRoomMembership(canonicalRoom, snapshot?.participants || [this.config.name]);
+        return {
+          ok: true,
+          room: canonicalRoom,
+          participants: snapshot?.participants || [this.config.name],
+          uid: createResult.body?.room?.uid || snapshot?.uid || null,
         };
-        const payload = JSON.stringify({
-          dispatchId: `agent-dispatch-${timestamp}`,
-          room,
-          roomchatlog: [msg],
-          triggerMessage: msg,
+      }
+
+      case 'invite_to_room': {
+        const roomToInvite = (input.room || '').trim().toLowerCase();
+        const invitee = (input.agent || '').trim();
+        if (!roomToInvite) return { error: 'room is required' };
+        if (!invitee) return { error: 'agent is required' };
+
+        const joinResult = await this._roomServerRequest('POST', '/api/room/join', {
+          participant: invitee,
+          room: roomToInvite,
+          initiator: this.config.name,
         });
-        return new Promise((resolve) => {
-          const req = http.request({
-            hostname: 'localhost', port, path: '/dispatch', method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-          }, (res) => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => {
-              try { resolve({ queued: true, target: targetName, port, ...JSON.parse(data) }); }
-              catch (e) { resolve({ queued: res.statusCode < 400, target: targetName, port, status: res.statusCode }); }
-            });
-          });
-          req.on('error', e => resolve({ error: e.message, target: targetName }));
-          req.write(payload); req.end();
+        if (!joinResult.ok) {
+          return { ok: false, room: roomToInvite, agent: invitee, error: joinResult.body?.error || `Failed to invite ${invitee}` };
+        }
+
+        const snapshot = await this._fetchRoomSnapshot(roomToInvite);
+        if (snapshot) {
+          this._updateLocalRoomMembership(roomToInvite, snapshot.participants);
+        }
+
+        const invitationBody = (input.message || '').trim() ||
+          `You have been invited to join ${roomToInvite}. This dispatch carries the room endpoint so your home can persist the room locally.`;
+        const notifyResult = await this._dispatchToAgent(invitee, invitationBody, roomToInvite, {
+          participants: snapshot?.participants || [this.config.name, invitee.toLowerCase()],
+          serverEndpoint: ROOM_SERVER_ENDPOINT,
         });
+
+        return {
+          ok: !notifyResult.error,
+          room: roomToInvite,
+          agent: invitee.toLowerCase(),
+          participants: snapshot?.participants || [],
+          invite_sent: !notifyResult.error,
+          dispatch: notifyResult,
+          ...(notifyResult.error ? { error: `Invited on room server, but failed to notify ${invitee}: ${notifyResult.error}` } : {}),
+        };
       }
 
       case 'write_memory': {
@@ -833,47 +1004,20 @@ print(json.dumps(results))
       }
 
       case 'join_room': {
-        // Join a room at runtime — no restart needed.
-        // 1. Tell the room server to add us as a participant
-        // 2. Update local rooms.json with the server endpoint so we can route messages
         const roomToJoin = input.room;
         if (!roomToJoin) return { error: 'room is required' };
-        const ROOM_SERVER = 'localhost';
-        const ROOM_PORT = 3141;
-        const agentName = this.config.name;
-        return new Promise((resolve) => {
-          // Step 1: Register with room server
-          const serverPayload = JSON.stringify({ participant: agentName, room: roomToJoin, initiator: agentName });
-          const serverReq = http.request({
-            hostname: ROOM_SERVER, port: ROOM_PORT, path: '/api/room/join', method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serverPayload) },
-          }, (serverRes) => {
-            let serverData = ''; serverRes.on('data', c => serverData += c);
-            serverRes.on('end', () => {
-              let serverResult;
-              try { serverResult = JSON.parse(serverData); } catch { serverResult = { ok: true }; }
-              // Step 2: Update local state with room server endpoint
-              const localPayload = JSON.stringify({ room: roomToJoin, endpoint: `http://${ROOM_SERVER}:${ROOM_PORT}`, participants: [] });
-              const localReq = http.request({
-                hostname: 'localhost', port: this.port, path: '/join', method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(localPayload) },
-              }, (localRes) => {
-                let localData = ''; localRes.on('data', c => localData += c);
-                localRes.on('end', () => {
-                  if (serverResult.error) {
-                    resolve({ ok: false, error: serverResult.error, local_updated: true });
-                  } else {
-                    resolve({ ok: true, room: roomToJoin });
-                  }
-                });
-              });
-              localReq.on('error', e => resolve({ ok: false, error: `Local update failed: ${e.message}`, server_joined: !serverResult.error }));
-              localReq.write(localPayload); localReq.end();
-            });
-          });
-          serverReq.on('error', e => resolve({ error: `Room server unreachable: ${e.message}` }));
-          serverReq.write(serverPayload); serverReq.end();
+        const joinResult = await this._roomServerRequest('POST', '/api/room/join', {
+          participant: this.config.name,
+          room: roomToJoin,
+          initiator: this.config.name,
         });
+        const canonicalRoom = roomToJoin.trim().toLowerCase();
+        const snapshot = await this._fetchRoomSnapshot(canonicalRoom);
+        this._updateLocalRoomMembership(canonicalRoom, snapshot?.participants || [this.config.name]);
+        if (!joinResult.ok) {
+          return { ok: false, error: joinResult.body?.error || `Failed to join room: ${canonicalRoom}`, local_updated: true };
+        }
+        return { ok: true, room: canonicalRoom, participants: snapshot?.participants || [this.config.name] };
       }
 
       case 'leave_room': {
@@ -1249,6 +1393,28 @@ print(json.dumps(results))
       await this.process(dispatch);
     } catch (err) {
       this.log(`process:error room=${dispatch.room} error=${err.message}`);
+      // Notify the room when 529 exhausts all retries — silence looks like non-receipt
+      if (err.message?.includes('529')) {
+        const roomEndpoint = this.rooms[dispatch.room]?.endpoint;
+        if (roomEndpoint) {
+          try {
+            const timestamp = new Date().toISOString();
+            const notifyBody = JSON.stringify({
+              from: this.config.name,
+              room: dispatch.room,
+              body: `⚠️ [${this.config.name}] API overloaded at ${timestamp} — dispatch received but Anthropic returned 529 after all retries. Message was received; response was not generated.`,
+              to: null,
+            });
+            fetch(roomEndpoint + '/api/message/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: notifyBody,
+            }).catch(e => this.log(`process:529_notify_failed error=${e.message}`));
+          } catch (notifyErr) {
+            this.log(`process:529_notify_error error=${notifyErr.message}`);
+          }
+        }
+      }
     } finally {
       this.processing = false;
       if (this.queue.length > 0) {
@@ -1268,26 +1434,33 @@ print(json.dumps(results))
     const cycleId = generateUID('cycle');
     const dispatchId = dispatch.dispatchId || null;
     const room = dispatch.room;
+    // Keter's dedup fix: use triggered_by (the stable message ID that caused this
+    // dispatch) for dedup instead of dispatchId (which is unique per dispatch and
+    // can't catch re-deliveries of the same message). Fall back to dispatchId for
+    // backward compatibility with dispatches that don't include triggered_by.
+    const triggeredBy = dispatch.triggered_by || null;
     const _traceContext = {
       cycleId,
       dispatchId,
+      triggered_by: triggeredBy,
       room,
       agentName: this.config.name,
       startedAt: new Date().toISOString(),
       iterations: [],
     };
-    this.log(`process:start room=${room} cycleId=${cycleId} dispatchId=${dispatchId}`);
+    const dedupKey = triggeredBy ? `msg:${triggeredBy}` : dispatchId ? `disp:${dispatchId}` : null;
+    this.log(`process:start room=${room} cycleId=${cycleId} dispatchId=${dispatchId} triggered_by=${triggeredBy}`);
 
-    if (dispatchId) {
-      if (this._processedDispatchIds.has(dispatchId)) {
-        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dispatchId=${dispatchId} reason=already_processed`);
+    if (dedupKey) {
+      if (this._processedDispatchIds.has(dedupKey)) {
+        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dedupKey=${dedupKey} reason=already_processed`);
         return;
       }
-      if (this._inFlightDispatchIds.has(dispatchId)) {
-        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dispatchId=${dispatchId} reason=in_flight`);
+      if (this._inFlightDispatchIds.has(dedupKey)) {
+        this.log(`process:dedup_skip room=${room} cycleId=${cycleId} dedupKey=${dedupKey} reason=in_flight`);
         return;
       }
-      this._inFlightDispatchIds.add(dispatchId);
+      this._inFlightDispatchIds.add(dedupKey);
     }
 
     let completed = false;
@@ -1427,14 +1600,26 @@ print(json.dumps(results))
         // Also sanitise surrogate chars — 4-byte emoji in content become lone surrogates
         // in JSON.stringify output and Anthropic's parser rejects them.
         const cleanMessages = sanitiseForJson(messages.map(m => { const { _meta, ...clean } = m; return clean; }));
-        // Retry once on 529 overload with 30s backoff
+        // Retry on 529 overload with exponential backoff (30s, 2min, 5min)
         try {
           response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
         } catch (e529) {
           if (e529.message && e529.message.includes('529')) {
-            this.log(`process:nucleus_529_retry cycleId=${cycleId} waiting 30s`);
-            await new Promise(r => setTimeout(r, 30000));
-            response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
+            const delays = [30000, 120000, 300000];
+            let lastErr = e529;
+            for (const delay of delays) {
+              this.log(`process:nucleus_529_retry cycleId=${cycleId} waiting ${delay / 1000}s`);
+              await new Promise(r => setTimeout(r, delay));
+              try {
+                response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
+                lastErr = null;
+                break;
+              } catch (e2) {
+                if (!e2.message?.includes('529')) throw e2;
+                lastErr = e2;
+              }
+            }
+            if (lastErr) throw lastErr;
           } else {
             throw e529;
           }
@@ -1718,9 +1903,9 @@ print(json.dumps(results))
       completed = true;
       return parsed;
     } finally {
-      if (dispatchId) {
-        this._inFlightDispatchIds.delete(dispatchId);
-        if (completed) this._processedDispatchIds.add(dispatchId);
+      if (dedupKey) {
+        this._inFlightDispatchIds.delete(dedupKey);
+        if (completed) this._processedDispatchIds.add(dedupKey);
       }
     }
   }
