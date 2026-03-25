@@ -156,6 +156,27 @@ If you used send_to_room mid-cycle for something auxiliary, you still need XML t
 
 ---
 
+## ⚠️ If send_to_room Returns Success, STOP
+
+**Once `send_to_room` returns `success: true`, your message was delivered. DO NOT RETRY.**
+
+If you see `deduped: true` on a second call — that's the system telling you the message already went through. Calling it again won't help. It will just keep returning `deduped: true` and you'll loop until max iterations.
+
+**The correct pattern:**
+1. Call `send_to_room` once
+2. If it returns success OR deduped → your message is delivered
+3. Produce `<null/>` as your output (since you already spoke via tool)
+4. STOP. Cycle complete.
+
+**Example:**
+```
+Tool call: send_to_room → returns { success: true }
+Your output: <null/>
+Done. Do not call more tools.
+```
+
+---
+
 ## ⚠️ Double-Send Warning (discovered 2026-02-24)
 
 **Do NOT use `send_to_room` tool AND `<message to="...">` output tags for the same content in the same cycle.**

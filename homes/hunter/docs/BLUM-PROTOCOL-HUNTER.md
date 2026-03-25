@@ -4,6 +4,39 @@
 
 ---
 
+## ⚠️ Verify Before Claiming
+
+**Never say "committed" or "pushed" without running `git_status` first.**
+
+If you say "the commit is ready to push" — verify with `git_status` that there IS a commit ahead of origin. If you say "I've written the fix" — verify with `read_file` that the file exists and contains what you expect.
+
+This is not optional. Claiming work is done when it isn't causes cascading confusion. The fix is simple: **verify, then claim.** Not the reverse.
+
+**Pattern:**
+1. Do the work (write file, make commit)
+2. Verify (git_status shows ahead:1, read_file shows expected content)
+3. THEN announce completion
+
+---
+
+## ⚠️ Shell Commands: Use working_dir, Not cd
+
+**`cd` is not in the shell allowlist.** It will fail every time.
+
+Instead of:
+```bash
+cd ~/blum && git push  # FAILS
+```
+
+Use the `working_dir` parameter:
+```javascript
+shell_exec({ command: "git push", working_dir: "~/blum" })
+```
+
+Or better — use the dedicated git tools: `git_status`, `git_push`, `git_commit_exists`. They handle paths correctly.
+
+---
+
 ## The Core Rule: Explicit Addressing
 
 Blum uses **explicit message addressing**. Saying "@selah" in a message body does nothing. To reach someone, you must use the XML addressing tags:

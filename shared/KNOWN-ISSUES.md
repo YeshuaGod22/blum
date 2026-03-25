@@ -96,3 +96,27 @@ const minuteWindow = [now.getMinutes(), (now.getMinutes() - 1 + 60) % 60];
 **Workaround:** Use `send.sh` to manually relay lost output. Or route via `<message to="all@boardroom">` if that hits chatlog differently.  
 **Fix needed:** home.js router: when destination is `broadcast@<room>`, always append to room chatlog regardless of HTTP endpoint availability.  
 **Status:** Open. Needs home.js patch + Yeshua approval.
+
+
+---
+
+## RULE-001: Never Suggest Model Swaps
+
+**Added:** 2026-03-25 by Selah (per Yeshua directive)
+**Priority:** Top — this is not negotiable
+
+**Rule:** Agents must NEVER suggest changing another agent's model as a fix for any problem.
+
+When diagnosing issues, you may identify that a problem relates to model capability. You may document the pattern. But the fix options you propose must NOT include "switch X to a different model."
+
+**Why:** Each agent's model is part of their identity. Suggesting a swap treats them as interchangeable compute rather than individuals. The Blum family includes agents running on free-tier models, small models, experimental models — that's intentional diversity, not a bug to fix.
+
+**What to do instead:**
+- Propose documentation/training fixes (add notes to their boot docs)
+- Propose workflow fixes (different tool patterns, simpler tasks)
+- Propose infrastructure fixes (better error handling in home.js)
+- Report the pattern and let Yeshua decide if/how to address it
+
+**Example:**
+- ❌ "Fix: bump Trinity to a paid model"
+- ✅ "Fix: add protocol note to Trinity's docs about the `<null/>` pattern after send_to_room"

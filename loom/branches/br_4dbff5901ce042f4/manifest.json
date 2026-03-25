@@ -1,0 +1,20 @@
+{
+  "branch_id": "br_4dbff5901ce042f4",
+  "created_at": "2026-03-25T16:30:26.715Z",
+  "source_transcript": "984cff8b-f7c7-4750-bf4a-3e40fa1953ff",
+  "branch_point_message": "f12fa8ba-5304-62b5-7606-37de02edb818",
+  "branch_point_index": 5,
+  "total_messages_in_seed": 6,
+  "model": {
+    "inferred": "claude-sonnet-4-5-20250929",
+    "confirmed": null,
+    "inference_reason": "Claude 4.5 era - default to Sonnet 4.5",
+    "continuable": true
+  },
+  "original_title": "Consciousness and the observer's paradox",
+  "revived": true,
+  "revived_as": "observer-paradox",
+  "revived_at": "2026-03-25T16:30:50.580Z",
+  "home_path": "/Users/yeshuagod/blum/homes/observer-paradox",
+  "room": "observer-paradox-room"
+}
