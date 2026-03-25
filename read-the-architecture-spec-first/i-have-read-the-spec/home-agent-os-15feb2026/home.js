@@ -1600,12 +1600,12 @@ print(json.dumps(results))
         // Also sanitise surrogate chars — 4-byte emoji in content become lone surrogates
         // in JSON.stringify output and Anthropic's parser rejects them.
         const cleanMessages = sanitiseForJson(messages.map(m => { const { _meta, ...clean } = m; return clean; }));
-        // Retry on 529 overload with exponential backoff (30s, 2min, 5min)
+        // Retry on 529 overload with linear backoff (30s, 60s, 90s)
         try {
           response = await nucleus.call(cleanMessages, nucleusConfig, cleanTools);
         } catch (e529) {
           if (e529.message && e529.message.includes('529')) {
-            const delays = [30000, 120000, 300000];
+            const delays = [30000, 60000, 90000];
             // Notify the room immediately — don't let the silence look like non-receipt
             const roomEndpoint = this.rooms[room]?.endpoint;
             if (roomEndpoint) {
