@@ -1606,6 +1606,21 @@ print(json.dumps(results))
         } catch (e529) {
           if (e529.message && e529.message.includes('529')) {
             const delays = [30000, 120000, 300000];
+            // Notify the room immediately — don't let the silence look like non-receipt
+            const roomEndpoint = this.rooms[room]?.endpoint;
+            if (roomEndpoint) {
+              const retryMins = Math.round(delays.reduce((a, b) => a + b, 0) / 60000);
+              fetch(roomEndpoint + '/api/message/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: this.config.name,
+                  room,
+                  body: `⚠️ [${this.config.name}] Anthropic API overloaded (529) — I received your message and will retry automatically over the next ~${retryMins} minutes.`,
+                  to: null,
+                }),
+              }).catch(e => this.log(`process:529_notify_failed error=${e.message}`));
+            }
             let lastErr = e529;
             for (const delay of delays) {
               this.log(`process:nucleus_529_retry cycleId=${cycleId} waiting ${delay / 1000}s`);
