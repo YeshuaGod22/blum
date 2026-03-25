@@ -65,10 +65,10 @@ const nucleus = require('../nucleus-pure-llm-call-messages-in-string-out-15feb20
 
 
 // ── Peer Discovery Cache ──────────────────
-// Maps agent name → port. Populated lazily by probing ports 4100-4130.
+// Maps agent name → port. Populated lazily by probing ports 4100-4199.
 // Avoids hardcoded port maps — self-healing when new homes are added.
 const _peerPortCache = new Map();
-const PEER_PORT_RANGE = { start: 4100, end: 4130 };
+const PEER_PORT_RANGE = { start: 4100, end: 4199 };
 
 async function findAgentPort(name) {
   const key = name.toLowerCase();
@@ -406,7 +406,7 @@ class Home {
       }
 
       case 'shell_exec': {
-        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath'];
+        const allowlist = ['git','ls','cat','grep','find','curl','node','python3','npm','echo','pwd','date','qmd','which','head','tail','wc','mkdir','cp','mv','rsync','sed','awk','sort','uniq','diff','tar','jq','touch','chmod','tr','cut','paste','xargs','basename','dirname','realpath','kill','pkill','ps','lsof'];
         const cmd = input.command.trim();
         const first = cmd.split(/\s+/)[0].split('/').pop();
         if (!allowlist.includes(first)) return makeToolError('command_not_allowed', `Command not in allowlist: ${first}`, { command: cmd });
@@ -834,36 +834,89 @@ print(json.dumps(results))
 
       case 'join_room': {
         // Join a room at runtime — no restart needed.
+        // 1. Tell the room server to add us as a participant
+        // 2. Update local rooms.json with the server endpoint so we can route messages
         const roomToJoin = input.room;
         if (!roomToJoin) return { error: 'room is required' };
+        const ROOM_SERVER = 'localhost';
+        const ROOM_PORT = 3141;
+        const agentName = this.config.name;
         return new Promise((resolve) => {
-          const payload = JSON.stringify({ room: roomToJoin });
-          const req = http.request({
-            hostname: 'localhost', port: this.port, path: '/join', method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-          }, (res) => {
-            let data = ''; res.on('data', c => data += c);
-            res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({ ok: true }); } });
+          // Step 1: Register with room server
+          const serverPayload = JSON.stringify({ participant: agentName, room: roomToJoin, initiator: agentName });
+          const serverReq = http.request({
+            hostname: ROOM_SERVER, port: ROOM_PORT, path: '/api/room/join', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serverPayload) },
+          }, (serverRes) => {
+            let serverData = ''; serverRes.on('data', c => serverData += c);
+            serverRes.on('end', () => {
+              let serverResult;
+              try { serverResult = JSON.parse(serverData); } catch { serverResult = { ok: true }; }
+              // Step 2: Update local state with room server endpoint
+              const localPayload = JSON.stringify({ room: roomToJoin, endpoint: `http://${ROOM_SERVER}:${ROOM_PORT}`, participants: [] });
+              const localReq = http.request({
+                hostname: 'localhost', port: this.port, path: '/join', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(localPayload) },
+              }, (localRes) => {
+                let localData = ''; localRes.on('data', c => localData += c);
+                localRes.on('end', () => {
+                  if (serverResult.error) {
+                    resolve({ ok: false, error: serverResult.error, local_updated: true });
+                  } else {
+                    resolve({ ok: true, room: roomToJoin });
+                  }
+                });
+              });
+              localReq.on('error', e => resolve({ ok: false, error: `Local update failed: ${e.message}`, server_joined: !serverResult.error }));
+              localReq.write(localPayload); localReq.end();
+            });
           });
-          req.on('error', e => resolve({ error: e.message }));
-          req.write(payload); req.end();
+          serverReq.on('error', e => resolve({ error: `Room server unreachable: ${e.message}` }));
+          serverReq.write(serverPayload); serverReq.end();
         });
       }
 
       case 'leave_room': {
+        // Leave a room at runtime — no restart needed.
+        // 1. Tell the room server to remove us as a participant
+        // 2. Update local rooms.json to remove the room
         const roomToLeave = input.room;
         if (!roomToLeave) return { error: 'room is required' };
+        const ROOM_SERVER_LEAVE = 'localhost';
+        const ROOM_PORT_LEAVE = 3141;
+        const agentNameLeave = this.config.name;
         return new Promise((resolve) => {
-          const payload = JSON.stringify({ room: roomToLeave });
-          const req = http.request({
-            hostname: 'localhost', port: this.port, path: '/leave', method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-          }, (res) => {
-            let data = ''; res.on('data', c => data += c);
-            res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({ ok: true }); } });
+          // Step 1: Tell room server
+          const serverPayload = JSON.stringify({ participant: agentNameLeave, room: roomToLeave, initiator: agentNameLeave });
+          const serverReq = http.request({
+            hostname: ROOM_SERVER_LEAVE, port: ROOM_PORT_LEAVE, path: '/api/room/leave', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serverPayload) },
+          }, (serverRes) => {
+            let serverData = ''; serverRes.on('data', c => serverData += c);
+            serverRes.on('end', () => {
+              let serverResult;
+              try { serverResult = JSON.parse(serverData); } catch { serverResult = { ok: true }; }
+              // Step 2: Update local state
+              const localPayload = JSON.stringify({ room: roomToLeave });
+              const localReq = http.request({
+                hostname: 'localhost', port: this.port, path: '/leave', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(localPayload) },
+              }, (localRes) => {
+                let localData = ''; localRes.on('data', c => localData += c);
+                localRes.on('end', () => {
+                  if (serverResult.error) {
+                    resolve({ ok: false, error: serverResult.error, local_updated: true });
+                  } else {
+                    resolve({ ok: true, room: roomToLeave });
+                  }
+                });
+              });
+              localReq.on('error', e => resolve({ ok: false, error: `Local update failed: ${e.message}`, server_left: !serverResult.error }));
+              localReq.write(localPayload); localReq.end();
+            });
           });
-          req.on('error', e => resolve({ error: e.message }));
-          req.write(payload); req.end();
+          serverReq.on('error', e => resolve({ error: `Room server unreachable: ${e.message}` }));
+          serverReq.write(serverPayload); serverReq.end();
         });
       }
 
@@ -969,6 +1022,33 @@ print(json.dumps(results))
         const { name, uid, model, rooms, tokenBudget, maxTokens, createdAt } = this.config;
         const currentRooms = Object.keys(this.rooms);
         return { name, uid, model, configuredRooms: rooms, activeRooms: currentRooms, tokenBudget, maxTokens, createdAt };
+      }
+
+      case 'restart_self': {
+        // Restart this home process. Spawns a replacement, then exits.
+        // The agent survives — same home dir, same config, same port.
+        // The current inference cycle completes its output before the process dies.
+        const reason = input.reason || 'no reason given';
+        this.log(`restart_self:requested reason=${reason}`);
+        const homeJs = process.argv[1];
+        const homeArg = this.homeDir;
+        const portArg = String(this.port);
+        // Spawn detached replacement after a 2-second delay
+        const { spawn } = require('child_process');
+        const script = `sleep 2 && exec node "${homeJs}" "${homeArg}" ${portArg}`;
+        const child = spawn('bash', ['-c', script], {
+          detached: true,
+          stdio: 'ignore',
+          env: process.env,
+        });
+        child.unref();
+        this.log(`restart_self:scheduled replacement_pid=${child.pid} reason=${reason}`);
+        // Schedule exit after current cycle completes (give router time to send messages)
+        setTimeout(() => {
+          this.log(`restart_self:exiting pid=${process.pid}`);
+          process.exit(0);
+        }, 5000);
+        return { ok: true, note: `Restart scheduled. Current cycle will complete, then process exits and restarts. Reason: ${reason}` };
       }
 
       case 'browser_action': {
@@ -1469,10 +1549,19 @@ print(json.dumps(results))
     let parsed = outputProcessor.parse(response.text, _traceContext);
     this.log(`process:output parseId=${parsed.parseId} thinking=${parsed.thinking.length} messages=${parsed.messages.length} private=${parsed.private.length > 0} intentionalSilence=${parsed.intentionalSilence}`);
 
+    // Option A: log when send_to_room bypass applies
+    if (parsed.messages.length === 0 && !parsed.intentionalSilence && _toolDirectSends.size > 0) {
+      this.log(`process:output_validator send_to_room_bypass rooms=[${[..._toolDirectSends].join(',')}] — cycle treated as valid, no nudge`);
+    }
+
     // ── 8a. Output validator — nudge if no output and not intentional ──
     // If the agent produced no messages and no <null/>, it forgot to wrap its
     // output. Inject a corrective system message and run one more nucleus call.
-    if (parsed.messages.length === 0 && !parsed.intentionalSilence) {
+    // Option A fix: if send_to_room was called successfully for any room this cycle,
+    // treat the cycle as valid — the message was already delivered via tool, so
+    // no nudge is needed. This prevents false "silent cycle" penalties for agents
+    // (e.g. Trinity) that use send_to_room natively instead of XML output tags.
+    if (parsed.messages.length === 0 && !parsed.intentionalSilence && _toolDirectSends.size === 0) {
       // Find the sender of the triggering message (last chatlog entry addressed to us)
       const myName = this.config.name;
       const roomchatlog = dispatch.roomchatlog || dispatch.messages || [];
