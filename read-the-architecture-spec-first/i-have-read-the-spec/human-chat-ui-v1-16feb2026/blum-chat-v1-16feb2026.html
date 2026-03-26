@@ -248,6 +248,27 @@
     flex-shrink: 0;
   }
   .compose-bar button:hover { background: #d4943e; }
+
+  /* === FILE UPLOAD === */
+  .compose-attach {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    font-size: 15px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.12s; line-height: 1;
+  }
+  .compose-attach:hover { border-color: var(--accent); color: var(--accent); }
+  .compose-preview {
+    display: flex; gap: 4px; align-items: center; padding: 0 4px;
+    font-family: var(--mono); font-size: 9px; color: var(--accent);
+  }
+  .compose-preview img { height: 28px; border-radius: 2px; border: 1px solid var(--border); }
+  .compose-preview .remove-file {
+    cursor: pointer; color: var(--text-dim); font-size: 11px; margin-left: 2px;
+  }
+  .compose-preview .remove-file:hover { color: var(--red); }
+  .msg-image { max-width: 320px; max-height: 240px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--border); cursor: pointer; }
+  .msg-image:hover { border-color: var(--accent); }
+  .msg-file-link { color: var(--blue); text-decoration: underline; cursor: pointer; font-family: var(--mono); font-size: 11px; }
 </style>
 </head>
 <body>
@@ -309,6 +330,9 @@
   <select id="compose-to"><option value="">broadcast</option></select>
   <span class="at">@</span>
   <select id="compose-room" onchange="localStorage.setItem('blum-room-last-room',this.value); updateRecipientsForRoom(this.value)"></select>
+  <button class="compose-attach" onclick="document.getElementById('file-input').click()" title="Attach file or image">+</button>
+  <input type="file" id="file-input" style="display:none" accept="image/*,.pdf,.txt,.md,.json,.csv" multiple onchange="handleFileSelect(this)" />
+  <div class="compose-preview" id="compose-preview"></div>
   <input type="text" id="compose-body" placeholder="message..." />
   <button onclick="doSend()">Send</button>
 </div>
@@ -443,15 +467,22 @@ function renderParticipantDir() {
 function renderRoomDir() {
   const list = document.getElementById('room-list');
   document.getElementById('room-count').textContent = Object.keys(roomMeta).length;
+  // Save all dropdown selections before clearing (poll re-renders every 2s)
+  const savedSelections = {};
+  for (const rName of Object.keys(roomMeta)) {
+    const sel = document.getElementById('add-to-' + rName);
+    if (sel) savedSelections[rName] = sel.value;
+  }
   list.innerHTML = '';
   for (const [name, room] of Object.entries(roomMeta)) {
     const wrapper = document.createElement('div');
     const div = document.createElement('div');
     div.className = 'dir-entry';
+    const isHidden = hiddenRooms.has(name);
     div.innerHTML =
-      `<span style="font-size:9px">◻</span>` +
+      `<span style="font-size:9px;cursor:pointer;opacity:${isHidden ? '0.4' : '1'}" onclick="toggleHide('${name}')" title="${isHidden ? 'Show' : 'Hide'} room panel">${isHidden ? '◻' : '◼'}</span>` +
       `<div>` +
-        `<div class="dir-name" style="color:var(--text-bright)">${name}</div>` +
+        `<div class="dir-name agent-link" style="color:var(--text-bright)${isHidden ? ';opacity:0.4' : ''}" onclick="focusRoom('${name}')" title="View ${name}">${name}</div>` +
         `<div class="dir-detail">${room.participants.length} members</div>` +
       `</div>` +
       `<span class="dir-uid">${room.uid || ''}</span>`;
@@ -480,6 +511,14 @@ function renderRoomDir() {
         `</select>` +
         `<button onclick="doJoinRoom('${name}')">+ Join</button>`;
       wrapper.appendChild(addDiv);
+      // Restore saved selection if the option still exists
+      const savedValue = savedSelections[name];
+      if (savedValue) {
+        const newSel = addDiv.querySelector('select');
+        if (newSel && [...newSel.options].some(o => o.value === savedValue)) {
+          newSel.value = savedValue;
+        }
+      }
     }
     list.appendChild(wrapper);
   }
@@ -494,15 +533,17 @@ const lastRendered = {};  // { roomName: lastMsgId } — for change detection
 function rebuildGrid() {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
-  const roomNames = Object.keys(roomMeta);
-  if (roomNames.length === 0) {
-    grid.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-style:italic;font-size:11px;background:var(--bg)">No rooms</div>';
+  const allRoomNames = Object.keys(roomMeta);
+  // Only lay out visible rooms
+  const visibleRooms = allRoomNames.filter(n => !hiddenRooms.has(n));
+  if (visibleRooms.length === 0) {
+    grid.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-style:italic;font-size:11px;background:var(--bg)">No rooms visible — unhide from directory</div>';
     return;
   }
-  // Split into rows of up to 4
+  // Split visible rooms into rows of up to 4
   const rows = [];
-  for (let i = 0; i < roomNames.length; i += 4) {
-    rows.push(roomNames.slice(i, i + 4));
+  for (let i = 0; i < visibleRooms.length; i += 4) {
+    rows.push(visibleRooms.slice(i, i + 4));
   }
   for (const row of rows) {
     const rowDiv = document.createElement('div');
@@ -510,7 +551,8 @@ function rebuildGrid() {
     for (const name of row) {
       const room = roomMeta[name];
       const panel = document.createElement('div');
-      panel.className = 'panel room' + (hiddenRooms.has(name) ? ' hidden-panel' : '');
+      panel.className = 'panel room';
+      panel.setAttribute('data-room', name);
       panel.innerHTML =
         `<div class="panel-header">` +
           `<span style="font-size:9px">◻</span>` +
@@ -519,7 +561,7 @@ function rebuildGrid() {
             `<div class="panel-sub">${room.participants.join(', ')}</div>` +
           `</div>` +
           `<button class="panel-btn" title="Expand/focus this room" onclick="toggleFocus('${name}',this)">⤢</button>` +
-          `<button class="panel-btn" title="Hide this room" onclick="toggleHide('${name}',this)">✕</button>` +
+          `<button class="panel-btn" title="Hide this room" onclick="toggleHide('${name}')">✕</button>` +
         `</div>` +
         `<div class="panel-body empty" id="rb-${name}"></div>` +
         `<div class="panel-footer" id="rf-${name}">loading...</div>`;
@@ -529,7 +571,7 @@ function rebuildGrid() {
     grid.appendChild(rowDiv);
   }
   // Fetch each room's chatlog immediately
-  for (const name of roomNames) fetchRoomTranscript(name);
+  for (const name of allRoomNames) fetchRoomTranscript(name);
 }
 
 // ── Per-room chatlog fetch ──
@@ -591,7 +633,7 @@ function renderRoomPanel(roomName, transcript) {
         `<span class="msg-ts">${msg.ts ? ts(msg.ts) : ''}</span>` +
       `</div>` +
       quoteHtml +
-      `<div class="msg-body">${esc(msg.body || '')}</div>`;
+      `<div class="msg-body">${renderBody(msg.body || '')}</div>`;
     body.appendChild(div);
   }
   // Restore scroll: if user was near bottom, advance to new bottom.
@@ -676,22 +718,15 @@ function toggleFocus(name, btn) {
   }
 }
 
-function toggleHide(name, btn) {
-  const panels = document.querySelectorAll('.panel.room');
+function toggleHide(name) {
   if (hiddenRooms.has(name)) {
     hiddenRooms.delete(name);
-    panels.forEach(p => {
-      const rname = p.querySelector('.panel-title')?.textContent;
-      if (rname === name) p.classList.remove('hidden-panel');
-    });
   } else {
     hiddenRooms.add(name);
-    panels.forEach(p => {
-      const rname = p.querySelector('.panel-title')?.textContent;
-      if (rname === name) { p.classList.add('hidden-panel'); p.classList.remove('focused-panel'); if (focusedRoom === name) focusedRoom = null; }
-    });
+    if (focusedRoom === name) focusedRoom = null;
   }
   localStorage.setItem('blum-hidden-rooms', JSON.stringify([...hiddenRooms]));
+  rebuildGrid();
 }
 
 function setFontSize(delta) {
@@ -707,9 +742,18 @@ async function doSend() {
   const to = document.getElementById('compose-to').value || null;
   const room = document.getElementById('compose-room').value;
   const bodyEl = document.getElementById('compose-body');
-  const body = bodyEl.value.trim();
-  if (!body || !room) return;
+  let body = bodyEl.value.trim();
+  if (!body && pendingFiles.length === 0) return;
+  if (!room) return;
   try {
+    // Upload any pending files first
+    if (pendingFiles.length > 0) {
+      const uploaded = await uploadFiles();
+      for (const f of uploaded) {
+        const marker = f.isImage ? `[img:${f.url}:${f.originalName}]` : `[file:${f.url}:${f.originalName}]`;
+        body = body ? body + ' ' + marker : marker;
+      }
+    }
     const result = await api('POST', '/api/message/send', {
       from: me, to, room, body, initiator: me,
     });
@@ -748,6 +792,32 @@ function openHome(name) {
   const viewerUrl = new URL('../' + HOME_VIEWER_PATH, window.location.href);
   viewerUrl.searchParams.set('home', entry.endpoint);
   window.open(viewerUrl.href, '_blank');
+}
+
+// ── Focus a room from the directory sidebar ──
+function focusRoom(name) {
+  // Unhide the room if hidden
+  if (hiddenRooms.has(name)) {
+    hiddenRooms.delete(name);
+    localStorage.setItem('blum-hidden-rooms', JSON.stringify([...hiddenRooms]));
+  }
+  // Find the panel and its focus button, then toggle focus
+  const panels = document.querySelectorAll('.panel.room');
+  for (const p of panels) {
+    const title = p.querySelector('.panel-title');
+    if (title && title.textContent === name) {
+      const btn = p.querySelector('.panel-btn');
+      if (btn) toggleFocus(name, btn);
+      // Also select this room in the compose bar
+      const roomSel = document.getElementById('compose-room');
+      if (roomSel.querySelector(`option[value="${name}"]`)) {
+        roomSel.value = name;
+        localStorage.setItem('blum-room-last-room', name);
+        updateRecipientsForRoom(name);
+      }
+      return;
+    }
+  }
 }
 
 // ── Polling: fetch EACH room's chatlog independently ──
@@ -839,6 +909,79 @@ async function refreshState() {
 function toggleDirectory() {
   document.getElementById('directory').classList.toggle('hidden');
   document.getElementById('dir-toggle').classList.toggle('active');
+}
+
+// ── File Upload ──
+let pendingFiles = []; // { file, base64, previewUrl }
+
+function handleFileSelect(input) {
+  for (const file of input.files) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target.result.split(',')[1];
+      const isImage = file.type.startsWith('image/');
+      const previewUrl = isImage ? e.target.result : null;
+      pendingFiles.push({ file, base64, previewUrl, name: file.name });
+      renderFilePreviews();
+    };
+    reader.readAsDataURL(file);
+  }
+  input.value = '';
+}
+
+function renderFilePreviews() {
+  const preview = document.getElementById('compose-preview');
+  preview.innerHTML = '';
+  for (let i = 0; i < pendingFiles.length; i++) {
+    const f = pendingFiles[i];
+    const span = document.createElement('span');
+    span.style.display = 'flex';
+    span.style.alignItems = 'center';
+    span.style.gap = '2px';
+    if (f.previewUrl) {
+      span.innerHTML = `<img src="${f.previewUrl}" /> <span class="remove-file" onclick="removeFile(${i})">✕</span>`;
+    } else {
+      span.innerHTML = `📎 ${f.name} <span class="remove-file" onclick="removeFile(${i})">✕</span>`;
+    }
+    preview.appendChild(span);
+  }
+}
+
+function removeFile(idx) {
+  pendingFiles.splice(idx, 1);
+  renderFilePreviews();
+}
+
+async function uploadFiles() {
+  const uploaded = [];
+  for (const f of pendingFiles) {
+    try {
+      const result = await api('POST', '/api/upload', {
+        filename: f.name,
+        data: f.base64,
+        initiator: me,
+      });
+      if (result.success) {
+        uploaded.push({ filename: result.filename, url: result.url, isImage: !!f.previewUrl, originalName: f.name });
+      }
+    } catch (e) { console.error('Upload failed:', e); }
+  }
+  pendingFiles = [];
+  renderFilePreviews();
+  return uploaded;
+}
+
+// Render message body with inline images/file links
+function renderBody(body) {
+  if (!body) return '';
+  // Match [file:url:name] or [img:url:name] markers
+  return esc(body).replace(/\[img:([^\]:]+):([^\]]+)\]/g, (_, url, name) => {
+    const fullUrl = server + url;
+    return `<br><img class="msg-image" src="${fullUrl}" alt="${esc(name)}" title="${esc(name)}" onclick="window.open('${fullUrl}','_blank')" />`;
+  }).replace(/\[file:([^\]:]+):([^\]]+)\]/g, (_, url, name) => {
+    const fullUrl = server + url;
+    return ` <a class="msg-file-link" href="${fullUrl}" target="_blank">📎 ${esc(name)}</a>`;
+  });
 }
 
 // ── Keyboard ──
