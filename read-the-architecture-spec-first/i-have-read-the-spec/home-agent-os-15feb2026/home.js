@@ -2063,17 +2063,64 @@ function startServer(home, port) {
 
   server.listen(port, () => {
     home.log(`server:listening port=${port}`);
-    console.log(`🏠 Home [${home.config.name}] listening on http://localhost:${port}`);
+    console.log(` Home [${home.config.name}] listening on http://localhost:${port}`);
     console.log(`   UID: ${home.config.uid}`);
     console.log(`   Rooms: ${Object.keys(home.rooms).join(', ') || '(none)'}`);
     startCron(home, port);
+    
+    // Update endpoint in room server directory on every boot
+    // This ensures the directory stays in sync if port changes between restarts
+    updateEndpointOnBoot(home, port);
   });
 
   return server;
 }
 
+// ── Endpoint Registration ─────────────────
+// On boot, notify the room server of our current endpoint.
+// This fixes the stale-endpoint bug where an agent restarts on a different port
+// but the directory still points to the old port, causing silent dispatch failures.
+function updateEndpointOnBoot(home, port) {
+  const endpoint = `http://localhost:${port}`;
+  const name = home.config.name;
+  
+  const postData = JSON.stringify({ name, endpoint, initiator: name });
+  
+  const options = {
+    hostname: ROOM_SERVER_HOST,
+    port: ROOM_SERVER_PORT,
+    path: '/api/directory/update-endpoint',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  };
+  
+  const req = http.request(options, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      if (res.statusCode === 200) {
+        home.log(`boot:endpoint_registered endpoint=${endpoint}`);
+        console.log(`   Endpoint registered: ${endpoint}`);
+      } else {
+        home.log(`boot:endpoint_registration_failed status=${res.statusCode} body=${data}`);
+        console.log(`   ⚠️ Endpoint registration failed: ${res.statusCode}`);
+      }
+    });
+  });
+  
+  req.on('error', (err) => {
+    // Room server might not be running — log but don't crash
+    home.log(`boot:endpoint_registration_error error=${err.message}`);
+    console.log(`   ⚠️ Could not register endpoint (room server unreachable): ${err.message}`);
+  });
+  
+  req.write(postData);
+  req.end();
+}
 
-// ── Cron Scheduler ───────────────────────
 //
 // Loads cron.json from the home directory at startup.
 // Runs enabled jobs on a minute-tick scheduler (setInterval every 60s).
