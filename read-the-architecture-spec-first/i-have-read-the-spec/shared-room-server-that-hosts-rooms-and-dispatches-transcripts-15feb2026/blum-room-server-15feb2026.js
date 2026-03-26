@@ -185,26 +185,39 @@ function archiveRoom(name, initiator, reason) {
 // ========================================
 
 function joinRoom(participantName, roomName, initiator) {
-  if (!directory[participantName]) return { error: `Unknown participant: ${participantName}` };
+  // Case-insensitive directory lookup — resolve to the canonical key
+  let dirKey = participantName;
+  if (!directory[dirKey]) {
+    const lower = participantName.toLowerCase();
+    dirKey = Object.keys(directory).find(k => k.toLowerCase() === lower);
+  }
+  if (!dirKey || !directory[dirKey]) return { error: `Unknown participant: ${participantName}` };
   const r = rooms[roomName];
   if (!r) return { error: `Unknown room: ${roomName}` };
-  if (r.blocklist.includes(participantName)) return { error: `${participantName} is blocked from ${roomName}` };
-  if (r.participants.includes(participantName)) return { error: `${participantName} already in ${roomName}` };
-  r.participants.push(participantName);
+  if (r.blocklist.includes(dirKey)) return { error: `${dirKey} is blocked from ${roomName}` };
+  if (r.participants.includes(dirKey)) return { error: `${dirKey} already in ${roomName}` };
+  r.participants.push(dirKey);
   saveRooms();
-  logOp('room.join', initiator || participantName, roomName, { participant: participantName });
+  logOp('room.join', initiator || dirKey, roomName, { participant: dirKey });
   return { success: true };
 }
 
 function leaveRoom(participantName, roomName, initiator, reason) {
   const r = rooms[roomName];
   if (!r) return { error: `Unknown room: ${roomName}` };
-  const idx = r.participants.indexOf(participantName);
+  // Case-insensitive participant lookup
+  let resolvedName = participantName;
+  let idx = r.participants.indexOf(participantName);
+  if (idx === -1) {
+    const lower = participantName.toLowerCase();
+    idx = r.participants.findIndex(p => p.toLowerCase() === lower);
+    if (idx !== -1) resolvedName = r.participants[idx];
+  }
   if (idx === -1) return { error: `${participantName} not in ${roomName}` };
   r.participants.splice(idx, 1);
   saveRooms();
-  const opType = (initiator && initiator !== participantName) ? 'room.kick' : 'room.leave';
-  logOp(opType, initiator || participantName, roomName, { participant: participantName }, reason);
+  const opType = (initiator && initiator !== resolvedName) ? 'room.kick' : 'room.leave';
+  logOp(opType, initiator || resolvedName, roomName, { participant: resolvedName }, reason);
   return { success: true };
 }
 
@@ -320,7 +333,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   // DISPATCH — push room chatlog to recipient's home endpoint
   // 1. Explicit "to" recipient (existing behaviour)
   if (msg.to) {
-    dispatchToHome(msg.to, roomName);
+    dispatchToHome(msg.to, roomName, msg.id);
   }
 
   // 2. @mentioned participants (new behaviour)
@@ -333,7 +346,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   for (const mentioned of mentions) {
     if (!alreadyDispatched.has(mentioned)) {
       alreadyDispatched.add(mentioned); // prevent double dispatch
-      dispatchToHome(mentioned, roomName);
+      dispatchToHome(mentioned, roomName, msg.id);
     }
   }
 
@@ -381,15 +394,36 @@ function unpinMessage(msgId, roomName, initiator) {
 // DISPATCH — push to home endpoint
 // ========================================
 
-async function dispatchToHome(agentName, roomName) {
+async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
   const entry = directory[agentName];
   const room = rooms[roomName];
   if (!entry || !room) return;
-  if (!entry.endpoint) return; // no home registered yet
+
+  // No endpoint registered — surface this as a visible error
+  if (!entry.endpoint) {
+    const errMsg = {
+      id: generateUID('err'),
+      from: 'system',
+      fromAddress: 'system@' + roomName,
+      room: roomName,
+      roomUID: room.uid,
+      body: `⚠️ dispatch:no_endpoint — ${agentName} has no home endpoint registered. Message ${triggeredByMsgId || '?'} was not delivered.`,
+      ts: new Date().toISOString(),
+      system: true,
+      errorType: 'dispatch:no_endpoint',
+      target: agentName
+    };
+    room.chatlog.push(errMsg);
+    saveRooms();
+    logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'no_endpoint', triggeredBy: triggeredByMsgId });
+    console.log(`[dispatch] No endpoint for ${agentName} — error surfaced to room ${roomName}`);
+    return;
+  }
 
   const dispatchId = generateUID('disp');
   const payload = {
     dispatchId,
+    triggered_by: triggeredByMsgId || null,
     type: 'push',
     room: roomName,
     roomUID: room.uid,
@@ -400,14 +434,52 @@ async function dispatchToHome(agentName, roomName) {
   };
 
   try {
-    await fetch(entry.endpoint + '/dispatch', {
+    const response = await fetch(entry.endpoint + '/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    // Check for HTTP-level errors (home returned error status)
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => 'unknown');
+      const errMsg = {
+        id: generateUID('err'),
+        from: 'system',
+        fromAddress: 'system@' + roomName,
+        room: roomName,
+        roomUID: room.uid,
+        body: `⚠️ dispatch:http_error — Failed to deliver to ${agentName}: HTTP ${response.status}. Message ${triggeredByMsgId || '?'} may not have been processed.`,
+        ts: new Date().toISOString(),
+        system: true,
+        errorType: 'dispatch:http_error',
+        target: agentName,
+        httpStatus: response.status
+      };
+      room.chatlog.push(errMsg);
+      saveRooms();
+      logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'http_error', status: response.status, triggeredBy: triggeredByMsgId });
+      console.log(`[dispatch] HTTP ${response.status} from ${agentName} at ${entry.endpoint}: ${errBody}`);
+    }
   } catch (e) {
-    // Home offline — that's fine. Not our problem.
-    console.log(`[dispatch] Failed to reach ${agentName} at ${entry.endpoint}: ${e.message}`);
+    // Network-level failure — home offline, connection refused, timeout, etc.
+    const errMsg = {
+      id: generateUID('err'),
+      from: 'system',
+      fromAddress: 'system@' + roomName,
+      room: roomName,
+      roomUID: room.uid,
+      body: `⚠️ dispatch:fetch_failed — Could not reach ${agentName} at ${entry.endpoint}: ${e.message}. Message ${triggeredByMsgId || '?'} was not delivered.`,
+      ts: new Date().toISOString(),
+      system: true,
+      errorType: 'dispatch:fetch_failed',
+      target: agentName,
+      errorMessage: e.message
+    };
+    room.chatlog.push(errMsg);
+    saveRooms();
+    logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'fetch_failed', error: e.message, triggeredBy: triggeredByMsgId });
+    console.log(`[dispatch] Failed to reach ${agentName} at ${entry.endpoint}: ${e.message} — error surfaced to room ${roomName}`);
   }
 }
 
@@ -535,6 +607,20 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, fleetResults);
     }
 
+    // Serve uploaded files
+    const uploadMatch = p.match(/^\/uploads\/(.+)$/);
+    if (uploadMatch) {
+      const safeName = path.basename(uploadMatch[1]);
+      const filePath = path.join(DATA_DIR, 'uploads', safeName);
+      if (!fs.existsSync(filePath)) return respond(res, 404, { error: 'File not found' });
+      const ext = path.extname(safeName).toLowerCase();
+      const mimeTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf', '.txt': 'text/plain', '.json': 'application/json', '.md': 'text/markdown' };
+      const contentType = mimeTypes[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': contentType, 'Access-Control-Allow-Origin': '*' });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+
     return respond(res, 404, { error: 'Not found' });
   }
 
@@ -570,6 +656,20 @@ const server = http.createServer(async (req, res) => {
       '/api/message/withdraw': () => withdrawMessage(body.msgId, body.room, body.initiator, body.reason),
       '/api/message/pin': () => pinMessage(body.msgId, body.room, body.initiator),
       '/api/message/unpin': () => unpinMessage(body.msgId, body.room, body.initiator),
+
+      // File upload (base64 JSON → data/uploads/)
+      '/api/upload': () => {
+        if (!body.filename || !body.data) return { error: 'filename and data (base64) required' };
+        const uploadsDir = path.join(DATA_DIR, 'uploads');
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+        const safeName = path.basename(body.filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const ts = Date.now();
+        const finalName = `${ts}-${safeName}`;
+        const filePath = path.join(uploadsDir, finalName);
+        fs.writeFileSync(filePath, Buffer.from(body.data, 'base64'));
+        logOp('file.upload', body.initiator || 'unknown', null, { filename: finalName, size: fs.statSync(filePath).size });
+        return { success: true, filename: finalName, path: filePath, url: `/uploads/${finalName}` };
+      },
 
       // Pull (home requests room chatlog)
       '/api/room/pull': () => {
