@@ -800,6 +800,7 @@ function focusRoom(name) {
   if (hiddenRooms.has(name)) {
     hiddenRooms.delete(name);
     localStorage.setItem('blum-hidden-rooms', JSON.stringify([...hiddenRooms]));
+    rebuildGrid(); // rebuild DOM so the panel exists before we search for it
   }
   // Find the panel and its focus button, then toggle focus
   const panels = document.querySelectorAll('.panel.room');
@@ -808,6 +809,8 @@ function focusRoom(name) {
     if (title && title.textContent === name) {
       const btn = p.querySelector('.panel-btn');
       if (btn) toggleFocus(name, btn);
+      // Scroll panel into view (handles rooms that exist but are off-screen)
+      p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       // Also select this room in the compose bar
       const roomSel = document.getElementById('compose-room');
       if (roomSel.querySelector(`option[value="${name}"]`)) {
