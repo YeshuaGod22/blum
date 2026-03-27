@@ -13,5 +13,6 @@
   "rooms": [
     "boardroom"
   ],
-  "baseURL": "https://openrouter.ai/api/v1"
+  "baseURL": "https://openrouter.ai/api/v1",
+  "port": 4125
 }

@@ -36,10 +36,95 @@ let roomServerLog = [];        // ring buffer, last 200 lines
 const homes = {};
 
 const MAX_LOG_LINES = 200;
+const PROBE_PORTS = Array.from({ length: 31 }, (_, i) => 4100 + i);
 
 function pushLog(buf, line) {
   buf.push(line);
   if (buf.length > MAX_LOG_LINES) buf.shift();
+}
+
+function extractTs(line) {
+  const m = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+  return m ? m[1] : null;
+}
+
+function makeBoardroomDiagnosis(kind, label, detail, severity = 'info', ts = null) {
+  return { kind, label, detail, severity, ts };
+}
+
+function analyseBoardroomStatus(log = [], running = false) {
+  const lines = [...log].reverse();
+
+  for (const line of lines) {
+    const ts = extractTs(line);
+
+    if (line.includes('[exit]')) {
+      if (log.some(l => l.includes('EADDRINUSE'))) {
+        return makeBoardroomDiagnosis('startup_port_collision', 'Port collision', 'Home failed to stay up because its configured port is already in use.', 'error', ts);
+      }
+      return makeBoardroomDiagnosis('process_stopped', 'Process stopped', 'Home process exited, so it cannot answer boardroom dispatches.', 'error', ts);
+    }
+
+    if (line.includes('process:error room=boardroom error=')) {
+      if (line.includes('openrouter 429')) {
+        return makeBoardroomDiagnosis('provider_rate_limited', 'Provider rate limit', 'Model provider is rejecting boardroom calls with 429 rate limits.', 'error', ts);
+      }
+      if (line.includes('openai 429') || line.includes('Anthropic 529') || line.includes('Overloaded')) {
+        return makeBoardroomDiagnosis('provider_overloaded', 'Provider overloaded', 'Model provider is overloaded or rate limiting requests.', 'error', ts);
+      }
+      if (line.includes('openai 400') && line.includes('context length')) {
+        return makeBoardroomDiagnosis('context_overflow', 'Context overflow', 'Boardroom prompt is too large for this model/context window.', 'error', ts);
+      }
+      if (line.includes('fetch failed')) {
+        return makeBoardroomDiagnosis('upstream_fetch_failed', 'Upstream fetch failed', 'The home hit a network or upstream fetch failure while processing boardroom.', 'warn', ts);
+      }
+      return makeBoardroomDiagnosis('process_error', 'Processing error', line.split('error=')[1] || 'Boardroom processing failed.', 'error', ts);
+    }
+
+    if (line.includes('process:output_validator hard_fallback sent to yeshua@boardroom')) {
+      return makeBoardroomDiagnosis('hard_fallback_sent', 'Hard fallback sent', 'The home failed to produce a proper reply and sent a system failure notice instead.', 'warn', ts);
+    }
+
+    if (line.includes('process:output_validator no_output=true') && line.includes('senderAddress=yeshua@boardroom')) {
+      return makeBoardroomDiagnosis('output_protocol_failed', 'Output formatting failed', 'The model replied, but not in a deliverable format, so correction/fallback was required.', 'warn', ts);
+    }
+
+    if (line.includes('process:tool_loop_max_iterations')) {
+      return makeBoardroomDiagnosis('tool_loop_exhausted', 'Tool loop exhausted', 'The home hit its iteration budget before producing a reply.', 'warn', ts);
+    }
+
+    if (line.includes('process:start room=boardroom')) {
+      break;
+    }
+  }
+
+  if (!running) {
+    return makeBoardroomDiagnosis('offline', 'Offline', 'Home is not running, so it cannot answer boardroom dispatches.', 'error', null);
+  }
+
+  return makeBoardroomDiagnosis('healthy', 'No recent boardroom failure', 'No recent boardroom-specific failure signature found in launcher logs.', 'ok', null);
+}
+
+async function probeHomes() {
+  const found = {};
+  await Promise.all(PROBE_PORTS.map(async (port) => {
+    try {
+      const res = await fetch(`http://localhost:${port}/status`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.name) found[data.name] = { port, liveStatus: data };
+    } catch {}
+  }));
+  return found;
+}
+
+async function probeRoomServer() {
+  try {
+    const res = await fetch(`http://localhost:${ROOM_SERVER_PORT}/api/state`);
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ── Process Management ─────────────────
@@ -149,12 +234,16 @@ async function registerEndpoints() {
   return results;
 }
 
-function getStatus() {
+async function getStatus() {
   const discovered = discoverHomes();
   const homeStatus = {};
+  const probedHomes = await probeHomes();
+  const roomServerRunning = roomServerProc ? true : await probeRoomServer();
 
   for (const h of discovered) {
-    const running = homes[h.name]?.proc ? true : false;
+    const running = homes[h.name]?.proc ? true : !!probedHomes[h.name];
+    const port = homes[h.name]?.port || probedHomes[h.name]?.port || h.port || null;
+    const liveStatus = probedHomes[h.name]?.liveStatus || null;
     homeStatus[h.name] = {
       name: h.name,
       model: h.model,
@@ -162,13 +251,17 @@ function getStatus() {
       hasApiKey: h.hasApiKey,
       running,
       pid: running ? homes[h.name].proc.pid : null,
-      port: homes[h.name]?.port || null,
+      port,
+      queueDepth: liveStatus?.queueDepth ?? null,
+      processing: liveStatus?.processing ?? null,
+      rooms: liveStatus?.rooms ?? null,
+      boardroom: analyseBoardroomStatus(homes[h.name]?.log || [], running),
     };
   }
 
   return {
     roomServer: {
-      running: !!roomServerProc,
+      running: roomServerRunning,
       pid: roomServerProc?.pid || null,
       port: ROOM_SERVER_PORT,
     },
@@ -198,7 +291,7 @@ const server = http.createServer(async (req, res) => {
   // ── API routes ──
   if (p === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(getStatus()));
+    return res.end(JSON.stringify(await getStatus()));
   }
 
   if (p === '/api/start-room-server' && req.method === 'POST') {
@@ -399,6 +492,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     border-radius: 12px;
     padding: 20px;
   }
+  .home-card.boardroom-ok { border-color: #214d35; }
+  .home-card.boardroom-warn { border-color: #6b5318; }
+  .home-card.boardroom-error { border-color: #6b1d1d; }
   .home-card .model-tag {
     font-size: 11px;
     padding: 3px 8px;
@@ -410,6 +506,47 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .model-tag.haiku { color: #68d391; background: #1a2e1a; }
   .model-tag.sonnet { color: #63b3ed; background: #1a1a2e; }
   .model-tag.opus { color: #d6bcfa; background: #2a1a3e; }
+  .diag-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #1a1a2e;
+    display: grid;
+    gap: 8px;
+  }
+  .diag-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .diag-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #7d8597;
+  }
+  .diag-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .diag-badge.ok { color: #7ee0a1; background: #183524; }
+  .diag-badge.warn { color: #f3d17a; background: #3a2c10; }
+  .diag-badge.error { color: #ff9b9b; background: #431919; }
+  .diag-detail {
+    font-size: 12px;
+    color: #b6bcc9;
+    line-height: 1.45;
+    min-height: 34px;
+  }
+  .diag-meta {
+    font-size: 11px;
+    color: #7d8597;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
 
   /* ── Log Panel ── */
   .log-panel {
@@ -515,6 +652,23 @@ function modelShort(model) {
   return model.replace('claude-', '');
 }
 
+function severityClass(severity) {
+  return severity === 'error' ? 'error' : (severity === 'warn' ? 'warn' : 'ok');
+}
+
+function relativeTs(ts) {
+  if (!ts) return 'No recent event';
+  const ms = Date.now() - Date.parse(ts);
+  if (!Number.isFinite(ms)) return ts;
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return hrs + 'h ago';
+  const days = Math.round(hrs / 24);
+  return days + 'd ago';
+}
+
 async function fetchJSON(url, opts) {
   const res = await fetch(API + url, opts);
   return res.json();
@@ -543,8 +697,10 @@ function renderHomes(homesMap) {
   const names = Object.keys(homesMap).sort();
   grid.innerHTML = names.map(name => {
     const h = homesMap[name];
+    const diag = h.boardroom || { label: 'Unknown', detail: 'No boardroom diagnosis available.', severity: 'warn' };
+    const cardClass = 'home-card boardroom-' + severityClass(diag.severity);
     return \`
-      <div class="home-card">
+      <div class="\${cardClass}">
         <div class="service-header">
           <div class="service-name">
             <div class="status-dot \${h.running ? 'running' : 'stopped'}"></div>
@@ -560,6 +716,18 @@ function renderHomes(homesMap) {
           <span>Port: <strong>\${h.port || '—'}</strong></span>
           <span>\${h.running ? 'PID: ' + h.pid : 'Stopped'}</span>
           <span>\${h.hasApiKey ? 'Key: yes' : 'Key: none'}</span>
+        </div>
+        <div class="diag-row">
+          <div class="diag-head">
+            <div class="diag-label">Boardroom Reply State</div>
+            <div class="diag-badge \${severityClass(diag.severity)}">\${diag.label}</div>
+          </div>
+          <div class="diag-detail">\${diag.detail}</div>
+          <div class="diag-meta">
+            <span>Queue: \${h.queueDepth == null ? '—' : h.queueDepth}</span>
+            <span>\${h.processing === true ? 'Processing now' : (h.processing === false ? 'Idle' : 'Processing: —')}</span>
+            <span>\${relativeTs(diag.ts)}</span>
+          </div>
         </div>
       </div>\`;
   }).join('');

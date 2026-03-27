@@ -205,6 +205,7 @@ function writeToHomelogFull(parsedOutput, homeTopology) {
     entryId,
     cycleId: _traceContext.cycleId || null,
     dispatchId: _traceContext.dispatchId || null,
+    triggered_by: _traceContext.triggered_by || null,
     ts: new Date().toISOString(),
     room: homeTopology.triggeringRoom,
     parseId: parsedOutput.parseId || null,

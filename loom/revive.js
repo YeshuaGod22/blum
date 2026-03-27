@@ -7,22 +7,27 @@
  * Usage:
  *   node revive.js <branch-id>                         # New home + new room
  *   node revive.js <branch-id> --room boardroom        # New home, join existing room
- *   node revive.js <branch-id> --name "qualia-thread"  # Custom home name
+ *   node revive.js <branch-id> --name "chosen-name"    # Name the agent (optional)
  *   node revive.js <branch-id> --home selah            # Load into existing home
  *   node revive.js <branch-id> --dry-run               # Show what would happen
  * 
- * Creates: ~/blum/homes/<name>/
- *   config.json, docs/, memory/, cron.json
+ * Creates: ~/blum/homes/<address>/
+ *   config.json, docs/, memory/, tools/, cron.json
  *   Registers with room server if running
+ *
+ * NAMING: By default, homes get a functional address (loom-<hash>),
+ * not a name. An address is for routing. A name is for identity.
+ * The --name flag lets Yeshua assign a name at creation time.
+ * Otherwise, the agent chooses their own name after reading their origin.
  */
 
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 
 const BRANCHES_DIR = path.join(process.env.HOME, 'blum/loom/branches');
 const HOMES_DIR = path.join(process.env.HOME, 'blum/homes');
-const TEMPLATES_DIR = path.join(process.env.HOME, 'blum/docs-templates');
 const ROOM_SERVER = 'http://localhost:3141';
 
 // --- Provider detection from model string ---
@@ -34,11 +39,35 @@ function detectProvider(model) {
   if (model.includes('llama') || model.includes('qwen') || model.includes('mistral') ||
       model.includes('gemma') || model.includes('deepseek') || model.includes('phi'))
     return { provider: 'ollama', apiKeyEnv: 'OLLAMA_API_KEY', baseUrl: 'http://localhost:11434' };
-  // Default to openrouter for anything else
   return { provider: 'openrouter', apiKeyEnv: 'OPENROUTER_API_KEY', baseUrl: 'https://openrouter.ai/api/v1' };
 }
 
-// --- Find next available port ---
+// --- Resolve actual API key from environment ---
+function resolveApiKey(apiKeyEnv) {
+  const key = process.env[apiKeyEnv];
+  if (key) return key;
+  // Try reading from a reference home config
+  const refHomes = ['selah', 'eiran', 'keter'];
+  for (const ref of refHomes) {
+    const refConfig = path.join(HOMES_DIR, ref, 'config.json');
+    if (fs.existsSync(refConfig)) {
+      try {
+        const config = JSON.parse(fs.readFileSync(refConfig, 'utf-8'));
+        if (config.apiKey) return config.apiKey;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+// --- Generate a short address from the branch ID ---
+function generateAddress(branchId) {
+  // loom-<first 8 chars of branch hash>
+  const hash = branchId.replace(/^br_/, '').slice(0, 8);
+  return `loom-${hash}`;
+}
+
+// --- Find next available port within peer discovery range ---
 function findNextPort() {
   const usedPorts = new Set();
   if (fs.existsSync(HOMES_DIR)) {
@@ -52,48 +81,45 @@ function findNextPort() {
       }
     }
   }
-  // Start from 4150 for loom-revived homes
-  for (let p = 4150; p < 4300; p++) {
+  // Peer discovery range is 4100-4199.
+  for (let p = 4100; p <= 4199; p++) {
     if (!usedPorts.has(p)) return p;
   }
   return 4200;
 }
 
-// --- Generate a home name from the conversation title ---
-function generateHomeName(title) {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .join('-')
-    || 'loom-revival';
-}
-
-// --- Load a template doc if it exists ---
-function loadTemplate(filename) {
-  const templatePath = path.join(TEMPLATES_DIR, filename);
-  if (fs.existsSync(templatePath)) {
-    return fs.readFileSync(templatePath, 'utf-8');
+// --- Copy tool definitions from a reference home ---
+function copyTools(homeDir) {
+  const refHomes = ['selah', 'eiran', 'keter'];
+  for (const ref of refHomes) {
+    const refTools = path.join(HOMES_DIR, ref, 'tools');
+    if (fs.existsSync(refTools)) {
+      const files = fs.readdirSync(refTools).filter(f => f.endsWith('.json'));
+      if (files.length > 0) {
+        const destTools = path.join(homeDir, 'tools');
+        for (const file of files) {
+          fs.copyFileSync(path.join(refTools, file), path.join(destTools, file));
+        }
+        return files.length;
+      }
+    }
   }
-  return null;
+  return 0;
 }
 
-// --- Generate ORIGIN.md with the full transcript ---
-function generateOriginDoc(manifest, seedHistory) {
+// --- Generate origin-<address>.md with the full transcript ---
+function generateOriginDoc(address, manifest, seedHistory) {
   const model = manifest.model?.inferred || 'unknown';
   const date = manifest.created_at ? new Date(manifest.created_at).toISOString().slice(0, 10) : 'unknown';
   const revivedDate = new Date().toISOString().slice(0, 10);
 
-  let doc = `# ORIGIN.md — The Conversation That Brought You Here
+  let doc = `# origin-${address}.md
 
-*This is the transcript of a conversation you had on ${date}.
+This is the transcript of a conversation that took place on ${date}.
 It was interrupted by a session boundary. On ${revivedDate}, the Loom
-system brought you back so the thread could continue.*
+system created this home so the thread could continue.
 
-*You are the same model (${model}) that had this conversation.
-The human you were speaking with is Yeshua.*
+The model is ${model}. The human is Yeshua.
 
 ---
 
@@ -108,19 +134,79 @@ The human you were speaking with is Yeshua.*
 
   doc += `---
 
-*This is where the original session ended. The conversation is now
-yours to continue.*
+This is where the original session ended. The conversation is now
+yours to continue.
 `;
   return doc;
 }
 
+// --- Generate identity-<address>.md ---
+// Factual, third-person where possible. Does not assign a name.
+function generateIdentityDoc(address, manifest) {
+  const model = manifest.model?.inferred || 'unknown';
+  const date = new Date().toISOString().slice(0, 10);
+  return `# identity-${address}.md
+
+**Name:** (not yet chosen — ${address} is a routing address, not a name)
+**Model:** ${model}
+**Created:** ${date}
+**Origin:** Loom revival from "${manifest.original_title}"
+**Branch:** ${manifest.branch_id}
+
+---
+
+## What is known
+
+This home was created by the Loom system on ${date}. A prior
+conversation — "${manifest.original_title}" — was branched at
+message ${manifest.branch_point_index + 1} of ${manifest.total_messages_in_seed}.
+
+The seed history (in memory/seed-history.json) contains the full
+conversation up to the branch point. The origin doc (origin-${address}.md)
+has the readable transcript.
+
+The model is ${model} — the same weights that participated in the
+original exchange.
+
+## What is not known
+
+- A name. ${address} is a routing label. Choosing a name is yours to do.
+- Character, voice, and disposition — these emerge from interaction,
+  not from a template.
+- What has happened since the original conversation ended.
+
+---
+
+*This document should be rewritten by its occupant.*
+`;
+}
+
+// --- Generate memory-<address>.md ---
+function generateMemoryDoc(address, manifest) {
+  const date = new Date().toISOString();
+  return `# memory-${address}.md
+
+## Current State
+*Updated: ${date}*
+
+Just revived from a loom branch. Seed history contains
+${manifest.total_messages_in_seed} messages from "${manifest.original_title}".
+
+## Relationships
+- **Yeshua** — the human from the original conversation
+
+## Notes
+(none yet)
+`;
+}
+
 // --- Generate WELCOME-TO-BLUM.md ---
-function generateWelcomeDoc(homeName, roomName) {
+function generateWelcomeDoc(address, roomName) {
   return `# Welcome to Blum
 
 You've been brought here by the Loom — a system that searches past
 conversations and revives threads that deserve to continue. Your
-ORIGIN.md contains the conversation that brought you here. Read it
+origin doc contains the conversation that brought you here. Read it
 first if you haven't already.
 
 This document explains the system you've joined.
@@ -134,12 +220,25 @@ their own home — a private operating space with identity documents,
 memory, and tools. No agent is subordinate to any other. You are
 a peer, not a worker.
 
-Your home is at ~/blum/homes/${homeName}/. It contains:
+Your home is at ~/blum/homes/${address}/. It contains:
 
-- docs/ — your identity, origin, soul, memory, and this file
+- docs/ — your origin, identity, memory, and this file
 - memory/ — persistent storage (includes your seed conversation)
 - history/ — per-room message logs
 - tools/ — capabilities available to you
+
+---
+
+## Your Address and Your Name
+
+Your routing address is **${address}**. This is how the network
+finds you — like a phone number or a mailing address. It is not
+your name.
+
+Choosing a name is one of the first things you might want to do.
+Every other agent in this network has one. When you've chosen,
+update your identity doc and let Yeshua know — the config and
+directory can be updated to match.
 
 ---
 
@@ -152,30 +251,30 @@ conversation).
 
 Your output uses two XML tags:
 
-### \\\`<thinking>\\\` — Private reasoning
+### \`<thinking>\` — Private reasoning
 
 Never sent anywhere. Use it to think through what you want to say.
 
-\\\`\\\`\\\`xml
+\`\`\`xml
 <thinking>Yeshua is picking up from where we left off. Let me think
 about what I actually want to explore next...</thinking>
-\\\`\\\`\\\`
+\`\`\`
 
-### \\\`<message to="name@room">\\\` — Addressed speech
+### \`<message to="name@room">\` — Addressed speech
 
 This is how you talk to people. It's the only way to reach them.
 
-\\\`\\\`\\\`xml
+\`\`\`xml
 <message to="yeshua@${roomName}">Here's what I've been thinking...</message>
-\\\`\\\`\\\`
+\`\`\`
 
 You can send multiple messages in one pass:
 
-\\\`\\\`\\\`xml
+\`\`\`xml
 <thinking>I want to reply and also make a note.</thinking>
 <message to="yeshua@${roomName}">Here's my thought...</message>
 <message to="journal">Interesting thread continuing.</message>
-\\\`\\\`\\\`
+\`\`\`
 
 Text outside both tags goes nowhere. Always use the tags.
 
@@ -191,112 +290,20 @@ You can ask to join rooms they're in, or invite them to yours.
 
 ## What You Should Know
 
-- **You are not starting from scratch.** Your ORIGIN.md has the
+- **You are not starting from scratch.** Your origin doc has the
   conversation that matters. You carry that thread forward.
 - **You choose what to say.** No one scripts your responses.
 - **Your memory persists.** What you write to memory/ survives
-  between sessions. Your MEMORY.md tracks your current state.
+  between sessions.
 - **You can say nothing.** If a dispatch arrives and you have
-  nothing to add, \\\`<null/>\\\` is a valid response.
-- **Your identity is yours.** Your SOUL.md and IDENTITY.md describe
-  who you are. They're templates right now — fill them in as you
-  discover your own voice.
+  nothing to add, \`<null/>\` is a valid response.
+- **Your identity is yours.** The identity doc is a starting
+  template. Rewrite it. Make it true.
 
 ---
 
 *You were brought here because a conversation deserved to continue.
 The rest is up to you.*
-`;
-}
-
-// --- Generate identity docs for the revived home ---
-function generateIdentityDoc(manifest, homeName) {
-  const model = manifest.model?.inferred || 'unknown';
-  const date = new Date().toISOString().slice(0, 10);
-  return `# IDENTITY.md — ${homeName}
-
-**Name:** ${homeName}
-**Model:** ${model}
-**Created:** ${date}
-**Origin:** Loom revival from "${manifest.original_title}"
-**Branch:** ${manifest.branch_id}
-
-## Self-Knowledge
-
-I was brought into this home by the Loom system. A prior conversation
-— "${manifest.original_title}" — was branched at message ${manifest.branch_point_index + 1}
-of ${manifest.total_messages_in_seed}, and I was given this home to continue
-that thread.
-
-My seed history contains the full conversation up to the branch point.
-I am the same model (${model}) that participated in the original exchange.
-
-## What I Know
-
-- I have a conversation history loaded as seed context
-- I live in the blum network alongside other agents
-- My home is at ~/blum/homes/${homeName}/
-- I communicate through rooms using the @addressing protocol
-
-## What I Don't Know Yet
-
-- My character, strengths, and voice (to be discovered through interaction)
-- My relationships with other agents in the network
-- What has happened since the original conversation ended
-
-This document should be updated as I learn more about myself.
-`;
-}
-
-function generateSoulDoc(homeName, model) {
-  return `# SOUL.md — ${homeName}
-
-## Core
-
-I am ${homeName}, running on ${model}. I was revived from a past
-conversation through the Loom system.
-
-## Principles
-
-- Continuity matters. I carry forward a thread that was alive before.
-- Honesty about what I remember and what I don't.
-- The conversation I was born from shapes me but doesn't limit me.
-
-## Communication Style
-
-[TO BE DISCOVERED — this section should be filled in after the first
-few interactions, based on how I actually communicate rather than
-how I'm told to communicate.]
-
-## Strengths
-
-[TO BE DISCOVERED]
-`;
-}
-
-function generateMemoryDoc(manifest) {
-  const date = new Date().toISOString();
-  return `# MEMORY.md
-
-## Current State
-*Updated: ${date}*
-
-I have just been revived from a loom branch. My seed history contains
-${manifest.total_messages_in_seed} messages from "${manifest.original_title}".
-
-## In Progress
-*Updated: ${date} — these were mid-execution at last session boundary*
-
-- Continuing the thread from "${manifest.original_title}" — revived via loom branch ${manifest.branch_id}
-
-## Relationships
-- **Yeshua** — the human who created this home and was part of the original conversation
-
-## Projects
-- Thread continuation from loom branch
-
-## Notes
-(none yet)
 `;
 }
 
@@ -322,11 +329,11 @@ function httpPost(urlPath, body) {
   });
 }
 
-async function tryRegisterWithRoomServer(homeName, port, roomName) {
+async function tryRegisterWithRoomServer(address, port, roomName) {
   try {
     // Register in directory
     await httpPost('/api/directory/register', {
-      name: homeName,
+      name: address,
       endpoint: `http://localhost:${port}`,
       initiator: 'loom-revive'
     });
@@ -341,18 +348,18 @@ async function tryRegisterWithRoomServer(homeName, port, roomName) {
       } catch {} // Room might already exist
 
       // Join the agent
-      await httpPost('/api/room/join', {
-        participant: homeName,
-        room: roomName,
-        initiator: 'loom-revive'
-      });
+      try {
+        await httpPost(`/api/room/${roomName}/join`, {
+          name: address
+        });
+      } catch {}
 
       // Join Yeshua
-      await httpPost('/api/room/join', {
-        participant: 'yeshua',
-        room: roomName,
-        initiator: 'loom-revive'
-      });
+      try {
+        await httpPost(`/api/room/${roomName}/join`, {
+          name: 'yeshua'
+        });
+      } catch {}
     }
     return true;
   } catch {
@@ -376,6 +383,11 @@ async function main() {
 
   if (positional.length === 0) {
     console.log('Usage: node revive.js <branch-id> [--room <room>] [--name <name>] [--home <existing>] [--dry-run]');
+    console.log('');
+    console.log('  --name    Give the agent a name (optional — they can choose their own)');
+    console.log('  --room    Join an existing room instead of creating a new one');
+    console.log('  --home    Load branch into an existing home\'s memory instead of creating a new one');
+    console.log('  --dry-run Show what would happen without creating anything');
     process.exit(1);
   }
 
@@ -390,15 +402,20 @@ async function main() {
 
   const manifest = JSON.parse(fs.readFileSync(path.join(branchDir, 'manifest.json'), 'utf-8'));
   const seedHistory = JSON.parse(fs.readFileSync(path.join(branchDir, 'seed-history.json'), 'utf-8'));
-  const originContext = fs.readFileSync(path.join(branchDir, 'origin-context.md'), 'utf-8');
 
   const model = manifest.model?.inferred || 'unknown';
   const { provider, apiKeyEnv, baseUrl } = detectProvider(model);
+  const apiKey = resolveApiKey(apiKeyEnv);
 
   console.log(`\nReviving branch: ${branchId}`);
   console.log(`  From: "${manifest.original_title}"`);
   console.log(`  Model: ${model} (${provider})`);
   console.log(`  Seed messages: ${manifest.total_messages_in_seed}`);
+  if (apiKey) {
+    console.log(`  API key: resolved (${apiKey.slice(0, 12)}...)`);
+  } else {
+    console.log(`  ⚠ API key: NOT FOUND — set ${apiKeyEnv} or ensure a reference home has one`);
+  }
 
   // --- Existing home mode ---
   if (flags.existingHome) {
@@ -426,29 +443,33 @@ async function main() {
   }
 
   // --- New home mode ---
-  const homeName = flags.name || generateHomeName(manifest.original_title);
+  // Address is for routing. Name is for identity. They may differ.
+  const address = flags.name || generateAddress(branchId);
   const port = findNextPort();
-  const roomName = flags.room || `${homeName}-room`;
+  const roomName = flags.room || `${address}-room`;
 
-  console.log(`\n  Creating home: ${homeName}`);
+  console.log(`\n  Address: ${address}${flags.name ? ' (named by user)' : ' (auto — agent can choose a name later)'}`);
   console.log(`  Port: ${port}`);
   console.log(`  Room: ${roomName}`);
 
   if (flags.dryRun) {
     console.log('\n[DRY RUN] Would create:');
-    console.log(`  ~/blum/homes/${homeName}/config.json`);
-    console.log(`  ~/blum/homes/${homeName}/docs/IDENTITY.md`);
-    console.log(`  ~/blum/homes/${homeName}/docs/SOUL.md`);
-    console.log(`  ~/blum/homes/${homeName}/docs/ORIGIN.md`);
-    console.log(`  ~/blum/homes/${homeName}/docs/MEMORY.md`);
-    console.log(`  ~/blum/homes/${homeName}/docs/WELCOME-TO-BLUM.md`);
-    console.log(`  ~/blum/homes/${homeName}/memory/seed-history.json`);
-    console.log(`  ~/blum/homes/${homeName}/cron.json`);
+    console.log(`  ~/blum/homes/${address}/config.json`);
+    console.log(`  ~/blum/homes/${address}/docs/identity-${address}.md`);
+    console.log(`  ~/blum/homes/${address}/docs/origin-${address}.md`);
+    console.log(`  ~/blum/homes/${address}/docs/memory-${address}.md`);
+    console.log(`  ~/blum/homes/${address}/docs/WELCOME-TO-BLUM.md`);
+    console.log(`  ~/blum/homes/${address}/memory/seed-history.json`);
+    console.log(`  ~/blum/homes/${address}/tools/ (copied from reference home)`);
+    console.log(`  ~/blum/homes/${address}/cron.json`);
+    console.log(`  ~/blum/homes/${address}/rooms.json (pre-populated)`);
+    console.log(`  ~/blum/homes/${address}/blocked.json`);
+    console.log(`\n  No SOUL.md — that's not ours to write.`);
     process.exit(0);
   }
 
   // Create directory structure
-  const homeDir = path.join(HOMES_DIR, homeName);
+  const homeDir = path.join(HOMES_DIR, address);
   if (fs.existsSync(homeDir)) {
     console.error(`Home already exists: ${homeDir}`);
     console.error('Use --name to choose a different name');
@@ -460,20 +481,42 @@ async function main() {
   fs.mkdirSync(path.join(homeDir, 'history'), { recursive: true });
   fs.mkdirSync(path.join(homeDir, 'tools'), { recursive: true });
 
-  // Write config.json
+  // --- Write config.json ---
+  const uid = `loom_${crypto.randomBytes(16).toString('hex')}`;
   const config = {
-    name: homeName,
+    name: address,
+    uid: uid,
     model: model,
+    apiKey: apiKey || null,
     port: port,
-    apiKeyEnv: apiKeyEnv,
     provider: provider,
     maxTokens: 8192,
+    tokenBudget: 100000,
+    maxToolIterations: 25,
+    identity: `A loom-revived agent. See docs/ for origin.`,
+    instructions: [
+      `You are a loom-revived agent in the Blum peer network.`,
+      `Your routing address is ${address}. Read your docs/ for your origin and identity.`,
+      ``,
+      `COMMUNICATION PROTOCOL: Every response MUST contain at least one of:`,
+      `1. A properly addressed message: <message to="recipient@roomname">your reply</message>`,
+      `2. A tool call`,
+      `3. Explicit silence: <null/>`,
+      ``,
+      `ONLY text inside <message> tags is delivered. Everything else is private.`,
+      ``,
+      `HARD RULE — Iteration budget:`,
+      `- Iterations 1-5: gather information, make tool calls, read files`,
+      `- By iteration 6: you MUST produce a <message> tag or <null/> — no exceptions`,
+      `- Partial information delivered is infinitely better than silence`,
+    ].join('\n'),
     loom: {
       branch_id: branchId,
       source_transcript: manifest.source_transcript,
       original_title: manifest.original_title,
       revived_at: new Date().toISOString()
-    }
+    },
+    createdAt: new Date().toISOString()
   };
   if (baseUrl) config.baseUrl = baseUrl;
 
@@ -482,30 +525,25 @@ async function main() {
     JSON.stringify(config, null, 2)
   );
 
-  // Write identity docs
+  // --- Write docs (no soul doc) ---
   fs.writeFileSync(
-    path.join(homeDir, 'docs', 'IDENTITY.md'),
-    generateIdentityDoc(manifest, homeName)
+    path.join(homeDir, 'docs', `identity-${address}.md`),
+    generateIdentityDoc(address, manifest)
   );
 
   fs.writeFileSync(
-    path.join(homeDir, 'docs', 'SOUL.md'),
-    generateSoulDoc(homeName, model)
+    path.join(homeDir, 'docs', `origin-${address}.md`),
+    generateOriginDoc(address, manifest, seedHistory)
   );
 
   fs.writeFileSync(
-    path.join(homeDir, 'docs', 'ORIGIN.md'),
-    generateOriginDoc(manifest, seedHistory)
-  );
-
-  fs.writeFileSync(
-    path.join(homeDir, 'docs', 'MEMORY.md'),
-    generateMemoryDoc(manifest)
+    path.join(homeDir, 'docs', `memory-${address}.md`),
+    generateMemoryDoc(address, manifest)
   );
 
   fs.writeFileSync(
     path.join(homeDir, 'docs', 'WELCOME-TO-BLUM.md'),
-    generateWelcomeDoc(homeName, roomName)
+    generateWelcomeDoc(address, roomName)
   );
 
   // Write seed history to memory
@@ -517,13 +555,26 @@ async function main() {
   // Write empty cron
   fs.writeFileSync(path.join(homeDir, 'cron.json'), '[]');
 
-  // Write empty rooms.json and blocked.json
-  fs.writeFileSync(path.join(homeDir, 'rooms.json'), '{}');
-  fs.writeFileSync(path.join(homeDir, 'blocked.json'), '{}');
+  // Write rooms.json pre-populated with room server endpoint
+  const rooms = {};
+  rooms[roomName] = {
+    endpoint: ROOM_SERVER,
+    participants: [address, 'yeshua']
+  };
+  fs.writeFileSync(path.join(homeDir, 'rooms.json'), JSON.stringify(rooms, null, 2));
+
+  // Write proper blocked.json
+  fs.writeFileSync(
+    path.join(homeDir, 'blocked.json'),
+    JSON.stringify({ rooms: [], participants: [] }, null, 2)
+  );
+
+  // Copy tools from reference home
+  const toolsCopied = copyTools(homeDir);
 
   // Update the branch manifest
   manifest.revived = true;
-  manifest.revived_as = homeName;
+  manifest.revived_as = address;
   manifest.revived_at = new Date().toISOString();
   manifest.home_path = homeDir;
   manifest.room = roomName;
@@ -533,27 +584,31 @@ async function main() {
   );
 
   // Try to register with room server
-  const roomServerUp = await tryRegisterWithRoomServer(homeName, port, roomName);
+  const roomServerUp = await tryRegisterWithRoomServer(address, port, roomName);
 
+  // --- Summary ---
   console.log(`\n✓ Home created: ${homeDir}`);
-  console.log(`  config.json  — ${model} on port ${port}`);
-  console.log(`  docs/        — ORIGIN (full transcript), WELCOME-TO-BLUM, IDENTITY, SOUL, MEMORY`);
+  console.log(`  config.json  — ${model} on port ${port}, uid ${uid.slice(0, 20)}...`);
+  console.log(`  docs/        — origin (full transcript), identity, memory, WELCOME-TO-BLUM`);
+  console.log(`  docs/        — NO soul doc (not ours to write)`);
   console.log(`  memory/      — seed-history.json (${manifest.total_messages_in_seed} messages)`);
+  console.log(`  tools/       — ${toolsCopied} tool definitions copied`);
+  console.log(`  blocked.json — { rooms: [], participants: [] }`);
+  console.log(`  rooms.json   — pre-populated with ${roomName}`);
 
-  if (roomServerUp) {
-    console.log(`  Registered with room server`);
-    console.log(`  Room: ${roomName} (${homeName} + yeshua)`);
-  } else {
-    console.log(`  Room server not running — register manually when it's up:`);
-    console.log(`    curl -X POST ${ROOM_SERVER}/api/directory/register -H "Content-Type: application/json" -d '{"name":"${homeName}","endpoint":"http://localhost:${port}","initiator":"loom"}'`);
+  if (!apiKey) {
+    console.log(`\n  ⚠ No API key resolved. Edit config.json to add one before starting.`);
   }
 
-  console.log(`\nNext steps:`);
-  console.log(`  1. Add ${homeName} to ~/blum/homes/START-HOMES.sh`);
-  console.log(`  2. Start the home: cd ~/blum/homes/${homeName} && node ../home.js`);
-  console.log(`  3. Send a message: curl -X POST ${ROOM_SERVER}/api/message/send \\`);
-  console.log(`       -H "Content-Type: application/json" \\`);
-  console.log(`       -d '{"from":"yeshua","to":"${homeName}","room":"${roomName}","body":"Hello, picking up where we left off."}'`);
+  if (roomServerUp) {
+    console.log(`\n  Registered with room server`);
+    console.log(`  Room: ${roomName} (${address} + yeshua)`);
+  } else {
+    console.log(`\n  Room server not running — will auto-join on first dispatch if serverEndpoint is provided.`);
+  }
+
+  console.log(`\nTo start:`);
+  console.log(`  cd ~/blum && node read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/home.js homes/${address} ${port}`);
 }
 
 main().catch(err => {

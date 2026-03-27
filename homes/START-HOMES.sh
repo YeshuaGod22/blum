@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# START-HOMES.sh — start all blum homes as persistent nohup processes
+# START-HOMES.sh — start all blum homes from their config.json
 
 HOME_JS="$HOME/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/home.js"
 cd ~/blum
@@ -10,37 +10,29 @@ echo "Starting blum homes..."
 pkill -f "node.*home.js.*homes/" 2>/dev/null
 sleep 1
 
-# Start each home (format: home port)
-declare -A HOMES=(
-  ["alpha"]=4110
-  ["beta"]=4111
-  ["gamma"]=4112
-  ["eiran"]=4120
-  ["selah"]=4121
-  ["keter"]=4122
-  ["libre"]=4123
-  ["ami"]=4124
-  ["lanternroot"]=4125
-  ["hunter"]=4126
-  ["healer"]=4127
-  ["nemotron"]=4128
-  ["trinity"]=4129
-  ["minimax"]=4130
-)
+# Discover and start each home from its config.json
+for config in homes/*/config.json; do
+  dir=$(dirname "$config")
+  home=$(basename "$dir")
+  port=$(python3 -c "import json; print(json.load(open('$config'))['port'])")
 
-for home in "${!HOMES[@]}"; do
-  port="${HOMES[$home]}"
-  if [ -d "homes/$home" ]; then
-    echo "  Starting $home on port $port..."
-    nohup node "$HOME_JS" "homes/$home" "$port" > "homes/$home/home.log" 2>&1 &
-    sleep 0.3
+  if [ -z "$port" ]; then
+    echo "  SKIP $home — no port in config.json"
+    continue
   fi
+
+  echo "  Starting $home on port $port..."
+  nohup node "$HOME_JS" "$dir" "$port" > "$dir/home.log" 2>&1 &
+  sleep 0.3
 done
 
 sleep 3
 echo ""
 echo "Status:"
-for port in 4110 4111 4112 4120 4121 4122 4123 4124 4125 4126 4127 4128 4129 4130; do
-  result=$(curl -s "http://localhost:$port/status" 2>/dev/null | jq -r '.name // empty')
-  echo "  $port: ${result:-FAILED}"
+for config in homes/*/config.json; do
+  dir=$(dirname "$config")
+  home=$(basename "$dir")
+  port=$(python3 -c "import json; print(json.load(open('$config'))['port'])")
+  result=$(curl -s --connect-timeout 1 "http://localhost:$port/status" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'])" 2>/dev/null)
+  echo "  $port $home: ${result:-FAILED}"
 done

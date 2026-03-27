@@ -9,5 +9,6 @@
   "apiKey": "REDACTED-ANTHROPIC-KEY",
   "rooms": [
     "boardroom"
-  ]
+  ],
+  "port": 4124
 }
