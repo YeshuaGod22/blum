@@ -275,7 +275,15 @@ async function getStatus() {
 function assignPort(name) {
   const portMap = { alpha: 4110, beta: 4111, gamma: 4112 };
   if (portMap[name]) return portMap[name];
-  // Auto-assign from 4113+
+  // Read from config.json if available — prevents port collisions on restart
+  const configPath = path.join(HOMES_DIR, name, 'config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.port) return config.port;
+    } catch {}
+  }
+  // Fall back to auto-assign from 4113+
   const usedPorts = new Set(Object.values(homes).map(h => h.port));
   let p = 4113;
   while (usedPorts.has(p)) p++;
