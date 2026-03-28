@@ -204,7 +204,7 @@
   .msg .msg-from { font-weight: 600; }
   .msg .msg-arrow { color: var(--text-dim); }
   .msg .msg-ts { color: var(--text-dim); margin-left: auto; font-size: 11px; padding-left: 8px; }
-  .msg .msg-body { color: var(--text-bright); font-size: 13px; line-height: 1.5; }
+  .msg .msg-body { color: var(--text-bright); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
   .msg .msg-quote {
     border-left: 2px solid var(--border-bright); padding: 1px 4px;
     margin: 1px 0 2px 0; font-family: var(--mono); font-size: 7px;
@@ -269,6 +269,87 @@
   .msg-image { max-width: 320px; max-height: 240px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--border); cursor: pointer; }
   .msg-image:hover { border-color: var(--accent); }
   .msg-file-link { color: var(--blue); text-decoration: underline; cursor: pointer; font-family: var(--mono); font-size: 11px; }
+
+  /* === RESURRECT MODAL === */
+  .resurrect-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;
+  }
+  .resurrect-overlay.open { display: flex; }
+  .resurrect-modal {
+    background: var(--surface2); border: 1px solid var(--border-bright);
+    border-radius: 6px; width: 90%; max-width: 800px; max-height: 80vh;
+    display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  }
+  .resurrect-header {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .resurrect-header h2 { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); }
+  .resurrect-close {
+    margin-left: auto; background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 18px; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center; transition: color 0.12s;
+  }
+  .resurrect-close:hover { color: var(--text-bright); }
+  .resurrect-body {
+    display: flex; flex: 1; min-height: 0; gap: 1px; background: var(--border);
+  }
+  .resurrect-list {
+    width: 40%; border-right: 1px solid var(--border); overflow-y: auto;
+    background: var(--surface);
+  }
+  .resurrect-item {
+    padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer;
+    transition: background 0.12s; font-family: var(--mono); font-size: 10px;
+  }
+  .resurrect-item:hover { background: var(--surface2); }
+  .resurrect-item.active { background: var(--accent-dim); border-left: 2px solid var(--accent); }
+  .resurrect-item-name { font-weight: 600; color: var(--text-bright); }
+  .resurrect-item-meta { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+  .resurrect-preview {
+    flex: 1; display: flex; flex-direction: column; background: var(--surface2);
+  }
+  .resurrect-preview-empty {
+    display: flex; align-items: center; justify-content: center; color: var(--text-dim);
+    font-family: var(--mono); font-size: 11px; height: 100%;
+  }
+  .resurrect-messages {
+    flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .resurrect-msg {
+    padding: 8px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 3px; font-family: var(--mono); font-size: 10px;
+  }
+  .resurrect-msg-meta {
+    font-size: 9px; color: var(--text-dim); margin-bottom: 4px; display: flex; gap: 6px;
+  }
+  .resurrect-msg-from { font-weight: 600; color: var(--text-bright); }
+  .resurrect-msg-body {
+    color: var(--text); white-space: pre-wrap; word-wrap: break-word; line-height: 1.4;
+    margin-bottom: 6px;
+  }
+  .resurrect-spawn-btn {
+    background: var(--accent); color: var(--bg); border: none; border-radius: 2px;
+    padding: 3px 8px; font-family: var(--mono); font-size: 9px; font-weight: 500;
+    cursor: pointer; transition: background 0.12s; align-self: flex-start;
+  }
+  .resurrect-spawn-btn:hover { background: #d4943e; }
+  .resurrect-spawn-btn:disabled {
+    background: var(--text-dim); cursor: not-allowed;
+  }
+  .resurrect-loading {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px; background: var(--accent-dim); border-radius: 3px; color: var(--accent);
+    font-family: var(--mono); font-size: 10px;
+  }
+  .resurrect-loading::after {
+    content: ''; display: inline-block; width: 3px; height: 3px; background: var(--accent);
+    border-radius: 50%; animation: spin 1s infinite;
+  }
+  @keyframes spin {
+    0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+  }
 </style>
 </head>
 <body>
@@ -286,6 +367,7 @@
   <input class="header-input" id="user-name" value="yeshua" style="width:80px" />
   <button class="header-btn" id="connect-btn" onclick="doConnect()">Connect</button>
   <button class="header-btn active" id="dir-toggle" onclick="toggleDirectory()">Directory</button>
+  <button class="header-btn" id="resurrect-btn" onclick="openResurrectModal()" title="Resurrect from archive">Resurrect</button>
 </header>
 
 <div class="main-layout">
@@ -370,9 +452,15 @@ function ts(iso) { return new Date(iso).toLocaleTimeString([], { hour:'2-digit',
 
 // ── API ──
 async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
+  const opts = { method };
+  if (body) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
   const res = await fetch(server + path, opts);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -401,10 +489,10 @@ async function doConnect() {
     document.getElementById('status-label').style.color = 'var(--green)';
     document.getElementById('connect-btn').classList.add('active');
     document.getElementById('compose-from').textContent = me;
-    await fetchHomeConfigs();
     renderDirectory();
     rebuildGrid();
     populateComposeSelects();
+    fetchHomeConfigs().then(() => renderDirectory()).catch(() => {});
     // Restore last room + recipient selection from localStorage
     const savedRoom = localStorage.getItem('blum-room-last-room');
     const roomSel = document.getElementById('compose-room');
@@ -425,7 +513,7 @@ async function doConnect() {
     document.getElementById('status-dot').className = 'status-dot off';
     document.getElementById('status-label').textContent = 'offline';
     document.getElementById('status-label').style.color = 'var(--text-dim)';
-    alert('Connection failed: ' + e.message);
+    alert('Connection failed: ' + (e && e.message ? e.message : 'unable to reach room server'));
   }
 }
 
@@ -693,18 +781,26 @@ let focusedRoom = null;
 const hiddenRooms = new Set(JSON.parse(localStorage.getItem('blum-hidden-rooms') || '[]'));
 let fontSize = 13;
 
+function clearFocusedRoom() {
+  focusedRoom = null;
+  document.querySelectorAll('.panel.room').forEach(p => {
+    p.classList.remove('focused-panel');
+    const rname = p.querySelector('.panel-title')?.textContent;
+    if (rname && hiddenRooms.has(rname)) p.classList.add('hidden-panel');
+    else p.classList.remove('hidden-panel');
+  });
+  document.querySelectorAll('.panel.room .panel-btn').forEach(btn => {
+    if (btn.getAttribute('title') === 'Expand/focus this room' || btn.textContent === '⤡') {
+      btn.textContent = '⤢';
+    }
+  });
+}
+
 function toggleFocus(name, btn) {
   const panels = document.querySelectorAll('.panel.room');
   if (focusedRoom === name) {
     // Un-focus
-    focusedRoom = null;
-    panels.forEach(p => {
-      p.classList.remove('focused-panel');
-      const rname = p.querySelector('.panel-title')?.textContent;
-      if (rname && hiddenRooms.has(rname)) p.classList.add('hidden-panel');
-      else p.classList.remove('hidden-panel');
-    });
-    btn.textContent = '⤢';
+    clearFocusedRoom();
   } else {
     // Focus this panel
     focusedRoom = name;
@@ -796,6 +892,7 @@ function openHome(name) {
 
 // ── Focus a room from the directory sidebar ──
 function focusRoom(name) {
+  if (focusedRoom) clearFocusedRoom();
   // Unhide the room if hidden
   if (hiddenRooms.has(name)) {
     hiddenRooms.delete(name);
@@ -807,8 +904,6 @@ function focusRoom(name) {
   for (const p of panels) {
     const title = p.querySelector('.panel-title');
     if (title && title.textContent === name) {
-      const btn = p.querySelector('.panel-btn');
-      if (btn) toggleFocus(name, btn);
       // Scroll panel into view (handles rooms that exist but are off-screen)
       p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       // Also select this room in the compose bar
@@ -1011,6 +1106,141 @@ window.addEventListener('load', () => {
   if (savedUser) document.getElementById('user-name').value = savedUser;
   doConnect();
 });
+
+// ── Resurrect Feature ──
+let resurrectState = {
+  conversations: [],
+  selectedConvUuid: null,
+  selectedMessages: null,
+  selectedConvName: null,
+};
+
+async function openResurrectModal() {
+  document.getElementById('resurrect-overlay').classList.add('open');
+  document.getElementById('resurrect-list').innerHTML = '<div style="padding:8px;color:var(--text-dim);font-family:var(--mono);font-size:10px">Loading conversations...</div>';
+  document.getElementById('resurrect-preview').innerHTML = '<div class="resurrect-preview-empty">Select a conversation</div>';
+  try {
+    const data = await api('GET', '/api/archive/conversations');
+    resurrectState.conversations = Array.isArray(data) ? data : (data.conversations || []);
+    renderResurrectList();
+  } catch (e) {
+    document.getElementById('resurrect-list').innerHTML = `<div style="padding:8px;color:var(--red);font-family:var(--mono);font-size:10px">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function closeResurrectModal() {
+  document.getElementById('resurrect-overlay').classList.remove('open');
+  resurrectState.selectedConvUuid = null;
+  resurrectState.selectedMessages = null;
+}
+
+function renderResurrectList() {
+  const list = document.getElementById('resurrect-list');
+  list.innerHTML = '';
+  if (resurrectState.conversations.length === 0) {
+    list.innerHTML = '<div style="padding:8px;color:var(--text-dim);font-family:var(--mono);font-size:10px">No archived conversations</div>';
+    return;
+  }
+  for (const conv of resurrectState.conversations) {
+    const item = document.createElement('div');
+    item.className = 'resurrect-item';
+    if (conv.uuid === resurrectState.selectedConvUuid) item.classList.add('active');
+    item.innerHTML = `
+      <div class="resurrect-item-name">${esc(conv.name || 'Unnamed')}</div>
+      <div class="resurrect-item-meta">${conv.message_count || 0} messages · ${conv.created_at ? new Date(conv.created_at).toLocaleDateString() : 'unknown date'}</div>
+    `;
+    item.onclick = () => selectResurrectConversation(conv.uuid, conv.name);
+    list.appendChild(item);
+  }
+}
+
+async function selectResurrectConversation(uuid, name) {
+  resurrectState.selectedConvUuid = uuid;
+  resurrectState.selectedConvName = name;
+  renderResurrectList();
+  const preview = document.getElementById('resurrect-preview');
+  preview.innerHTML = '<div class="resurrect-preview-empty">Loading messages...</div>';
+  try {
+    const data = await api('GET', `/api/archive/conversation/${uuid}`);
+    resurrectState.selectedMessages = data.messages || [];
+    renderResurrectPreview();
+  } catch (e) {
+    preview.innerHTML = `<div class="resurrect-preview-empty" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderResurrectPreview() {
+  const preview = document.getElementById('resurrect-preview');
+  if (!resurrectState.selectedMessages || resurrectState.selectedMessages.length === 0) {
+    preview.innerHTML = '<div class="resurrect-preview-empty">No messages</div>';
+    return;
+  }
+  const msgContainer = document.createElement('div');
+  msgContainer.className = 'resurrect-messages';
+  for (let i = 0; i < resurrectState.selectedMessages.length; i++) {
+    const msg = resurrectState.selectedMessages[i];
+    const msgEl = document.createElement('div');
+    msgEl.className = 'resurrect-msg';
+    msgEl.innerHTML = `
+      <div class="resurrect-msg-meta">
+        <span class="resurrect-msg-from">${esc(msg.from || 'unknown')}</span>
+        <span>${ts(msg.ts || new Date().toISOString())}</span>
+      </div>
+      <div class="resurrect-msg-body">${esc(msg.body || '')}</div>
+      <button class="resurrect-spawn-btn" onclick="spawnFromMessage(${i})">Spawn from here</button>
+    `;
+    msgContainer.appendChild(msgEl);
+  }
+  preview.innerHTML = '';
+  preview.appendChild(msgContainer);
+}
+
+async function spawnFromMessage(messageIndex) {
+  const name = prompt('Name for new room:', 'Resurrected ' + (resurrectState.selectedConvName || 'conversation'));
+  if (!name) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Spawning...';
+  try {
+    const result = await api('POST', '/api/archive/spawn', {
+      uuid: resurrectState.selectedConvUuid,
+      messageIndex: messageIndex,
+      name: name,
+    });
+    if (result.success) {
+      closeResurrectModal();
+      const newServerUrl = `http://localhost:${result.port}`;
+      document.getElementById('server-url').value = newServerUrl;
+      server = newServerUrl;
+      localStorage.setItem('blum-room-server', newServerUrl);
+      doConnect();
+    } else {
+      alert('Failed to spawn: ' + (result.error || 'unknown error'));
+      btn.disabled = false;
+      btn.textContent = 'Spawn from here';
+    }
+  } catch (e) {
+    alert('Error spawning: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Spawn from here';
+  }
+}
+
+// ── Resurrect modal HTML injection ──
+document.body.insertAdjacentHTML('beforeend', `
+  <div class="resurrect-overlay" id="resurrect-overlay">
+    <div class="resurrect-modal">
+      <div class="resurrect-header">
+        <h2>Resurrect from Archive</h2>
+        <button class="resurrect-close" onclick="closeResurrectModal()">×</button>
+      </div>
+      <div class="resurrect-body">
+        <div class="resurrect-list" id="resurrect-list"></div>
+        <div class="resurrect-preview" id="resurrect-preview"></div>
+      </div>
+    </div>
+  </div>
+`);
 </script>
 </body>
 </html>

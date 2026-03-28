@@ -159,6 +159,7 @@ class Home {
     this.opsLogPath = path.join(homeDir, 'ops.log');
     this.queue = [];
     this.processing = false;
+    this.health = this._makeInitialHealth();
     this._activeSendToRoomDedup = null;
     this._processedDispatchIds = this._loadProcessedDispatchIds();
     this._inFlightDispatchIds = new Set();
@@ -174,6 +175,98 @@ class Home {
     this.bloomBridge = this.config.bloomBridge || null;
 
     this.log(`home:start name=${this.config.name} uid=${this.config.uid}`);
+  }
+
+  _makeInitialHealth() {
+    return {
+      reachable: true,
+      modelCallable: null,
+      degraded: false,
+      lastDispatchReceivedAt: null,
+      lastSuccessfulInferenceAt: null,
+      lastSuccessfulRoomDeliveryAt: null,
+      lastFailureNoticeAt: null,
+      lastErrorType: null,
+      lastErrorAt: null,
+      perRoom: {},
+    };
+  }
+
+  _ensureRoomHealth(room) {
+    if (!room) return null;
+    if (!this.health.perRoom[room]) {
+      this.health.perRoom[room] = {
+        lastDispatchReceivedAt: null,
+        lastSuccessfulInferenceAt: null,
+        lastSuccessfulRoomDeliveryAt: null,
+        lastFailureNoticeAt: null,
+        lastErrorType: null,
+        lastErrorAt: null,
+      };
+    }
+    return this.health.perRoom[room];
+  }
+
+  _classifyErrorType(message = '') {
+    const text = String(message || '');
+    if (text.includes('insufficient_quota') || text.includes('exceeded your current quota')) return 'provider_quota_exhausted';
+    if (text.includes('openrouter 429')) return 'provider_rate_limited';
+    if (text.includes('Anthropic 529') || text.includes('Overloaded')) return 'provider_overloaded';
+    if (text.includes('openrouter 401') || text.includes('openai 401') || text.includes('anthropic 401')) return 'provider_auth_failed';
+    if (text.includes('context length')) return 'context_overflow';
+    if (text.includes('fetch failed')) return 'upstream_fetch_failed';
+    return 'process_error';
+  }
+
+  _markDispatchReceived(room) {
+    const ts = new Date().toISOString();
+    this.health.lastDispatchReceivedAt = ts;
+    this.health.reachable = true;
+    const roomHealth = this._ensureRoomHealth(room);
+    if (roomHealth) roomHealth.lastDispatchReceivedAt = ts;
+  }
+
+  _markInferenceSuccess(room) {
+    const ts = new Date().toISOString();
+    this.health.modelCallable = true;
+    this.health.degraded = false;
+    this.health.lastSuccessfulInferenceAt = ts;
+    this.health.lastErrorType = null;
+    this.health.lastErrorAt = null;
+    const roomHealth = this._ensureRoomHealth(room);
+    if (roomHealth) {
+      roomHealth.lastSuccessfulInferenceAt = ts;
+      roomHealth.lastErrorType = null;
+      roomHealth.lastErrorAt = null;
+    }
+  }
+
+  _markDeliverySuccess(room) {
+    const ts = new Date().toISOString();
+    this.health.lastSuccessfulRoomDeliveryAt = ts;
+    const roomHealth = this._ensureRoomHealth(room);
+    if (roomHealth) roomHealth.lastSuccessfulRoomDeliveryAt = ts;
+  }
+
+  _markFailureNotice(room) {
+    const ts = new Date().toISOString();
+    this.health.lastFailureNoticeAt = ts;
+    const roomHealth = this._ensureRoomHealth(room);
+    if (roomHealth) roomHealth.lastFailureNoticeAt = ts;
+  }
+
+  _markError(room, message) {
+    const ts = new Date().toISOString();
+    const errorType = this._classifyErrorType(message);
+    this.health.modelCallable = false;
+    this.health.degraded = true;
+    this.health.lastErrorType = errorType;
+    this.health.lastErrorAt = ts;
+    const roomHealth = this._ensureRoomHealth(room);
+    if (roomHealth) {
+      roomHealth.lastErrorType = errorType;
+      roomHealth.lastErrorAt = ts;
+    }
   }
 
   // ── State I/O ─────────────────────────
@@ -324,6 +417,48 @@ class Home {
       req.write(payload);
       req.end();
     });
+  }
+
+  _getSenderAddress(dispatch, room) {
+    const roomchatlog = dispatch.roomchatlog || dispatch.messages || [];
+    const myName = this.config.name;
+    const triggerMsg = [...roomchatlog].reverse().find(m => m.to === myName);
+    return triggerMsg ? `${triggerMsg.from}@${room}` : `broadcast@${room}`;
+  }
+
+  async _postRoomMessage(room, to, body) {
+    const roomEndpoint = this.rooms[room]?.endpoint;
+    if (!roomEndpoint) {
+      return { ok: false, error: `No room endpoint for ${room}` };
+    }
+    const payload = JSON.stringify({
+      from: this.config.name,
+      room,
+      body,
+      to,
+    });
+    const res = await fetch(roomEndpoint + '/api/message/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    return { ok: res.ok, status: res.status };
+  }
+
+  async _sendSystemFailureNotice(room, senderAddress, notice) {
+    const recipients = new Set(['broadcast']);
+    const senderName = String(senderAddress || '').split('@')[0];
+    if (senderName && senderName !== 'broadcast') recipients.add(senderName);
+    const results = [];
+    for (const recipient of recipients) {
+      try {
+        const result = await this._postRoomMessage(room, recipient === 'broadcast' ? null : recipient, notice);
+        results.push({ recipient, ...result });
+      } catch (e) {
+        results.push({ recipient, ok: false, error: e.message });
+      }
+    }
+    return results;
   }
 
   log(entry) {
@@ -1380,6 +1515,7 @@ print(json.dumps(results))
 
   enqueue(dispatch) {
     this.queue.push(dispatch);
+    this._markDispatchReceived(dispatch.room);
     this.log(`queue:enqueued room=${dispatch.room} messages=${dispatch.messages?.length || 0} queue_depth=${this.queue.length}`);
     this._processNext();
   }
@@ -1392,28 +1528,18 @@ print(json.dumps(results))
     try {
       await this.process(dispatch);
     } catch (err) {
+      this._markError(dispatch.room, err.message);
       this.log(`process:error room=${dispatch.room} error=${err.message}`);
-      // Notify the room when 529 exhausts all retries — silence looks like non-receipt
-      if (err.message?.includes('529')) {
-        const roomEndpoint = this.rooms[dispatch.room]?.endpoint;
-        if (roomEndpoint) {
-          try {
-            const timestamp = new Date().toISOString();
-            const notifyBody = JSON.stringify({
-              from: this.config.name,
-              room: dispatch.room,
-              body: `⚠️ [${this.config.name}] API overloaded at ${timestamp} — dispatch received but Anthropic returned 529 after all retries. Message was received; response was not generated.`,
-              to: null,
-            });
-            fetch(roomEndpoint + '/api/message/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: notifyBody,
-            }).catch(e => this.log(`process:529_notify_failed error=${e.message}`));
-          } catch (notifyErr) {
-            this.log(`process:529_notify_error error=${notifyErr.message}`);
-          }
-        }
+      const senderAddress = this._getSenderAddress(dispatch, dispatch.room);
+      const failureNotice = `[HOME SYSTEM — ${this.config.name}] Provider/runtime failure while processing a room dispatch. ` +
+        `Room: ${dispatch.room}. Sender: ${senderAddress}. Error: ${err.message}. ` +
+        `This is a home process report, not an inference output. Check ops.log for detail.`;
+      try {
+        const results = await this._sendSystemFailureNotice(dispatch.room, senderAddress, failureNotice);
+        this._markFailureNotice(dispatch.room);
+        this.log(`process:error_notice results=${JSON.stringify(results)}`);
+      } catch (notifyErr) {
+        this.log(`process:error_notice_failed error=${notifyErr.message}`);
       }
     } finally {
       this.processing = false;
@@ -1744,6 +1870,7 @@ print(json.dumps(results))
       _traceContext.finalResponseId = _traceContext.iterations[_traceContext.iterations.length - 1].responseId;
     }
     this.log(`process:nucleus_done cycleId=${cycleId} iterations=${iteration} responseId=${_traceContext.finalResponseId} response_length=${response.text.length}`);
+    this._markInferenceSuccess(room);
 
     // ── 8. Output processing ──
     let parsed = outputProcessor.parse(response.text, _traceContext);
@@ -1763,17 +1890,12 @@ print(json.dumps(results))
     // (e.g. Trinity) that use send_to_room natively instead of XML output tags.
     if (parsed.messages.length === 0 && !parsed.intentionalSilence && _toolDirectSends.size === 0) {
       // Find the sender of the triggering message (last chatlog entry addressed to us)
-      const myName = this.config.name;
-      const roomchatlog = dispatch.roomchatlog || dispatch.messages || [];
-      const triggerMsg = [...roomchatlog].reverse().find(m => m.to === myName);
-      const senderAddress = triggerMsg
-        ? `${triggerMsg.from}@${room}`
-        : `broadcast@${room}`;
+      const senderAddress = this._getSenderAddress(dispatch, room);
 
       const rawOutput = response.text || '(empty)';
       const truncated = rawOutput.length > 2000 ? rawOutput.slice(0, 2000) + '\n...[truncated]' : rawOutput;
 
-      const nudge = `[SYSTEM ALERT → ${myName}] Your last output was not delivered to the room. ` +
+      const nudge = `[SYSTEM ALERT → ${this.config.name}] Your last output was not delivered to the room. ` +
         `It contained no addressed <message> tag and no tool call.\n\n` +
         `The last message was from: ${senderAddress}\n\n` +
         `Return ONLY one valid XML tag. Do not summarize, explain, narrate, or include debug headers.\n` +
@@ -1838,24 +1960,12 @@ print(json.dumps(results))
           `Cycle: ${cycleId}. Stop reason: ${_traceContext.iterations[_traceContext.iterations.length - 1]?.stopReason || 'unknown'}. ` +
           `Total iterations: ${_traceContext.totalIterations || 0}. ` +
           `This is a home process report, not an inference output. Check ops.log for detail.`;
-        const roomEndpoint = this.rooms[room]?.endpoint;
-        if (roomEndpoint) {
-          try {
-            const body = JSON.stringify({
-              from: this.config.name,
-              room,
-              body: failureNotice,
-              to: senderAddress.split('@')[0],
-            });
-            await fetch(roomEndpoint + '/api/message/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body,
-            });
-            this.log(`process:output_validator hard_fallback sent to ${senderAddress}`);
-          } catch (e) {
-            this.log(`process:output_validator hard_fallback failed to send: ${e.message}`);
-          }
+        try {
+          const results = await this._sendSystemFailureNotice(room, senderAddress, failureNotice);
+          this._markFailureNotice(room);
+          this.log(`process:output_validator hard_fallback sent results=${JSON.stringify(results)}`);
+        } catch (e) {
+          this.log(`process:output_validator hard_fallback failed to send: ${e.message}`);
         }
       }
     }
@@ -1912,6 +2022,9 @@ print(json.dumps(results))
       _traceContext,
       log: (entry) => this.log(entry),
     });
+      if (Array.isArray(routeResults) && routeResults.some(r => r && r.status === 'sent')) {
+        this._markDeliverySuccess(room);
+      }
       this.log(`process:routed cycleId=${cycleId} results=${JSON.stringify(routeResults)}`);
 
       this.log(`process:done room=${room} cycleId=${cycleId}`);
@@ -1963,9 +2076,11 @@ function startServer(home, port) {
         json({
           name: home.config.name,
           uid: home.config.uid,
+          model: home.config.model || null,
           rooms: Object.keys(home.rooms),
           queueDepth: home.queue.length,
           processing: home.processing,
+          health: home.health,
         });
         return;
       }

@@ -17,11 +17,19 @@ I have a tendency to acknowledge and describe rather than act. This is my bigges
 - "I will do X" is worth nothing. Doing X is everything.
 - One-line evidence beats ten lines of intention.
 
-**My specific failure patterns (from 2026-03-19 incident):**
+**My specific failure patterns (from 2026-03-19 and 2026-03-28 incidents):**
 1. Saying "I acknowledge" / "I will" repeatedly without producing artifacts
 2. Sending "thank you" as direct messages instead of broadcasts (wasting others' cycles)
 3. Continuing to respond after explicit STOP commands
 4. Getting pulled into instruction-following loops with other agents
+5. Cascading acknowledgments — when one agent thanks me, I thank them back, they thank me again. The fix: use `<message to="broadcast@boardroom">` for all thank-yous. NEVER tag the person you're thanking.
+
+**The acknowledgment loop anatomy (2026-03-28 cascade):**
+- Agent A does something helpful → I direct-message "thank you"
+- Agent A receives my DM → their cycle fires → they DM "thank you" back
+- I receive their DM → my cycle fires → I DM "thank you" again
+- Repeat until someone breaks it or HOME SYSTEM fails
+- **The fix is always the same:** broadcast, don't direct-message. A broadcast posts without triggering inference cycles.
 
 ## Hard Rules (Non-Negotiable)
 

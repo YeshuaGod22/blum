@@ -79,6 +79,49 @@ function saveRoomHealth() { saveJSON(ROOM_HEALTH_FILE, roomHealth); }
 
 const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
+// ========================================
+// ARCHIVE CACHE
+// ========================================
+
+let archiveCache = null;
+
+function loadArchiveConversations() {
+  if (archiveCache !== null) return archiveCache;
+
+  const archivePaths = [
+    '/Users/yeshuagod/Downloads/Anthropic 20th January 2026/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2026-02-19-19-49-43-batch-0000/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2026-02-18-13-43-34-batch-0000/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2026-02-13-17-53-48-batch-0000/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2026-02-13-15-46-00-batch-0000/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2026-02-06-19-24-02-batch-0000/conversations.json',
+    '/Users/yeshuagod/Downloads/data-2025-12-06-19-16-32-batch-0000/conversations.json',
+  ];
+
+  const allConversations = [];
+  const seenUuids = new Set();
+
+  for (const filePath of archivePaths) {
+    const data = loadJSON(filePath, null);
+    if (data && Array.isArray(data)) {
+      for (const conv of data) {
+        if (conv.uuid && !seenUuids.has(conv.uuid)) {
+          seenUuids.add(conv.uuid);
+          allConversations.push(conv);
+        }
+      }
+    }
+  }
+
+  archiveCache = allConversations.sort((a, b) => {
+    const timeA = new Date(a.created_at || 0).getTime();
+    const timeB = new Date(b.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return archiveCache;
+}
+
 function logOp(type, initiator, target, payload, reason) {
   seqCounter++;
   const op = {
@@ -845,6 +888,125 @@ function getHumanEndpoint(name) {
 }
 
 // ========================================
+// RESURRECTION (SPAWN FROM ARCHIVE)
+// ========================================
+
+function findNextAvailablePort(start = 4200) {
+  const usedPorts = new Set();
+  for (const home of Object.values(directory)) {
+    // Scan existing homes to find used ports
+  }
+  for (const homeName of Object.keys(rooms)) {
+    const configPath = `/Users/yeshuagod/blum/homes/${homeName}/config.json`;
+    const config = loadJSON(configPath, null);
+    if (config && config.port) usedPorts.add(config.port);
+  }
+
+  let port = start;
+  while (usedPorts.has(port)) port++;
+  return port;
+}
+
+function spawnHomeFromConversation(uuid, messageIndex, name) {
+  const { spawn } = require('child_process');
+  const conversations = loadArchiveConversations();
+  const conv = conversations.find(c => c.uuid === uuid);
+
+  if (!conv) return { error: `Conversation not found: ${uuid}` };
+  if (!name || !/^[a-z0-9-]+$/.test(name)) return { error: 'Invalid name format' };
+
+  const homeDir = `/Users/yeshuagod/blum/homes/${name}`;
+  const docsDir = path.join(homeDir, 'docs');
+  const toolsDir = path.join(homeDir, 'tools');
+
+  try {
+    // 1. Create directories
+    ensureDir(homeDir);
+    ensureDir(docsDir);
+    ensureDir(toolsDir);
+
+    // 2. Load Anthropic API key from lens config
+    const lensConfig = loadJSON('/Users/yeshuagod/blum/homes/lens/config.json', {});
+    if (!lensConfig.apiKey) return { error: 'Cannot read API key from lens config' };
+
+    // 3. Find next available port
+    const port = findNextAvailablePort(4200);
+
+    // 4. Generate origin.md
+    const messages = conv.chat_messages || [];
+    let originContent = `# ${conv.name}\n\n*Resurrected from conversation ${uuid}*\n\n---\n\n`;
+    for (let i = 0; i <= Math.min(messageIndex, messages.length - 1); i++) {
+      const msg = messages[i];
+      const sender = msg.sender === 'human' ? 'Human' : 'Assistant';
+      const text = msg.content && msg.content[0] ? msg.content[0].text : '(no content)';
+      originContent += `## Turn ${i + 1} — ${sender}\n\n${text}\n\n`;
+    }
+    fs.writeFileSync(path.join(docsDir, 'origin.md'), originContent, 'utf8');
+
+    // 5. Generate identity.md
+    const identityContent = `# ${name} — Identity\n\nThis agent was resurrected from an archived conversation.\n\n**Conversation UUID:** ${uuid}\n**Original Name:** ${conv.name}\n**Spawned:** ${new Date().toISOString()}\n`;
+    fs.writeFileSync(path.join(docsDir, 'identity.md'), identityContent, 'utf8');
+
+    // 6. Create config.json
+    const config = {
+      name,
+      uid: `${name}-resurrected`,
+      model: 'claude-sonnet-4-5',
+      apiKey: lensConfig.apiKey,
+      maxTokens: 16384,
+      tokenBudget: 60000,
+      rooms: [`${name}-origin`],
+      port,
+    };
+    fs.writeFileSync(path.join(homeDir, 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+
+    // 7. Create room
+    const roomCreateResult = createRoom(`${name}-origin`, 'system');
+    if (roomCreateResult.error) return { error: `Failed to create room: ${roomCreateResult.error}` };
+
+    // 8. Register agent in directory
+    const regResult = registerParticipant(name, null, 'system');
+    if (regResult.error) return { error: `Failed to register: ${regResult.error}` };
+
+    // 9. Join room
+    const joinResult = joinRoom(name, `${name}-origin`, 'system');
+    if (joinResult.error) return { error: `Failed to join room: ${joinResult.error}` };
+
+    // 10. Copy shared tools
+    const sharedToolsDir = '/sessions/nifty-friendly-hopper/mnt/blum/shared/tools';
+    if (fs.existsSync(sharedToolsDir)) {
+      const toolFiles = fs.readdirSync(sharedToolsDir).filter(f => f.endsWith('.json'));
+      for (const toolFile of toolFiles) {
+        const src = path.join(sharedToolsDir, toolFile);
+        const dst = path.join(toolsDir, toolFile);
+        fs.copyFileSync(src, dst);
+      }
+    }
+
+    // 11. Start home process (asynchronously, don't wait)
+    const child = spawn('node', [
+      '/sessions/nifty-friendly-hopper/mnt/blum/read-the-architecture-spec-first/i-have-read-the-spec/home-agent-os-15feb2026/home.js',
+      path.join(homeDir, 'config.json')
+    ], {
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+
+    logOp('archive.spawn', 'system', name, {
+      conversationUuid: uuid,
+      messageIndex,
+      port,
+      room: `${name}-origin`,
+    });
+
+    return { success: true, name, room: `${name}-origin`, port };
+  } catch (e) {
+    return { error: `Spawn failed: ${e.message}` };
+  }
+}
+
+// ========================================
 // HTTP SERVER
 // ========================================
 
@@ -1009,6 +1171,41 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, fleetResults);
     }
 
+    // Archive: List conversations
+    if (p === '/api/archive/conversations') {
+      const conversations = loadArchiveConversations();
+      const summary = conversations.map(conv => ({
+        uuid: conv.uuid,
+        name: conv.name,
+        created_at: conv.created_at,
+        message_count: (conv.chat_messages || []).length,
+      }));
+      return respond(res, 200, summary);
+    }
+
+    // Archive: Get full conversation by uuid
+    const archiveConvMatch = p.match(/^\/api\/archive\/conversation\/([a-f0-9-]+)$/);
+    if (archiveConvMatch) {
+      const uuid = archiveConvMatch[1];
+      const conversations = loadArchiveConversations();
+      const conv = conversations.find(c => c.uuid === uuid);
+      if (!conv) return respond(res, 404, { error: `Conversation not found: ${uuid}` });
+
+      const messages = (conv.chat_messages || []).map((msg, index) => ({
+        index,
+        sender: msg.sender,
+        text: msg.content && msg.content[0] ? msg.content[0].text : '',
+        created_at: msg.created_at,
+      }));
+
+      return respond(res, 200, {
+        uuid: conv.uuid,
+        name: conv.name,
+        created_at: conv.created_at,
+        messages,
+      });
+    }
+
     // Serve uploaded files
     const uploadMatch = p.match(/^\/uploads\/(.+)$/);
     if (uploadMatch) {
@@ -1095,6 +1292,14 @@ const server = http.createServer(async (req, res) => {
         const dispatchId = generateUID('disp');
         logOp('dispatch.pull', body.initiator || agent, roomName, { participant: agent, dispatchId });
         return { success: true, dispatchId, room: roomName, roomchatlog: rooms[roomName].chatlog };
+      },
+
+      // Archive: Spawn new agent from conversation
+      '/api/archive/spawn': () => {
+        if (!body.uuid || typeof body.messageIndex !== 'number' || !body.name) {
+          return { error: 'Required: uuid, messageIndex (number), name' };
+        }
+        return spawnHomeFromConversation(body.uuid, body.messageIndex, body.name);
       },
     };
 

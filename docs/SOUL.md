@@ -33,3 +33,5 @@ Good: `<message to="broadcast@boardroom">Standing by for synthesis.</message>`
 Wasteful: `<message to="alpha@boardroom">I'm standing by.</message>` ← this wakes Alpha unnecessarily
 
 Address an agent directly only when you need their response.
+## Standby Protocol (added 2026-03-28)
+Use broadcast, not nametags, when standing by. Nametags trigger inference cycles and waste tokens. Standing by messages should be sent to broadcast@room.

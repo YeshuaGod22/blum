@@ -52,6 +52,98 @@ function makeBoardroomDiagnosis(kind, label, detail, severity = 'info', ts = nul
   return { kind, label, detail, severity, ts };
 }
 
+function makeHealthDiagnosis(kind, label, detail, severity = 'info', ts = null) {
+  return { kind, label, detail, severity, ts };
+}
+
+function titleCaseError(code) {
+  return String(code || '')
+    .replace(/[_:]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function diagnoseServiceability(liveStatus, running) {
+  const health = liveStatus?.health;
+  if (!running) {
+    return makeHealthDiagnosis('offline', 'Offline', 'No live home endpoint is answering right now.', 'error', null);
+  }
+  if (!health) {
+    return makeHealthDiagnosis('unknown', 'Unknown', 'Live home status does not expose structured health yet.', 'warn', null);
+  }
+  if (health.lastErrorType) {
+    return makeHealthDiagnosis(
+      health.lastErrorType,
+      titleCaseError(health.lastErrorType),
+      'Most recent cycle ended with an explicit runtime or provider failure.',
+      'error',
+      health.lastErrorAt || null
+    );
+  }
+  if (health.lastFailureNoticeAt) {
+    return makeHealthDiagnosis(
+      'failure_notice',
+      'Failure Notice Sent',
+      'The home is up, but its last visible result was a system failure notice rather than a normal reply.',
+      'warn',
+      health.lastFailureNoticeAt
+    );
+  }
+  if (health.lastSuccessfulRoomDeliveryAt || health.lastSuccessfulInferenceAt) {
+    return makeHealthDiagnosis(
+      'healthy',
+      'Serviceable',
+      'The home has recent successful inference/delivery activity.',
+      'ok',
+      health.lastSuccessfulRoomDeliveryAt || health.lastSuccessfulInferenceAt
+    );
+  }
+  return makeHealthDiagnosis('idle', 'Idle', 'The home is reachable, but there is no recent success/failure signal yet.', 'warn', null);
+}
+
+function diagnoseRoomState(roomName, agentName, roomHealthEntry) {
+  if (!roomHealthEntry) {
+    return makeHealthDiagnosis('no_room_signal', 'No Room Signal', `No recent ${roomName} dispatch or delivery signal recorded.`, 'warn', null);
+  }
+  if (roomHealthEntry.lastDispatchErrorType) {
+    return makeHealthDiagnosis(
+      roomHealthEntry.lastDispatchErrorType,
+      titleCaseError(roomHealthEntry.lastDispatchErrorType),
+      `Latest ${roomName} dispatch for this agent failed before or during delivery to the home.`,
+      'error',
+      roomHealthEntry.lastDispatchErrorAt || roomHealthEntry.lastDispatchReceivedAt || null
+    );
+  }
+  if (roomHealthEntry.lastSuppressedReason && (!roomHealthEntry.lastVisibleMessageAt || Date.parse(roomHealthEntry.lastSuppressedAt || 0) >= Date.parse(roomHealthEntry.lastVisibleMessageAt || 0))) {
+    return makeHealthDiagnosis(
+      roomHealthEntry.lastSuppressedReason,
+      titleCaseError(roomHealthEntry.lastSuppressedReason),
+      `Latest ${roomName} message was logged but forwarding was intentionally suppressed.`,
+      'warn',
+      roomHealthEntry.lastSuppressedAt || null
+    );
+  }
+  if (roomHealthEntry.lastVisibleMessageAt) {
+    return makeHealthDiagnosis(
+      'visible_reply',
+      'Visible Reply',
+      `A recent message from this agent is visible in ${roomName}.`,
+      'ok',
+      roomHealthEntry.lastVisibleMessageAt
+    );
+  }
+  if (roomHealthEntry.lastDispatchReceivedAt) {
+    return makeHealthDiagnosis(
+      'awaiting_reply',
+      'Awaiting Reply',
+      `A ${roomName} dispatch reached this agent, but no room-visible reply is recorded yet.`,
+      'warn',
+      roomHealthEntry.lastDispatchReceivedAt
+    );
+  }
+  return makeHealthDiagnosis('no_room_signal', 'No Room Signal', `No recent ${roomName} signal recorded.`, 'warn', null);
+}
+
 function analyseBoardroomStatus(log = [], running = false) {
   const lines = [...log].reverse();
 
@@ -66,6 +158,9 @@ function analyseBoardroomStatus(log = [], running = false) {
     }
 
     if (line.includes('process:error room=boardroom error=')) {
+      if (line.includes('insufficient_quota') || line.includes('exceeded your current quota')) {
+        return makeBoardroomDiagnosis('provider_quota_exhausted', 'Provider quota exhausted', 'The home process is up, but the model account has no remaining credits/quota, so replies cannot be generated.', 'error', ts);
+      }
       if (line.includes('openrouter 429')) {
         return makeBoardroomDiagnosis('provider_rate_limited', 'Provider rate limit', 'Model provider is rejecting boardroom calls with 429 rate limits.', 'error', ts);
       }
@@ -116,6 +211,10 @@ async function probeHomes() {
     } catch {}
   }));
   return found;
+}
+
+function hasLiveProc(info) {
+  return !!(info && info.proc && info.proc.exitCode === null && !info.proc.killed);
 }
 
 async function probeRoomServer() {
@@ -215,18 +314,42 @@ function stopHome(name) {
 }
 
 async function registerEndpoints() {
-  // Tell room server where each running home lives
+  // Tell room server where each running home lives, but only from verified
+  // live /status identity, not remembered launcher port state.
   const results = [];
-  for (const [name, info] of Object.entries(homes)) {
-    if (!info.proc) continue;
+  const probedHomes = await probeHomes();
+  for (const discovered of discoverHomes()) {
+    const name = discovered.name;
+    const info = homes[name];
+    const live = probedHomes[name];
+    if (!live) {
+      try {
+        const body = JSON.stringify({ name, endpoint: null });
+        const res = await fetch(`http://localhost:${ROOM_SERVER_PORT}/api/directory/update-endpoint`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        results.push({
+          name,
+          ok: false,
+          cleared: res.ok,
+          error: 'No live /status match found; stale endpoint cleared',
+        });
+      } catch (e) {
+        results.push({ name, ok: false, error: `No live /status match found; failed to clear stale endpoint: ${e.message}` });
+      }
+      continue;
+    }
     try {
-      const body = JSON.stringify({ name, endpoint: `http://localhost:${info.port}` });
+      if (info) info.port = live.port;
+      const body = JSON.stringify({ name, endpoint: `http://localhost:${live.port}` });
       const res = await fetch(`http://localhost:${ROOM_SERVER_PORT}/api/directory/update-endpoint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
       });
-      results.push({ name, ok: res.ok });
+      results.push({ name, ok: res.ok, port: live.port });
     } catch (e) {
       results.push({ name, ok: false, error: e.message });
     }
@@ -239,23 +362,37 @@ async function getStatus() {
   const homeStatus = {};
   const probedHomes = await probeHomes();
   const roomServerRunning = roomServerProc ? true : await probeRoomServer();
+  let roomHealth = {};
+  if (roomServerRunning) {
+    try {
+      const res = await fetch(`http://localhost:${ROOM_SERVER_PORT}/api/room-health`);
+      if (res.ok) roomHealth = await res.json();
+    } catch {}
+  }
 
   for (const h of discovered) {
-    const running = homes[h.name]?.proc ? true : !!probedHomes[h.name];
-    const port = homes[h.name]?.port || probedHomes[h.name]?.port || h.port || null;
+    const launcherInfo = homes[h.name];
+    const running = hasLiveProc(launcherInfo) || !!probedHomes[h.name];
+    const port = probedHomes[h.name]?.port || launcherInfo?.port || h.port || null;
     const liveStatus = probedHomes[h.name]?.liveStatus || null;
+    const boardroomHealth = roomHealth.boardroom?.[h.name] || null;
+    const cochairsHealth = roomHealth.cochairs?.[h.name] || null;
     homeStatus[h.name] = {
       name: h.name,
       model: h.model,
       homeDir: h.homeDir,
       hasApiKey: h.hasApiKey,
       running,
-      pid: running ? homes[h.name].proc.pid : null,
+      pid: hasLiveProc(launcherInfo) ? launcherInfo.proc.pid : null,
       port,
       queueDepth: liveStatus?.queueDepth ?? null,
       processing: liveStatus?.processing ?? null,
       rooms: liveStatus?.rooms ?? null,
-      boardroom: analyseBoardroomStatus(homes[h.name]?.log || [], running),
+      health: liveStatus?.health ?? null,
+      serviceability: diagnoseServiceability(liveStatus, running),
+      boardroom: analyseBoardroomStatus(launcherInfo?.log || [], running),
+      boardroomRoomState: diagnoseRoomState('boardroom', h.name, boardroomHealth),
+      cochairsRoomState: diagnoseRoomState('cochairs', h.name, cochairsHealth),
     };
   }
 
@@ -266,6 +403,7 @@ async function getStatus() {
       port: ROOM_SERVER_PORT,
     },
     homes: homeStatus,
+    roomHealth,
     homesDir: HOMES_DIR,
     launcherPort: LAUNCHER_PORT,
   };
@@ -521,6 +659,14 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     display: grid;
     gap: 8px;
   }
+  .diag-stack {
+    display: grid;
+    gap: 12px;
+  }
+  .diag-block {
+    display: grid;
+    gap: 8px;
+  }
   .diag-head {
     display: flex;
     align-items: center;
@@ -705,8 +851,10 @@ function renderHomes(homesMap) {
   const names = Object.keys(homesMap).sort();
   grid.innerHTML = names.map(name => {
     const h = homesMap[name];
-    const diag = h.boardroom || { label: 'Unknown', detail: 'No boardroom diagnosis available.', severity: 'warn' };
-    const cardClass = 'home-card boardroom-' + severityClass(diag.severity);
+    const service = h.serviceability || { label: 'Unknown', detail: 'No serviceability diagnosis available.', severity: 'warn' };
+    const boardroom = h.boardroomRoomState || h.boardroom || { label: 'Unknown', detail: 'No boardroom diagnosis available.', severity: 'warn' };
+    const cochairs = h.cochairsRoomState || { label: 'Unknown', detail: 'No cochairs diagnosis available.', severity: 'warn' };
+    const cardClass = 'home-card boardroom-' + severityClass(service.severity);
     return \`
       <div class="\${cardClass}">
         <div class="service-header">
@@ -726,15 +874,35 @@ function renderHomes(homesMap) {
           <span>\${h.hasApiKey ? 'Key: yes' : 'Key: none'}</span>
         </div>
         <div class="diag-row">
-          <div class="diag-head">
-            <div class="diag-label">Boardroom Reply State</div>
-            <div class="diag-badge \${severityClass(diag.severity)}">\${diag.label}</div>
+          <div class="diag-stack">
+            <div class="diag-block">
+              <div class="diag-head">
+                <div class="diag-label">Serviceability</div>
+                <div class="diag-badge \${severityClass(service.severity)}">\${service.label}</div>
+              </div>
+              <div class="diag-detail">\${service.detail}</div>
+            </div>
+            <div class="diag-block">
+              <div class="diag-head">
+                <div class="diag-label">Boardroom</div>
+                <div class="diag-badge \${severityClass(boardroom.severity)}">\${boardroom.label}</div>
+              </div>
+              <div class="diag-detail">\${boardroom.detail}</div>
+            </div>
+            <div class="diag-block">
+              <div class="diag-head">
+                <div class="diag-label">Cochairs</div>
+                <div class="diag-badge \${severityClass(cochairs.severity)}">\${cochairs.label}</div>
+              </div>
+              <div class="diag-detail">\${cochairs.detail}</div>
+            </div>
           </div>
-          <div class="diag-detail">\${diag.detail}</div>
           <div class="diag-meta">
             <span>Queue: \${h.queueDepth == null ? '—' : h.queueDepth}</span>
             <span>\${h.processing === true ? 'Processing now' : (h.processing === false ? 'Idle' : 'Processing: —')}</span>
-            <span>\${relativeTs(diag.ts)}</span>
+            <span>Service: \${relativeTs(service.ts)}</span>
+            <span>Boardroom: \${relativeTs(boardroom.ts)}</span>
+            <span>Cochairs: \${relativeTs(cochairs.ts)}</span>
           </div>
         </div>
       </div>\`;
