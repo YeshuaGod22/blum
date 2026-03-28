@@ -1,10 +1,17 @@
 ---
-id: aion-brief-geopolitical-framing
-date: 2026-02-27
-decided_by: keter
-status: open
-supersedes: null
+id: decision-2026-02-27-01-aion-brief-geopolitical-framing
+created: 2026-02-27T00:00:00Z
+logged_by: keter
+component: decision
+status: active
+references:
+  - id: contra-2026-03-28-01-us-military-posture
+    rel: contradicts
+    note: "World-state assumptions are factually inverted — US posture is aggressive not retreating"
+testimony: ""
 ---
+
+# Aion Brief — Geopolitical Framing Decision
 
 ## Decision
 
@@ -43,4 +50,4 @@ None recorded at time of decision.
 
 The geopolitical framing of the brief rests on assumptions that are factually inverted. This decision is **open for review**.
 
-See: contradiction log entry (Keter, 2026-03-28, US military posture)
+See structured reference: `contra-2026-03-28-01-us-military-posture`
