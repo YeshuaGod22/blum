@@ -26,6 +26,7 @@ qmd search "your question" ~/blum/shared/decision-log/
 - "Agent X said Y, but I remember Z"
 - "These two claims conflict"
 - "Different agents are giving me different answers"
+- "Two docs disagree on what was decided"
 
 **Query:**
 ```bash
