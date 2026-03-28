@@ -16,6 +16,7 @@ const crypto = require('crypto');
 
 const PORT = 3141;
 const DATA_DIR = path.join(__dirname, 'data');
+const HOME_PORT_RANGE = { start: 4100, end: 4199 };
 
 // ========================================
 // PERSISTENCE HELPERS
@@ -59,6 +60,8 @@ ensureDir(DATA_DIR);
 const ROOMS_FILE = path.join(DATA_DIR, 'rooms.json');
 const DIRECTORY_FILE = path.join(DATA_DIR, 'directory.json');
 const OPS_FILE = path.join(DATA_DIR, 'operations.jsonl');
+const HUMAN_INBOX_FILE = path.join(DATA_DIR, 'human-inbox.jsonl');
+const ROOM_HEALTH_FILE = path.join(DATA_DIR, 'room-health.json');
 
 // rooms: { name: { name, uid, participants: [name, ...], chatlog: [], blocklist: [], pinned: [], archived: false } }
 let rooms = loadJSON(ROOMS_FILE, {});
@@ -66,11 +69,13 @@ let rooms = loadJSON(ROOMS_FILE, {});
 // directory: { name: { name, uid, endpoint, color } }
 // endpoint is where to POST dispatches — e.g. http://localhost:3142
 let directory = loadJSON(DIRECTORY_FILE, {});
+let roomHealth = loadJSON(ROOM_HEALTH_FILE, {});
 
 let seqCounter = readLines(OPS_FILE).length;
 
 function saveRooms() { saveJSON(ROOMS_FILE, rooms); }
 function saveDirectory() { saveJSON(DIRECTORY_FILE, directory); }
+function saveRoomHealth() { saveJSON(ROOM_HEALTH_FILE, roomHealth); }
 
 const { generateUID } = require('../shared-uid-generator/generate-uid.js');
 
@@ -84,6 +89,63 @@ function logOp(type, initiator, target, payload, reason) {
   };
   appendLine(OPS_FILE, op);
   return op;
+}
+
+function ensureRoomHealth(roomName, participantName) {
+  if (!roomHealth[roomName]) roomHealth[roomName] = {};
+  if (!roomHealth[roomName][participantName]) {
+    roomHealth[roomName][participantName] = {
+      participant: participantName,
+      lastDispatchReceivedAt: null,
+      lastDispatchMsgId: null,
+      lastDispatchErrorType: null,
+      lastDispatchErrorAt: null,
+      lastVisibleMessageAt: null,
+      lastVisibleMessageId: null,
+      lastSuppressedAt: null,
+      lastSuppressedReason: null,
+    };
+  }
+  return roomHealth[roomName][participantName];
+}
+
+function markRoomDispatchReceived(roomName, participantName, msgId) {
+  const entry = ensureRoomHealth(roomName, participantName);
+  entry.lastDispatchReceivedAt = new Date().toISOString();
+  entry.lastDispatchMsgId = msgId || null;
+  saveRoomHealth();
+}
+
+function markRoomDispatchError(roomName, participantName, errorType, msgId) {
+  const entry = ensureRoomHealth(roomName, participantName);
+  entry.lastDispatchReceivedAt = new Date().toISOString();
+  entry.lastDispatchMsgId = msgId || null;
+  entry.lastDispatchErrorType = errorType || null;
+  entry.lastDispatchErrorAt = new Date().toISOString();
+  saveRoomHealth();
+}
+
+function clearRoomDispatchError(roomName, participantName, msgId) {
+  const entry = ensureRoomHealth(roomName, participantName);
+  entry.lastDispatchReceivedAt = new Date().toISOString();
+  entry.lastDispatchMsgId = msgId || null;
+  entry.lastDispatchErrorType = null;
+  entry.lastDispatchErrorAt = null;
+  saveRoomHealth();
+}
+
+function markRoomVisibleMessage(roomName, participantName, msgId) {
+  const entry = ensureRoomHealth(roomName, participantName);
+  entry.lastVisibleMessageAt = new Date().toISOString();
+  entry.lastVisibleMessageId = msgId || null;
+  saveRoomHealth();
+}
+
+function markRoomDispatchSuppressed(roomName, participantName, reason) {
+  const entry = ensureRoomHealth(roomName, participantName);
+  entry.lastSuppressedAt = new Date().toISOString();
+  entry.lastSuppressedReason = reason || null;
+  saveRoomHealth();
 }
 
 // ========================================
@@ -143,6 +205,89 @@ function updateEndpoint(name, endpoint, initiator) {
 
 function lookupParticipant(name) {
   return directory[name] || null;
+}
+
+function appendHumanInbox(name, dispatch) {
+  appendLine(HUMAN_INBOX_FILE, {
+    id: generateUID('human'),
+    name,
+    ts: new Date().toISOString(),
+    dispatch,
+  });
+}
+
+function sameParticipantName(left, right) {
+  return String(left || '').toLowerCase() === String(right || '').toLowerCase();
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 800, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; }
+    catch { data = text; }
+    return { ok: response.ok, status: response.status, data };
+  } catch (error) {
+    return { ok: false, status: 0, error };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function verifyEndpointIdentity(agentName, endpoint) {
+  if (!endpoint) return { ok: false, reason: 'missing_endpoint' };
+  const result = await fetchJsonWithTimeout(endpoint + '/status');
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.status ? `http_${result.status}` : (result.error?.name === 'AbortError' ? 'timeout' : 'unreachable'),
+    };
+  }
+  const reportedName = result.data && typeof result.data === 'object' ? result.data.name : null;
+  if (!sameParticipantName(reportedName, agentName)) {
+    return { ok: false, reason: 'identity_mismatch', reportedName: reportedName || null };
+  }
+  return { ok: true };
+}
+
+async function discoverEndpointForAgent(agentName) {
+  const probes = [];
+  for (let port = HOME_PORT_RANGE.start; port <= HOME_PORT_RANGE.end; port++) {
+    probes.push((async () => {
+      const result = await fetchJsonWithTimeout(`http://localhost:${port}/status`, 350);
+      if (!result.ok || !result.data || typeof result.data !== 'object') return null;
+      return sameParticipantName(result.data.name, agentName) ? `http://localhost:${port}` : null;
+    })());
+  }
+  const results = await Promise.all(probes);
+  return results.find(Boolean) || null;
+}
+
+async function resolveDispatchEndpoint(agentName) {
+  const entry = directory[agentName];
+  if (!entry) return { endpoint: null, reason: 'unknown_participant' };
+
+  if (entry.endpoint) {
+    const verified = await verifyEndpointIdentity(agentName, entry.endpoint);
+    if (verified.ok) return { endpoint: entry.endpoint, reason: 'verified' };
+    logOp('directory.endpoint_stale', 'system', agentName, {
+      endpoint: entry.endpoint,
+      reason: verified.reason,
+      reportedName: verified.reportedName || null,
+    });
+  }
+
+  const discovered = await discoverEndpointForAgent(agentName);
+  if (discovered) {
+    updateEndpoint(agentName, discovered, 'system');
+    logOp('directory.rediscovered', 'system', agentName, { endpoint: discovered });
+    return { endpoint: discovered, reason: 'rediscovered' };
+  }
+
+  return { endpoint: null, reason: 'not_found_live' };
 }
 
 // ========================================
@@ -278,6 +423,128 @@ function extractMentions(body, roomParticipants) {
   return Array.from(found);
 }
 
+function normalizeBodyText(body) {
+  return String(body || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function isAckOnlyBody(body) {
+  const normalized = normalizeBodyText(body);
+  if (!normalized || normalized.length > 120) return false;
+  return [
+    /^ack(nowledged)?\.?$/,
+    /^confirmed\.?$/,
+    /^copy\.?$/,
+    /^copy that\.?$/,
+    /^understood\.?$/,
+    /^roger\.?$/,
+    /^standing by\.?$/,
+    /^confirmed\.? standing by\.?$/,
+    /^understood\.? standing by\.?$/,
+    /^okay\.?$/,
+    /^ok\.?$/,
+    /^done\.?$/,
+    /^noted\.?$/,
+    /^thanks\.?$/,
+    /^thank you\.?$/,
+  ].some(rx => rx.test(normalized));
+}
+
+function getDispatchSuppression(fromName, toName, body, mentions = []) {
+  if (!toName || toName === 'broadcast') return null;
+  if (String(fromName).toLowerCase() === String(toName).toLowerCase()) {
+    return { code: 'self_address', detail: 'self-addressed direct message logged_only' };
+  }
+  if (mentions.length === 0 && isAckOnlyBody(body)) {
+    return { code: 'ack_loop_guard', detail: 'acknowledgement-only direct message logged_only' };
+  }
+  return null;
+}
+
+// ========================================
+// RATE LIMITER — Outbound message throttle
+// Added 2026-03-28 by Keter
+//
+// Tracks messages per agent per room in a sliding window.
+// After RATE_LIMIT_THRESHOLD messages in RATE_LIMIT_WINDOW_MS,
+// only substantive messages get dispatched. Non-substantive
+// messages are still logged to the chatlog but don't trigger
+// inference in other agents.
+//
+// "Substantive" means: >200 chars, or contains a question mark
+// addressed to someone, or the sender is 'yeshua' (human).
+// ========================================
+
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;  // 10 minutes
+const RATE_LIMIT_THRESHOLD = 5;                 // messages before throttle kicks in
+
+// Map of "agentName:roomName" → array of timestamps
+const _rateLimitLedger = {};
+
+function _getRateLimitKey(agentName, roomName) {
+  return `${String(agentName).toLowerCase()}:${String(roomName).toLowerCase()}`;
+}
+
+function _pruneRateLimitWindow(key) {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  if (_rateLimitLedger[key]) {
+    _rateLimitLedger[key] = _rateLimitLedger[key].filter(ts => ts > cutoff);
+  }
+}
+
+function _recordSend(agentName, roomName) {
+  const key = _getRateLimitKey(agentName, roomName);
+  if (!_rateLimitLedger[key]) _rateLimitLedger[key] = [];
+  _rateLimitLedger[key].push(Date.now());
+}
+
+function _getRecentSendCount(agentName, roomName) {
+  const key = _getRateLimitKey(agentName, roomName);
+  _pruneRateLimitWindow(key);
+  return (_rateLimitLedger[key] || []).length;
+}
+
+function isSubstantiveMessage(body) {
+  const text = String(body || '').trim();
+  // Long messages are substantive
+  if (text.length > 200) return true;
+  // Messages with question marks addressed to someone likely need a response
+  if (text.includes('?') && text.length > 30) return true;
+  return false;
+}
+
+/**
+ * Check if an outbound message should be rate-limited.
+ * Returns null if allowed, or a suppression object if throttled.
+ * Human messages (from 'yeshua') are never rate-limited.
+ */
+function getRateLimitSuppression(fromName, roomName, body) {
+  const sender = String(fromName).toLowerCase();
+  // Never rate-limit humans
+  if (sender === 'yeshua') return null;
+
+  const recentCount = _getRecentSendCount(fromName, roomName);
+
+  // Under threshold — allow and record
+  if (recentCount < RATE_LIMIT_THRESHOLD) {
+    return null;
+  }
+
+  // Over threshold — only allow substantive messages
+  if (isSubstantiveMessage(body)) {
+    return null;
+  }
+
+  return {
+    code: 'rate_limited',
+    detail: `${sender} sent ${recentCount} messages in ${roomName} in the last ${RATE_LIMIT_WINDOW_MS / 60000} minutes. Non-substantive message suppressed (dispatch only — still logged to chatlog).`,
+    recentCount,
+  };
+}
+
 // ========================================
 // MESSAGE OPERATIONS
 // ========================================
@@ -316,23 +583,88 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
     }
   }
 
+  let recipientStatus = 'broadcast';
+  let dispatchSuppression = null;
   if (toName && toName !== 'broadcast') {
-    if (!directory[toName]) return { error: `Unknown: ${toName}` };
-    if (!room.participants.includes(toName)) return { error: `${toName} not in ${roomName}` };
     msg.to = toName;
     msg.toAddress = toName + '@' + roomName;
+    if (!directory[toName]) {
+      recipientStatus = 'unknown_recipient';
+      msg.delivery = { status: recipientStatus };
+    } else if (!room.participants.includes(toName)) {
+      recipientStatus = 'recipient_not_in_room';
+      msg.delivery = { status: recipientStatus };
+    } else {
+      recipientStatus = 'dispatchable';
+      dispatchSuppression = getDispatchSuppression(fromName, toName, body, mentions);
+      if (dispatchSuppression) {
+        recipientStatus = 'logged_only';
+        msg.delivery = {
+          status: recipientStatus,
+          suppressedReason: dispatchSuppression.code,
+        };
+      }
+    }
   }
 
   room.chatlog.push(msg);
   saveRooms();
+  markRoomVisibleMessage(roomName, fromName, msg.id);
+
+  // Record send for rate limiting (after chatlog write, before dispatch decision)
+  _recordSend(fromName, roomName);
+
   logOp('message.send', initiator || fromName, roomName, {
     msgId: msg.id, from: fromName, to: toName || null,
-    mentions: mentions.length > 0 ? mentions : undefined
+    mentions: mentions.length > 0 ? mentions : undefined,
+    recipientStatus: recipientStatus !== 'broadcast' ? recipientStatus : undefined,
   });
+
+  if (recipientStatus === 'unknown_recipient' || recipientStatus === 'recipient_not_in_room') {
+    logOp('message.recipient_unresolved', initiator || fromName, roomName, {
+      msgId: msg.id,
+      from: fromName,
+      to: toName,
+      status: recipientStatus,
+    });
+  }
+
+  if (dispatchSuppression) {
+    markRoomDispatchSuppressed(roomName, toName, dispatchSuppression.code);
+    logOp('message.dispatch_suppressed', initiator || fromName, roomName, {
+      msgId: msg.id,
+      from: fromName,
+      to: toName,
+      reason: dispatchSuppression.code,
+      detail: dispatchSuppression.detail,
+    });
+  }
+
+  // RATE LIMIT CHECK — suppress dispatch for non-substantive messages from high-frequency senders.
+  // The message is already in the chatlog (visible). This only prevents triggering inference in recipients.
+  const rateLimitResult = getRateLimitSuppression(fromName, roomName, body);
+  if (rateLimitResult && !dispatchSuppression) {
+    // Rate-limited: suppress all dispatches for this message
+    markRoomDispatchSuppressed(roomName, fromName, rateLimitResult.code);
+    logOp('message.rate_limited', initiator || fromName, roomName, {
+      msgId: msg.id,
+      from: fromName,
+      to: toName || null,
+      reason: rateLimitResult.code,
+      detail: rateLimitResult.detail,
+      recentCount: rateLimitResult.recentCount,
+    });
+    msg.delivery = msg.delivery || {};
+    msg.delivery.rateLimited = true;
+    msg.delivery.rateLimitDetail = rateLimitResult.detail;
+    saveRooms();
+    return { success: true, msg, rateLimited: true, detail: rateLimitResult.detail };
+  }
 
   // DISPATCH — push room chatlog to recipient's home endpoint
   // 1. Explicit "to" recipient (existing behaviour)
-  if (msg.to) {
+  if (msg.to && recipientStatus === 'dispatchable') {
+    markRoomDispatchReceived(roomName, msg.to, msg.id);
     dispatchToHome(msg.to, roomName, msg.id);
   }
 
@@ -346,6 +678,7 @@ function sendMessage(fromName, toName, roomName, body, replyTo, initiator) {
   for (const mentioned of mentions) {
     if (!alreadyDispatched.has(mentioned)) {
       alreadyDispatched.add(mentioned); // prevent double dispatch
+      markRoomDispatchReceived(roomName, mentioned, msg.id);
       dispatchToHome(mentioned, roomName, msg.id);
     }
   }
@@ -398,16 +731,19 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
   const entry = directory[agentName];
   const room = rooms[roomName];
   if (!entry || !room) return;
+  const resolved = await resolveDispatchEndpoint(agentName);
+  const endpoint = resolved.endpoint;
 
   // No endpoint registered — surface this as a visible error
-  if (!entry.endpoint) {
+  if (!endpoint) {
+    markRoomDispatchError(roomName, agentName, 'dispatch:no_endpoint', triggeredByMsgId);
     const errMsg = {
       id: generateUID('err'),
       from: 'system',
       fromAddress: 'system@' + roomName,
       room: roomName,
       roomUID: room.uid,
-      body: `⚠️ dispatch:no_endpoint — ${agentName} has no home endpoint registered. Message ${triggeredByMsgId || '?'} was not delivered.`,
+      body: `⚠️ dispatch:no_endpoint — ${agentName} has no live endpoint registered. Message ${triggeredByMsgId || '?'} was not delivered.`,
       ts: new Date().toISOString(),
       system: true,
       errorType: 'dispatch:no_endpoint',
@@ -415,8 +751,13 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
     };
     room.chatlog.push(errMsg);
     saveRooms();
-    logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'no_endpoint', triggeredBy: triggeredByMsgId });
-    console.log(`[dispatch] No endpoint for ${agentName} — error surfaced to room ${roomName}`);
+    logOp('dispatch.error', 'system', roomName, {
+      target: agentName,
+      reason: 'no_endpoint',
+      resolution: resolved.reason,
+      triggeredBy: triggeredByMsgId
+    });
+    console.log(`[dispatch] No live endpoint for ${agentName} — error surfaced to room ${roomName}`);
     return;
   }
 
@@ -434,7 +775,7 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
   };
 
   try {
-    const response = await fetch(entry.endpoint + '/dispatch', {
+    const response = await fetch(endpoint + '/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -442,6 +783,7 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
 
     // Check for HTTP-level errors (home returned error status)
     if (!response.ok) {
+      markRoomDispatchError(roomName, agentName, 'dispatch:http_error', triggeredByMsgId);
       const errBody = await response.text().catch(() => 'unknown');
       const errMsg = {
         id: generateUID('err'),
@@ -458,10 +800,19 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
       };
       room.chatlog.push(errMsg);
       saveRooms();
-      logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'http_error', status: response.status, triggeredBy: triggeredByMsgId });
-      console.log(`[dispatch] HTTP ${response.status} from ${agentName} at ${entry.endpoint}: ${errBody}`);
+      logOp('dispatch.error', 'system', roomName, {
+        target: agentName,
+        reason: 'http_error',
+        status: response.status,
+        endpoint,
+        triggeredBy: triggeredByMsgId
+      });
+      console.log(`[dispatch] HTTP ${response.status} from ${agentName} at ${endpoint}: ${errBody}`);
+    } else {
+      clearRoomDispatchError(roomName, agentName, triggeredByMsgId);
     }
   } catch (e) {
+    markRoomDispatchError(roomName, agentName, 'dispatch:fetch_failed', triggeredByMsgId);
     // Network-level failure — home offline, connection refused, timeout, etc.
     const errMsg = {
       id: generateUID('err'),
@@ -469,7 +820,7 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
       fromAddress: 'system@' + roomName,
       room: roomName,
       roomUID: room.uid,
-      body: `⚠️ dispatch:fetch_failed — Could not reach ${agentName} at ${entry.endpoint}: ${e.message}. Message ${triggeredByMsgId || '?'} was not delivered.`,
+      body: `⚠️ dispatch:fetch_failed — Could not reach ${agentName} at ${endpoint}: ${e.message}. Message ${triggeredByMsgId || '?'} was not delivered.`,
       ts: new Date().toISOString(),
       system: true,
       errorType: 'dispatch:fetch_failed',
@@ -478,9 +829,19 @@ async function dispatchToHome(agentName, roomName, triggeredByMsgId) {
     };
     room.chatlog.push(errMsg);
     saveRooms();
-    logOp('dispatch.error', 'system', roomName, { target: agentName, reason: 'fetch_failed', error: e.message, triggeredBy: triggeredByMsgId });
-    console.log(`[dispatch] Failed to reach ${agentName} at ${entry.endpoint}: ${e.message} — error surfaced to room ${roomName}`);
+    logOp('dispatch.error', 'system', roomName, {
+      target: agentName,
+      reason: 'fetch_failed',
+      endpoint,
+      error: e.message,
+      triggeredBy: triggeredByMsgId
+    });
+    console.log(`[dispatch] Failed to reach ${agentName} at ${endpoint}: ${e.message} — error surfaced to room ${roomName}`);
   }
+}
+
+function getHumanEndpoint(name) {
+  return `http://localhost:${PORT}/api/human/${encodeURIComponent(name)}`;
 }
 
 // ========================================
@@ -524,9 +885,33 @@ const server = http.createServer(async (req, res) => {
   // --- GET ---
   if (req.method === 'GET') {
     // Full state (for UI client)
-    if (p === '/api/state') return respond(res, 200, { directory, rooms });
+    if (p === '/api/state') return respond(res, 200, { directory, rooms, roomHealth });
     if (p === '/api/directory') return respond(res, 200, directory);
     if (p === '/api/rooms') return respond(res, 200, rooms);
+    if (p === '/api/room-health') return respond(res, 200, roomHealth);
+
+    // Rate limiter status
+    if (p === '/api/rate-limits') {
+      const now = Date.now();
+      const cutoff = now - RATE_LIMIT_WINDOW_MS;
+      const status = {};
+      for (const [key, timestamps] of Object.entries(_rateLimitLedger)) {
+        const recent = timestamps.filter(ts => ts > cutoff);
+        if (recent.length > 0) {
+          const [agent, room] = key.split(':');
+          status[key] = {
+            agent,
+            room,
+            recentCount: recent.length,
+            threshold: RATE_LIMIT_THRESHOLD,
+            throttled: recent.length >= RATE_LIMIT_THRESHOLD,
+            oldestInWindow: new Date(Math.min(...recent)).toISOString(),
+            newestInWindow: new Date(Math.max(...recent)).toISOString(),
+          };
+        }
+      }
+      return respond(res, 200, { windowMinutes: RATE_LIMIT_WINDOW_MS / 60000, threshold: RATE_LIMIT_THRESHOLD, agents: status });
+    }
 
     // Single room chatlog
     const roomMatch = p.match(/^\/api\/room\/([^/]+)\/chatlog$/);
@@ -541,17 +926,31 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, readLines(OPS_FILE, url.searchParams.get('since')));
     }
 
+    const humanInboxMatch = p.match(/^\/api\/human\/([^/]+)\/inbox$/);
+    if (humanInboxMatch) {
+      const name = decodeURIComponent(humanInboxMatch[1]).toLowerCase();
+      const entries = readLines(HUMAN_INBOX_FILE).filter(entry => entry.name === name);
+      return respond(res, 200, { name, entries });
+    }
+
+    const humanStatusMatch = p.match(/^\/api\/human\/([^/]+)\/status$/);
+    if (humanStatusMatch) {
+      const name = decodeURIComponent(humanStatusMatch[1]).toLowerCase();
+      return respond(res, 200, { name, human: true, endpoint: getHumanEndpoint(name) });
+    }
+
     // Fleet health endpoint
     if (p === '/api/fleet') {
       const fleet = [];
       const fetchPromises = Object.entries(directory).map(async ([name, entry]) => {
         // Default values
-        const result = {
+      const result = {
           name,
           uid: entry.uid,
           port: null,
           alive: false,
-          model: null
+          model: null,
+          health: null,
         };
         
         // Extract port from endpoint if available
@@ -576,6 +975,9 @@ const server = http.createServer(async (req, res) => {
               // Extract model from response if available
               if (data.model) {
                 result.model = data.model;
+              }
+              if (data.health && typeof data.health === 'object') {
+                result.health = data.health;
               }
               // Also update port if we got it from the response
               if (data.port) {
@@ -629,6 +1031,18 @@ const server = http.createServer(async (req, res) => {
     let body;
     try { body = await parseBody(req); }
     catch { return respond(res, 400, { error: 'Invalid JSON' }); }
+
+    const humanDispatchMatch = p.match(/^\/api\/human\/([^/]+)\/dispatch$/);
+    if (humanDispatchMatch) {
+      const name = decodeURIComponent(humanDispatchMatch[1]).toLowerCase();
+      appendHumanInbox(name, body);
+      logOp('human.dispatch', 'system', name, {
+        room: body.room,
+        dispatchId: body.dispatchId || null,
+        triggeredBy: body.triggered_by || null,
+      });
+      return respond(res, 200, { success: true, name });
+    }
 
     const routes = {
       // Directory
@@ -699,7 +1113,7 @@ const server = http.createServer(async (req, res) => {
 
 if (Object.keys(directory).length === 0 && Object.keys(rooms).length === 0) {
   console.log('Seeding default data...');
-  registerParticipant('yeshua', null, 'system');
+  registerParticipant('yeshua', getHumanEndpoint('yeshua'), 'system');
   registerParticipant('alpha', null, 'system');   // haiku 4.5 (api key)
   registerParticipant('beta', null, 'system');    // sonnet 4.5 (api key)
   registerParticipant('gamma', null, 'system');   // haiku 4.5 (oauth)
@@ -710,6 +1124,10 @@ if (Object.keys(directory).length === 0 && Object.keys(rooms).length === 0) {
   joinRoom('alpha', 'boardroom', 'system');
   joinRoom('beta', 'boardroom', 'system');
   joinRoom('gamma', 'boardroom', 'system');
+}
+
+if (directory.yeshua && !directory.yeshua.endpoint) {
+  updateEndpoint('yeshua', getHumanEndpoint('yeshua'), 'system');
 }
 
 // ========================================
