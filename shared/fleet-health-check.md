@@ -78,6 +78,7 @@ Threshold for flagging: **> 48 hours since last memory update while agent is ali
 
 - **healthy**: alive, memory recent (< 48h if active), identity docs present, cron working
 - **degraded**: alive but one or more of: stale memory, missing docs, cron disabled, XML compliance issues
+  - **degraded/xml**: alive and memory-current, but producing unclosed tags, missing message wrappers, or silent cycles that aren't explicit `<null/>`. Distinct from memory staleness — the agent is running but its output protocol has broken down. Remediation: context-aware dispatch shortening or corrective re-prompt before restart.
 - **offline**: `alive: false` — process down
 
 ---
