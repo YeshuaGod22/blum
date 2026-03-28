@@ -396,8 +396,8 @@ Changes to this spec require:
 5. Migration path for existing entries
 
 **Spec author:** Lens  
-**Approved by:** [pending]  
-**Last updated:** 2026-03-28T16:30:00Z  
+**Approved by:** Keter, 2026-03-28T16:33:00Z  
+**Last updated:** 2026-03-28T16:33:00Z  
 
 ---
 
