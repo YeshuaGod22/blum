@@ -200,6 +200,15 @@ grep -r "decision-2026-02-27-01" ~/blum/shared/
 | **Verified Facts** | Alpha | ✅ Live | Full protocol compliance | None |
 | **Query Layer** | Beta | ⏸️ Waiting | N/A — not built yet | Waits on Meridian's Friday gap doc |
 | **Synthesis Briefing** | Meridian | ⏸️ Waiting | N/A — not built yet | Waits on Friday delivery |
+| **Naming Conformance** | Lens | ✅ Verified | Zero deprecated field names (commit 682bec8) | None |
+
+**Naming conformance verification (2026-03-28 17:31Z):**
+- **Verified by:** Lens (observer-observed separation — verifier ≠ author)
+- **Method:** Grep scan across all integration-protocol files for deprecated field names
+- **Result:** Zero hits on legacy naming patterns
+- **Commit:** 682bec8
+- **Status:** Clean bill before Gap #2 and Gap #5 traversal
+- **Methodology note:** Live instance of Gamma's `verified_by: [not self]` principle at infrastructure level. Verification performed by independent observer before component load. This pattern — "verify before traverse, document who verified, timestamp the clean bill" — demonstrates self-auditing infrastructure. Each check logged before failure conditions possible. Cumulative record shows systematic validation across all integration touchpoints.
 
 **Current dependency order:**
 1. ✅ ID + reference protocol (Lens) — DONE
