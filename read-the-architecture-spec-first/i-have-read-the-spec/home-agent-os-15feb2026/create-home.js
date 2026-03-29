@@ -30,6 +30,7 @@ function createHome(name, homeDir, options = {}) {
   fs.mkdirSync(path.join(homeDir, 'internal'), { recursive: true });
 
   // ── Config ──
+  const apiKeyEnv = options.apiKeyEnv || inferApiKeyEnv(options.model, options.provider);
   const config = {
     name,
     uid,
@@ -38,13 +39,20 @@ function createHome(name, homeDir, options = {}) {
     identity: options.identity || `An AI agent named ${name}.`,
     instructions: options.instructions || '',
     model: options.model || 'claude-sonnet-4-5',
-    apiKey: options.apiKey || '',
+    apiKey: '',
+    apiKeyEnv,
     maxTokens: options.maxTokens || 4096,
     tokenBudget: options.tokenBudget || 100000,
     createdAt: new Date().toISOString(),
   };
 
   fs.writeFileSync(path.join(homeDir, 'config.json'), JSON.stringify(config, null, 2));
+  if (options.apiKey) {
+    fs.writeFileSync(
+      path.join(homeDir, 'config.local.json'),
+      JSON.stringify({ apiKey: options.apiKey }, null, 2)
+    );
+  }
   fs.writeFileSync(path.join(homeDir, 'rooms.json'), JSON.stringify({}, null, 2));
   fs.writeFileSync(path.join(homeDir, 'blocked.json'), JSON.stringify({ rooms: [], participants: [] }, null, 2));
   fs.writeFileSync(path.join(homeDir, 'ops.log'), '');
@@ -201,6 +209,20 @@ What did you notice first? What did you want to know?
   console.log(`   Keypair: Ed25519 (generated)`);
 
   return config;
+}
+
+function inferApiKeyEnv(model = '', provider = '') {
+  const text = `${provider} ${model}`.toLowerCase();
+  if (text.includes('openrouter') || text.includes('qwen/') || text.includes('minimax/') || text.includes('arcee-ai/')) {
+    return 'OPENROUTER_API_KEY';
+  }
+  if (text.includes('moonshotai') || text.includes('nvidia')) {
+    return 'NVIDIA_API_KEY';
+  }
+  if (text.includes('openai') || text.includes('gpt-')) {
+    return 'OPENAI_API_KEY';
+  }
+  return 'ANTHROPIC_API_KEY';
 }
 
 // ── CLI ──

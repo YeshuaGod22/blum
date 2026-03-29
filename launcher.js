@@ -270,7 +270,7 @@ function discoverHomes() {
           name: config.name || entry.name,
           homeDir: path.join(HOMES_DIR, entry.name),
           model: config.model || 'unknown',
-          hasApiKey: !!(config.apiKey),
+          hasApiKey: !!(config.apiKey || config.apiKeyEnv || fs.existsSync(path.join(HOMES_DIR, entry.name, 'config.local.json'))),
         });
       } catch {}
     }

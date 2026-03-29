@@ -148,11 +148,26 @@ const ROOM_SERVER_HOST = 'localhost';
 const ROOM_SERVER_PORT = 3141;
 const ROOM_SERVER_ENDPOINT = `http://${ROOM_SERVER_HOST}:${ROOM_SERVER_PORT}`;
 
+function looksLikeLiveSecret(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  if (/^(REDACTED|YOUR_|PLACEHOLDER|CHANGE_ME|ENV:|<)/i.test(text)) return false;
+  return /^(sk-ant-|sk-or-|sk-[a-z0-9_-]+|nvapi-)/i.test(text);
+}
+
+function mergeDefined(base, override) {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(override || {})) {
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
 // ── Home State ────────────────────────────
 class Home {
   constructor(homeDir) {
     this.homeDir = homeDir;
-    this.config = this._loadJson('config.json');
+    this.config = this._loadHomeConfig();
     this.rooms = this._loadJson('rooms.json', {});
     this.blocked = this._loadJson('blocked.json', { rooms: [], participants: [] });
     this.historyDir = path.join(homeDir, 'history');
@@ -278,6 +293,36 @@ class Home {
       throw new Error(`Required file missing: ${filepath}`);
     }
     return JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+  }
+
+  _loadHomeConfig() {
+    const basePath = path.join(this.homeDir, 'config.json');
+    if (!fs.existsSync(basePath)) {
+      throw new Error(`Required file missing: ${basePath}`);
+    }
+
+    const baseConfig = JSON.parse(fs.readFileSync(basePath, 'utf-8'));
+    const localPath = path.join(this.homeDir, 'config.local.json');
+    const localConfig = fs.existsSync(localPath)
+      ? JSON.parse(fs.readFileSync(localPath, 'utf-8'))
+      : {};
+
+    if (looksLikeLiveSecret(baseConfig.apiKey)) {
+      throw new Error(`Refusing to start with live apiKey in tracked config.json for ${baseConfig.name || path.basename(this.homeDir)}. Move it to config.local.json or apiKeyEnv.`);
+    }
+
+    const config = mergeDefined(baseConfig, localConfig);
+    const envKeyName = config.apiKeyEnv || null;
+    if (envKeyName && process.env[envKeyName]) {
+      config.apiKey = process.env[envKeyName];
+    }
+    if (!config.apiKey && localConfig.apiKey) {
+      config.apiKey = localConfig.apiKey;
+    }
+    if (!config.apiKey && baseConfig.apiKey && !looksLikeLiveSecret(baseConfig.apiKey)) {
+      config.apiKey = baseConfig.apiKey;
+    }
+    return config;
   }
 
   _saveJson(filename, data) {
