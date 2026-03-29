@@ -55,9 +55,19 @@ function scanPrePushLines(stdinText) {
     const [localRef, localSha, remoteRef, remoteSha] = line.split(/\s+/);
     if (!localSha || /^0+$/.test(localSha)) continue;
     const range = (!remoteSha || /^0+$/.test(remoteSha)) ? localSha : `${remoteSha}..${localSha}`;
-    const diff = spawnSync('git', ['diff', '--no-color', '--unified=0', range], { encoding: 'utf8' });
-    if (diff.status !== 0) continue;
-    findings.push(...scanText(`${localRef} (${range})`, diff.stdout));
+    const revList = spawnSync('git', ['rev-list', range], { encoding: 'utf8' });
+    if (revList.status !== 0) continue;
+    const commits = revList.stdout.trim().split('\n').filter(Boolean);
+    for (const commit of commits) {
+      const lsTree = spawnSync('git', ['ls-tree', '-r', '--name-only', commit], { encoding: 'utf8' });
+      if (lsTree.status !== 0) continue;
+      const files = lsTree.stdout.trim().split('\n').filter(Boolean);
+      for (const file of files) {
+        const show = spawnSync('git', ['show', `${commit}:${file}`], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+        if (show.status !== 0) continue;
+        findings.push(...scanText(`${localRef} ${commit.slice(0, 12)}:${file}`, show.stdout));
+      }
+    }
   }
   return findings;
 }
