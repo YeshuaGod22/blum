@@ -514,6 +514,98 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ name, lines }));
   }
 
+  // ── Config API ──
+  if (p.startsWith('/api/config/') && req.method === 'GET') {
+    const name = p.slice('/api/config/'.length);
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid name' }));
+    }
+    const cfgPath = path.join(HOMES_DIR, name, 'config.json');
+    if (!fs.existsSync(cfgPath)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Not found' }));
+    }
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    // Redact API key value but preserve presence indicator
+    const safe = { ...cfg };
+    if (safe.apiKey) safe.apiKey = '***';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(safe));
+  }
+
+  if (p.startsWith('/api/config/') && req.method === 'POST') {
+    const name = p.slice('/api/config/'.length);
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid name' }));
+    }
+    const cfgPath = path.join(HOMES_DIR, name, 'config.json');
+    if (!fs.existsSync(cfgPath)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Not found' }));
+    }
+    const body = await readBody(req);
+    let updates;
+    try { updates = JSON.parse(body); } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+    const existing = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    // Don't let masked placeholder overwrite the real key
+    if (updates.apiKey === '***') delete updates.apiKey;
+    const merged = { ...existing, ...updates };
+    // Preserve immutables
+    merged.name = existing.name;
+    merged.uid = existing.uid;
+    fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
+    // Restart so changes take effect
+    stopHome(name);
+    await new Promise(r => setTimeout(r, 500));
+    startHome(name, merged.port || existing.port);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, restarted: true, name }));
+  }
+
+  // ── Cron API ──
+  if (p.startsWith('/api/cron/') && req.method === 'GET') {
+    const name = p.slice('/api/cron/'.length);
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid name' }));
+    }
+    const cronPath = path.join(HOMES_DIR, name, 'cron.json');
+    if (!fs.existsSync(cronPath)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify([]));
+    }
+    const jobs = JSON.parse(fs.readFileSync(cronPath, 'utf8'));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(jobs));
+  }
+
+  if (p.startsWith('/api/cron/') && req.method === 'POST') {
+    const name = p.slice('/api/cron/'.length);
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid name' }));
+    }
+    const cronPath = path.join(HOMES_DIR, name, 'cron.json');
+    const body = await readBody(req);
+    let jobs;
+    try { jobs = JSON.parse(body); } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+    if (!Array.isArray(jobs)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Expected array of cron jobs' }));
+    }
+    fs.writeFileSync(cronPath, JSON.stringify(jobs, null, 2));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, jobs: jobs.length, name }));
+  }
+
   // ── Serve UI ──
   if (p === '/' || p === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
