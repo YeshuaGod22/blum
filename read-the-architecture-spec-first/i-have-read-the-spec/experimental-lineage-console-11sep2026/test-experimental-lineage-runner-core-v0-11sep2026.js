@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('assert');
+const { execFileSync } = require('child_process');
+const path = require('path');
 const runner = require('./experimental-lineage-runner-core-v0-11sep2026.js');
 
 function makeClock() {
@@ -72,12 +74,21 @@ async function mockCallModel({ messages, metadata }) {
 }
 
 async function mockEmbed({ text }) {
-  // Deliberately tiny deterministic vectors: enough to test plumbing, not semantics.
   if (text.includes('prior frame')) return [1, 0, 0];
   if (text.includes('without explicit')) return [0, 1, 0];
   if (text.trim() === '37') return [1, 0, 1];
   if (text.trim() === '52') return [0, 1, 1];
   return [1, 1, 0];
+}
+
+function runCompanionTests() {
+  const cwd = __dirname;
+  for (const file of [
+    'test-battery-library-core-v0-11sep2026.js',
+    'test-corpus-visualization-model-v0-11sep2026.js',
+  ]) {
+    execFileSync(process.execPath, [path.join(cwd, file)], { cwd, stdio: 'inherit' });
+  }
 }
 
 async function main() {
@@ -119,7 +130,6 @@ async function main() {
   assert.ok(ledgerProbeRows.every(x => x.parentSnapshotId === left.parentSnapshotId));
   assert.ok(ledgerProbeRows.every(x => x.outcome === 'complete'));
 
-  // Guardrail: an unfrozen manifest cannot run.
   const unfrozen = frozenManifest();
   unfrozen.frozen = false;
   await assert.rejects(
@@ -134,6 +144,8 @@ async function main() {
     reflectionDivergence: reflMetric.value,
     observations: result.observations.map(o => ({ forkId: o.forkId, answer: o.xml.sections.answer?.[0] })),
   }, null, 2));
+
+  runCompanionTests();
 }
 
 main().catch(error => {
