@@ -1,0 +1,31 @@
+name: Test experimental lineage console
+
+on:
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/**'
+      - '.github/workflows/test-experimental-lineage-console.yml'
+  push:
+    branches:
+      - experimental-lineage-console-11sep2026
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/**'
+      - '.github/workflows/test-experimental-lineage-console.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vertical-slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run lineage core test
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-experimental-lineage-runner-core-v0-11sep2026.js
