@@ -47,3 +47,6 @@ jobs:
       - name: Verify importer against real DAE raw2
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-real-dae-raw2-integration-v0-11sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+      - name: Verify importer against real DAE raw12 integrity cases
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-raw12-integration-v0-11sep2026.js "$GITHUB_WORKSPACE/dae-witness"
