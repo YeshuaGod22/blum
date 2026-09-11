@@ -14,6 +14,16 @@ function main() {
     pathPrefix: 'experiments/EXP-003-the-sixth-question/raw2',
   });
 
+  // Diagnostic is deliberately printed before assertions. If the independent
+  // corpus census and importer disagree, expose the skipped/error population
+  // rather than weakening the expectation until the test turns green.
+  console.log('REAL RAW2 DIAGNOSTIC');
+  console.log(JSON.stringify({
+    summary: dataset.summary,
+    skipped: dataset.skipped,
+    errors: dataset.errors,
+  }, null, 2));
+
   // Independent corpus-map expectations, not values invented by this importer.
   assert.equal(dataset.summary.rawCallsImported, 42, 'raw2 corpus map records 42 completed calls');
   assert.equal(dataset.summary.messageSnapshotsSkipped, 2, 'raw2 corpus map records two snapshots');
