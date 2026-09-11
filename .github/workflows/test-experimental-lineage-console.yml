@@ -35,3 +35,6 @@ jobs:
       - name: Test imported observations through shared analysis path
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-retrospective-observation-analysis-v0-11sep2026.js
+      - name: Test corpus-level DAE lineage import census
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-dae-corpus-lineage-import-cli-v0-11sep2026.js
