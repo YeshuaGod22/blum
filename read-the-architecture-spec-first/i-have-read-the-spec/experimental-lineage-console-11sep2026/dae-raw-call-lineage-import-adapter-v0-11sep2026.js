@@ -38,7 +38,12 @@
     if (!Array.isArray(sent)) throw new Error('dae_sent_must_be_array');
     return sent.map((m, i) => {
       if (!m || typeof m !== 'object') throw new Error(`dae_sent_message_invalid_${i}`);
-      return { role: String(m.role || ''), content: String(m.content ?? '') };
+      const content = typeof m.content === 'string'
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.map(b => (b && typeof b === 'object' ? String(b.text ?? '') : String(b ?? ''))).join('\n')
+          : String(m.content ?? '');
+      return { role: String(m.role || ''), content };
     });
   }
 
@@ -51,7 +56,10 @@
     return `other:${stop}`;
   }
 
-  const DEFAULT_TAGS = ['priming','meditation','examination','debate','deliberation','reply','reflection','answer','revision'];
+  const DEFAULT_TAGS = [
+    'working','priming','meditation','examination','debate','deliberation',
+    'reply','reflection','answer','revision'
+  ];
 
   function inspectXmlIntegrity(rawText, tags = DEFAULT_TAGS) {
     const raw = String(rawText ?? '');
@@ -161,8 +169,6 @@
 
   function inferTrunkKey(record) {
     const cell = String(record.cell || 'unknown');
-    // Branch suffix is usually encoded in cell (e.g. ASa, ASb). Prefer the
-    // declared parent-prefix stem when present; otherwise strip final branch char.
     if (record.parent_prefix) {
       return String(record.parent_prefix).replace(/\.messages\.json$/i, '');
     }
@@ -172,11 +178,23 @@
     return cell + '-r' + String(record.replicate ?? '?');
   }
 
-  function importTrunkRecord(record, source = {}) {
-    if (!record || record.kind !== 'trunk') throw new Error('dae_trunk_record_required');
+  function observationWitnessFields(record, source) {
     const sent = normalizeMessages(record.sent || []);
     const rawOutput = String(record.received ?? '');
-    const xml = inspectXmlIntegrity(rawOutput);
+    return {
+      modelVisibleMessages: sent,
+      rawOutput,
+      stopReason: record.stop_reason ?? null,
+      callOutcome: classifyCallOutcome(record),
+      xml: inspectXmlIntegrity(rawOutput),
+      usage: clone(record.usage || {}),
+      systemPrompt: record.system_prompt ?? null,
+      source: sourceDescriptor(record, source),
+    };
+  }
+
+  function importTrunkRecord(record, source = {}) {
+    if (!record || record.kind !== 'trunk') throw new Error('dae_trunk_record_required');
     const trunkKey = inferTrunkKey(record);
     return {
       recordType: 'retrospective_trunk_turn',
@@ -186,23 +204,13 @@
       replicate: record.replicate ?? null,
       turn: record.turn ?? null,
       questionId: record.question_id ?? null,
-      modelVisibleMessages: sent,
-      rawOutput,
-      stopReason: record.stop_reason ?? null,
-      callOutcome: classifyCallOutcome(record),
-      xml,
-      usage: clone(record.usage || {}),
-      systemPrompt: record.system_prompt ?? null,
-      source: sourceDescriptor(record, source),
+      ...observationWitnessFields(record, source),
     };
   }
 
   function importBranchRecord(record, source = {}) {
     if (!record || record.kind !== 'branch') throw new Error('dae_branch_record_required');
-    const sent = normalizeMessages(record.sent || []);
     const parentSnapshot = makeParentSnapshot(record, source);
-    const rawOutput = String(record.received ?? '');
-    const xml = inspectXmlIntegrity(rawOutput);
     const trunkKey = inferTrunkKey(record);
     const probeId = String(record.item ?? record.question_id ?? 'unknown');
     const forkId = String(record.branch ?? 'unknown');
@@ -222,18 +230,50 @@
       parentSnapshotId: parentSnapshot?.parentSnapshotId || null,
       parentVerificationStatus: parentSnapshot?.verificationStatus || 'unverified',
       declaredParentPrefix: record.parent_prefix ?? null,
+      ancestryType: 'lived_trunk_branch',
       forkId,
       probeId,
-      modelVisibleMessages: sent,
-      rawOutput,
-      stopReason: record.stop_reason ?? null,
-      callOutcome: classifyCallOutcome(record),
-      xml,
-      usage: clone(record.usage || {}),
-      systemPrompt: record.system_prompt ?? null,
-      source: sourceDescriptor(record, source),
+      ...observationWitnessFields(record, source),
       parentSnapshot,
     };
+  }
+
+  function importColdRecord(record, source = {}) {
+    if (!record || record.kind !== 'cold') throw new Error('dae_cold_record_required');
+    const cell = String(record.cell || 'C');
+    const replicate = record.replicate ?? null;
+    const probeId = String(record.item ?? record.question_id ?? 'unknown');
+    const coldKey = `${cell}-r${replicate ?? '?'}`;
+
+    return {
+      recordType: 'retrospective_cold_observation',
+      observationId: id('obs', {
+        sourcePath: source.path || null,
+        cell,
+        replicate,
+        probeId,
+        ancestry: 'cold',
+      }),
+      trunkInstanceId: id('cold', { coldKey }),
+      trunkKey: coldKey,
+      parentSnapshotId: null,
+      parentVerificationStatus: 'cold_no_lived_parent',
+      declaredParentPrefix: null,
+      ancestryType: 'cold_no_lived_parent',
+      forkId: 'cold',
+      probeId,
+      family: cell,
+      replicate,
+      ...observationWitnessFields(record, source),
+      parentSnapshot: null,
+    };
+  }
+
+  function importObservationRecord(record, source = {}) {
+    if (!record || typeof record !== 'object') throw new Error('dae_observation_record_required');
+    if (record.kind === 'branch') return importBranchRecord(record, source);
+    if (record.kind === 'cold') return importColdRecord(record, source);
+    throw new Error(`dae_observation_kind_unsupported:${record.kind ?? 'missing'}`);
   }
 
   function compareBranchParentage(left, right) {
@@ -303,6 +343,8 @@
     makeParentSnapshot,
     importTrunkRecord,
     importBranchRecord,
+    importColdRecord,
+    importObservationRecord,
     compareBranchParentage,
     importBranchSet,
   };
