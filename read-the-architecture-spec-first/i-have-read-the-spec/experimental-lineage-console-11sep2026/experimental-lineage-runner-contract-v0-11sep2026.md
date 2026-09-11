@@ -1,9 +1,9 @@
 # Experimental Lineage Runner Contract v0
 
 **Date:** 11 Sep 2026  
-**Status:** design contract before execution code
+**Status:** design contract before live-provider execution
 
-This document defines the boundary between the lineage console and a future executor. The UI describes an experiment. The runner executes a **frozen manifest**. Analysis consumes immutable observations produced by that execution.
+This document defines the boundary between the lineage console and an executor. The UI describes an experiment. The runner executes a **frozen manifest**. Analysis consumes immutable observations produced by that execution.
 
 The purpose of this contract is to prevent execution logic from leaking into the UI and to preserve exact parentage, retry semantics, XML-region selection, and provenance.
 
@@ -64,7 +64,6 @@ Immutable result of one model continuation / probe attempt.
   "outcome": "complete",
   "xml": {
     "presentTags": ["reflection", "answer"],
-    "missingTags": [],
     "sections": {
       "reflection": ["..."],
       "answer": ["..."]
@@ -96,6 +95,8 @@ A parent snapshot contains the exact model-visible state at the fork point:
 Fork `a` and fork `0` must both point to the same snapshot for the contrast to be labelled `exact_shared_parent`.
 
 If hashes differ, the comparison is automatically downgraded to `cross_parent_exploratory` regardless of human labels.
+
+**Invariant:** a branch intervention is applied *after* the shared parent snapshot is frozen. The intervention therefore cannot contaminate the parent identity it is meant to vary from.
 
 ## 3. Execution phases
 
@@ -173,6 +174,8 @@ Example:
 
 If `<reflection>` is absent and policy is `NA`, the projection is `missing`; it does **not** silently fall back to whole-output embedding.
 
+**Invariant:** projection code may derive new records from an observation but may never overwrite `rawOutput` or change its execution outcome.
+
 ## 5. Embedding analysis contract
 
 An embedding observer receives only derived projection text plus immutable IDs.
@@ -243,10 +246,12 @@ The room server remains non-inferential. The nucleus remains stateless. A live B
 
 The exact placement should be decided before implementation, but either choice must preserve the constitutional Blum boundaries.
 
-## 10. First implementation target
+## 10. First implementation target — now implemented with mocks
 
-Before general execution, implement one narrow vertical slice:
+The first vertical slice is:
 
 **one frozen trunk → exact parent snapshot → two sibling forks (`a`, `0`) → one shared probe → raw observations → XML projection → sibling embedding divergence.**
 
-If that chain preserves IDs, hashes, retries, missingness, and provenance correctly, scale it to full batteries and multiple trunks.
+`experimental-lineage-runner-core-v0-11sep2026.js` implements this provider-agnostically. `test-experimental-lineage-runner-core-v0-11sep2026.js` exercises it with deterministic mock model and embedding functions. The browser rehearsal uses that same runner core rather than a duplicate implementation.
+
+The mock test establishes plumbing, not scientific validity. Real model and embedding adapters remain separate future work.
