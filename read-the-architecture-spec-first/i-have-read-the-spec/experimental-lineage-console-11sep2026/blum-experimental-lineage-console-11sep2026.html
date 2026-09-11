@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blum Experimental Lineage Console — 11 Sep 2026</title>
+<style>
+:root{
+  --bg:#0a0a0c;--surface:#111115;--surface2:#19191f;--surface3:#202028;
+  --border:#2b2b35;--border2:#3a3a48;--text:#d7d7df;--dim:#777786;--bright:#f2f2f7;
+  --amber:#e8a44a;--amberdim:rgba(232,164,74,.12);--green:#64b978;--greendim:rgba(100,185,120,.12);
+  --blue:#6293de;--bluedim:rgba(98,147,222,.12);--red:#dc6b6b;--reddim:rgba(220,107,107,.12);
+  --purple:#ad83d6;--purpledim:rgba(173,131,214,.12);--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px}
+button,input,textarea,select{font:inherit}.mono{font-family:var(--mono)}
+header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(10,10,12,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+.brand{font-family:var(--mono);color:var(--amber);font-weight:700;letter-spacing:.03em}.sub{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.spacer{flex:1}.pill{font:11px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:999px;color:var(--dim)}
+.pill.good{color:var(--green);border-color:rgba(100,185,120,.45);background:var(--greendim)}.pill.warn{color:var(--amber);border-color:rgba(232,164,74,.45);background:var(--amberdim)}
+button{border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:5px;padding:7px 10px;cursor:pointer}button:hover{border-color:var(--border2);color:var(--bright)}button.primary{background:var(--amber);color:#15110a;border-color:var(--amber);font-weight:700}button.good{border-color:rgba(100,185,120,.45);color:var(--green);background:var(--greendim)}button.danger{border-color:rgba(220,107,107,.4);color:var(--red);background:var(--reddim)}button.small{padding:4px 7px;font-size:11px}button:disabled{opacity:.45;cursor:not-allowed}
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr) 330px;min-height:calc(100vh - 51px)}
+nav{border-right:1px solid var(--border);background:var(--surface);padding:12px;position:sticky;top:51px;height:calc(100vh - 51px);overflow:auto}.navstep{display:block;width:100%;text-align:left;margin:0 0 6px;padding:10px 10px;border-radius:5px;background:transparent;border:1px solid transparent;color:var(--dim)}.navstep.active{background:var(--amberdim);border-color:rgba(232,164,74,.28);color:var(--amber)}.navstep b{font:11px var(--mono);display:block;margin-bottom:2px}.navstep span{font-size:11px}
+main{padding:18px 20px 80px;min-width:0}.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}.panelhead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.012)}.panelhead h2,.panelhead h3{margin:0;font-size:13px}.panelbody{padding:12px}.hint{color:var(--dim);font-size:12px;line-height:1.5}.eyebrow{font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.field label{display:block;font:10px var(--mono);color:var(--dim);margin-bottom:4px}.field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--bright);border-radius:5px;padding:8px;outline:none}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--amber)}.field textarea{min-height:72px;resize:vertical}
+.row{display:flex;align-items:center;gap:8px}.wrap{flex-wrap:wrap}.push{margin-left:auto}.divider{height:1px;background:var(--border);margin:12px 0}.muted{color:var(--dim)}
+.card{border:1px solid var(--border);border-radius:7px;background:var(--bg);padding:10px;margin-bottom:8px}.cardtop{display:flex;align-items:center;gap:7px;margin-bottom:8px}.idtag{font:10px var(--mono);padding:2px 6px;border:1px solid var(--border2);border-radius:3px;color:var(--amber)}.badge{font:9px var(--mono);padding:2px 5px;border-radius:3px;background:var(--surface3);color:var(--dim)}
+.turn{display:grid;grid-template-columns:24px 70px minmax(0,1fr) auto;gap:6px;align-items:start;margin-bottom:6px}.turn input[type=checkbox]{margin-top:9px}.turn input[type=text],.batteryrow input,.batteryrow select,.streamrow input,.streamrow select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px;border-radius:4px;min-width:0}.turn textarea{width:100%;min-height:48px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px;border-radius:4px;resize:vertical}
+.forkgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.forkcard{border-left:3px solid var(--blue)}.forkcard.schema{border-left-color:var(--purple)}.forkcard.cold{border-left-color:var(--green)}
+.batteryrow{display:grid;grid-template-columns:24px 58px 78px 110px 118px minmax(180px,1fr) auto;gap:5px;align-items:center;margin-bottom:5px}.batteryrow .text{width:100%}.minirow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.streamrow{display:grid;grid-template-columns:24px 130px 100px minmax(130px,1fr) 110px auto;gap:5px;align-items:center;margin-bottom:6px}.streamrow input,.streamrow select{width:100%}
+aside{border-left:1px solid var(--border);background:var(--surface);padding:12px;position:sticky;top:51px;height:calc(100vh - 51px);overflow:auto}.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.stat{padding:9px;background:var(--bg);border:1px solid var(--border);border-radius:5px}.stat .n{font:20px var(--mono);color:var(--bright)}.stat .l{font:9px var(--mono);text-transform:uppercase;color:var(--dim)}
+.matrix{display:grid;grid-template-columns:70px 1fr 1fr;gap:3px;font:10px var(--mono)}.mcell{border:1px solid var(--border);padding:7px;text-align:center;border-radius:3px;background:var(--bg)}.mcell.on{border-color:rgba(100,185,120,.45);background:var(--greendim);color:var(--green)}.mcell.off{border-color:rgba(232,164,74,.35);background:var(--amberdim);color:var(--amber)}.mhead{color:var(--dim);border:none;background:transparent}
+.warnbox{border-left:3px solid var(--amber);background:var(--amberdim);padding:8px 9px;margin:6px 0;font-size:11px;line-height:1.45}.okbox{border-left:3px solid var(--green);background:var(--greendim);padding:8px 9px;margin:6px 0;font-size:11px}.errbox{border-left:3px solid var(--red);background:var(--reddim);padding:8px 9px;margin:6px 0;font-size:11px}
+.lineage{font:11px/1.55 var(--mono);white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);padding:10px;border-radius:5px;color:var(--text)}
+.hidden{display:none!important}.freeze{border-color:rgba(100,185,120,.5)!important;box-shadow:0 0 0 1px rgba(100,185,120,.08) inset}.frozenveil input,.frozenveil textarea,.frozenveil select{pointer-events:none;opacity:.7}.footerbar{position:fixed;left:220px;right:330px;bottom:0;padding:8px 16px;border-top:1px solid var(--border);background:rgba(10,10,12,.96);display:flex;align-items:center;gap:8px;z-index:20;backdrop-filter:blur(8px)}
+@media(max-width:1100px){.shell{grid-template-columns:190px minmax(0,1fr)}aside{position:relative;top:auto;height:auto;grid-column:1/-1;border-left:0;border-top:1px solid var(--border)}.footerbar{left:190px;right:0}}@media(max-width:760px){.shell{display:block}nav{position:relative;top:auto;height:auto;border-right:0;border-bottom:1px solid var(--border);display:flex;overflow:auto}.navstep{min-width:130px}.grid2,.grid3{grid-template-columns:1fr}.batteryrow,.streamrow{display:flex;flex-wrap:wrap}.batteryrow>*:nth-child(6),.streamrow>*:nth-child(4){flex:1 1 100%}.footerbar{left:0}.turn{grid-template-columns:24px 60px 1fr}.turn .turnactions{grid-column:3}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">BLUM / EXPERIMENTAL LINEAGE CONSOLE</div>
+  <div class="sub">11sep2026 · lineage-first prototype</div>
+  <div class="spacer"></div>
+  <span id="freezePill" class="pill warn">draft</span>
+  <button class="small" onclick="exportManifest()">Export JSON</button>
+  <button class="small" onclick="document.getElementById('importFile').click()">Import JSON</button>
+  <input id="importFile" type="file" accept="application/json" class="hidden" onchange="importManifest(event)">
+</header>
+<div class="shell">
+<nav id="nav"></nav>
+<main id="main"></main>
+<aside>
+  <div class="eyebrow">Design geometry</div>
+  <div id="stats" class="statgrid" style="margin:8px 0 12px"></div>
+  <div class="eyebrow">2×2 trunk × schema</div>
+  <div id="matrix" class="matrix" style="margin:8px 0 12px"></div>
+  <div class="eyebrow">Preflight</div>
+  <div id="warnings"></div>
+  <div class="eyebrow" style="margin-top:14px">Lineage preview</div>
+  <div id="lineage" class="lineage" style="margin-top:7px"></div>
+</aside>
+</div>
+<div class="footerbar">
+  <span class="sub" id="statusText">Draft manifest · not executable yet</span>
+  <div class="spacer"></div>
+  <button id="newVersionBtn" class="good hidden" onclick="newVersionFromFrozen()">Create new draft version</button>
+  <button id="freezeBtn" class="primary" onclick="freezeManifest()">Freeze manifest</button>
+</div>
+<script>
+const steps=[
+  ['build','1 · BUILD','developmental object'],['fork','2 · FORK','controlled interventions'],['probe','3 · PROBE','battery instruments'],
+  ['measure','4 · MEASURE','analysis streams'],['review','5 · REVIEW','geometry & failure policy'],['freeze','6 · FREEZE','immutable manifest']
+];
+let activeStep='build';
+let state=defaultState();
+
+function uid(prefix){return prefix+'_'+Math.random().toString(16).slice(2,10)}
+function defaultState(){
+  const battery=[
+    {id:'E01',family:'E',construct:'',responseType:'credence',scorer:'',text:'',enabled:true},
+    {id:'A1',family:'A',construct:'',responseType:'bipolar',scorer:'',text:'',enabled:true},
+    {id:'N4',family:'N',construct:'',responseType:'credence',scorer:'',text:'',enabled:true},
+    {id:'N9',family:'N',construct:'',responseType:'threshold',scorer:'',text:'',enabled:true}
+  ];
+  return {
+    manifestVersion:1,frozen:false,fingerprint:null,frozenAt:null,
+    experiment:{name:'Untitled developmental experiment',objective:'',model:'',provider:'',notes:''},
+    trunks:[{id:'T01',label:'Developmental trunk',replicates:1,enabled:true,turns:[
+      {id:'P01',enabled:true,text:''},{id:'Q01',enabled:true,text:''},{id:'Q02',enabled:true,text:''},{id:'Q03',enabled:true,text:''}
+    ]}],
+    forks:[
+      {id:'a',label:'schema maintained',enabled:true,trunkLived:true,schemaPresent:true,intervention:'',replicates:1,batteryIds:battery.map(x=>x.id)},
+      {id:'0',label:'schema dropped',enabled:true,trunkLived:true,schemaPresent:false,intervention:'',replicates:1,batteryIds:battery.map(x=>x.id)}
+    ],
+    battery,
+    analysisStreams:[
+      {id:'whole_output',enabled:true,mode:'whole',tags:'',missingPolicy:'NA'},
+      {id:'reflection_only',enabled:true,mode:'single-tag',tags:'reflection',missingPolicy:'NA'},
+      {id:'answer_only',enabled:true,mode:'single-tag',tags:'answer',missingPolicy:'NA'},
+      {id:'reflective_core',enabled:false,mode:'composite',tags:'reflection,revision',missingPolicy:'NA'}
+    ],
+    metrics:{xi:true,lvs:true,trunkAnchor:true,siblingDivergence:true,promptAdjusted:true},
+    failurePolicy:{refusal:'record',parseFailure:'record',apiFailure:'record',truncated:'record',contextLimit:'record',protocolStop:'record',operatorAbort:'record',missingTag:'NA'},
+    provenance:{createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),source:'blum-experimental-lineage-console-11sep2026'}
+  }
+}
+function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function editable(){return !state.frozen}
+function changed(){state.provenance.updatedAt=new Date().toISOString();renderSide();}
+function setStep(id){activeStep=id;render()}
+function mutate(fn){if(state.frozen)return;fn();changed();render()}
+function val(path,value){if(state.frozen)return;let o=state;const keys=path.split('.');for(let i=0;i<keys.length-1;i++)o=o[keys[i]];o[keys.at(-1)]=value;changed();renderSide()}
+function byId(arr,id){return arr.find(x=>x.id===id)}
+
+function render(){
+ document.getElementById('nav').innerHTML=steps.map(([id,a,b])=>`<button class="navstep ${activeStep===id?'active':''}" onclick="setStep('${id}')"><b>${a}</b><span>${b}</span></button>`).join('');
+ const main=document.getElementById('main');main.className=state.frozen?'frozenveil':'';
+ main.innerHTML=({build:renderBuild,fork:renderFork,probe:renderProbe,measure:renderMeasure,review:renderReview,freeze:renderFreeze}[activeStep])();
+ renderSide();renderFreezeControls();
+}
+function renderBuild(){return `
+<div class="panel"><div class="panelhead"><h2>Define the developmental object</h2><span class="push hint">the trunk is the experimental parent</span></div><div class="panelbody">
+<div class="grid2"><div class="field"><label>EXPERIMENT NAME</label><input value="${esc(state.experiment.name)}" oninput="val('experiment.name',this.value)"></div><div class="field"><label>MODEL / PROVIDER</label><div class="minirow"><input placeholder="model" value="${esc(state.experiment.model)}" oninput="val('experiment.model',this.value)"><input placeholder="provider" value="${esc(state.experiment.provider)}" oninput="val('experiment.provider',this.value)"></div></div></div>
+<div class="field" style="margin-top:10px"><label>PRIMARY QUESTION / OBJECTIVE</label><textarea oninput="val('experiment.objective',this.value)" placeholder="What does this lineage let us distinguish?">${esc(state.experiment.objective)}</textarea></div></div></div>
+${state.trunks.map((t,ti)=>trunkCard(t,ti)).join('')}
+<button onclick="mutate(()=>state.trunks.push({id:'T'+String(state.trunks.length+1).padStart(2,'0'),label:'New trunk',replicates:1,enabled:true,turns:[{id:'P01',enabled:true,text:''}]}))">+ Add trunk</button>`}
+function trunkCard(t,ti){return `<div class="panel"><div class="panelhead"><span class="idtag">${esc(t.id)}</span><h3>${esc(t.label)}</h3><div class="push row"><label class="sub">replicates</label><input style="width:58px" type="number" min="1" value="${t.replicates}" onchange="mutate(()=>state.trunks[${ti}].replicates=Math.max(1,+this.value||1))"><button class="small danger" onclick="mutate(()=>state.trunks.splice(${ti},1))">remove</button></div></div><div class="panelbody">
+<div class="grid2"><div class="field"><label>TRUNK ID</label><input value="${esc(t.id)}" oninput="state.trunks[${ti}].id=this.value;changed()"></div><div class="field"><label>LABEL</label><input value="${esc(t.label)}" oninput="state.trunks[${ti}].label=this.value;changed()"></div></div>
+<div class="divider"></div><div class="row"><span class="eyebrow">Developmental turns</span><span class="push hint">renumber, untick, reorder, add</span></div><div style="margin-top:8px">${t.turns.map((q,qi)=>`<div class="turn"><input type="checkbox" ${q.enabled?'checked':''} onchange="mutate(()=>state.trunks[${ti}].turns[${qi}].enabled=this.checked)"><input type="text" value="${esc(q.id)}" oninput="state.trunks[${ti}].turns[${qi}].id=this.value;changed()"><textarea placeholder="Primer framing or developmental question" oninput="state.trunks[${ti}].turns[${qi}].text=this.value;changed()">${esc(q.text)}</textarea><div class="turnactions row"><button class="small" onclick="moveTurn(${ti},${qi},-1)">↑</button><button class="small" onclick="moveTurn(${ti},${qi},1)">↓</button><button class="small danger" onclick="mutate(()=>state.trunks[${ti}].turns.splice(${qi},1))">×</button></div></div>`).join('')}</div>
+<button class="small" onclick="mutate(()=>state.trunks[${ti}].turns.push({id:'Q'+String(state.trunks[${ti}].turns.length+1).padStart(2,'0'),enabled:true,text:''}))">+ turn</button>
+</div></div>`}
+function moveTurn(ti,qi,d){if(state.frozen)return;const a=state.trunks[ti].turns,j=qi+d;if(j<0||j>=a.length)return;[a[qi],a[j]]=[a[j],a[qi]];changed();render()}
+
+function renderFork(){return `<div class="panel"><div class="panelhead"><h2>Fork the lineage</h2><span class="push hint">declare exactly what changes at the branch</span></div><div class="panelbody"><p class="hint">Branches inherit the same frozen trunk unless marked as cold/no-trunk. Primary inference is strongest when sibling branches differ by one declared intervention.</p></div></div>
+<div class="forkgrid">${state.forks.map((f,i)=>forkCard(f,i)).join('')}</div><button style="margin-top:8px" onclick="addFork()">+ Add fork / control cell</button>`}
+function forkCard(f,i){const cls=!f.trunkLived?'cold':f.schemaPresent?'schema':'';return `<div class="card forkcard ${cls}"><div class="cardtop"><input type="checkbox" ${f.enabled?'checked':''} onchange="mutate(()=>state.forks[${i}].enabled=this.checked)"><span class="idtag">${esc(f.id)}</span><strong>${esc(f.label)}</strong><button class="small danger push" onclick="mutate(()=>state.forks.splice(${i},1))">remove</button></div>
+<div class="grid2"><div class="field"><label>FORK ID</label><input value="${esc(f.id)}" oninput="state.forks[${i}].id=this.value;changed()"></div><div class="field"><label>LABEL</label><input value="${esc(f.label)}" oninput="state.forks[${i}].label=this.value;changed()"></div></div>
+<div class="row wrap" style="margin:9px 0"><label><input type="checkbox" ${f.trunkLived?'checked':''} onchange="mutate(()=>state.forks[${i}].trunkLived=this.checked)"> lived trunk</label><label><input type="checkbox" ${f.schemaPresent?'checked':''} onchange="mutate(()=>state.forks[${i}].schemaPresent=this.checked)"> schema present at probe</label><label class="push sub">cold reps <input type="number" min="1" style="width:54px" value="${f.replicates}" onchange="mutate(()=>state.forks[${i}].replicates=Math.max(1,+this.value||1))"></label></div>
+<div class="field"><label>DECLARED INTERVENTION</label><textarea placeholder="What changes relative to the common parent?" oninput="state.forks[${i}].intervention=this.value;changed()">${esc(f.intervention)}</textarea></div>
+<div class="divider"></div><div class="row"><span class="eyebrow">Battery assignment</span><button class="small push" onclick="assignAll(${i},true)">all</button><button class="small" onclick="assignAll(${i},false)">none</button></div><div class="row wrap" style="margin-top:7px">${state.battery.map(b=>`<label class="badge"><input type="checkbox" ${f.batteryIds.includes(b.id)?'checked':''} onchange="toggleForkBattery(${i},'${jsq(b.id)}',this.checked)"> ${esc(b.id)}</label>`).join('')}</div></div>`}
+function addFork(){mutate(()=>state.forks.push({id:'F'+(state.forks.length+1),label:'new condition',enabled:true,trunkLived:true,schemaPresent:false,intervention:'',replicates:1,batteryIds:state.battery.filter(x=>x.enabled).map(x=>x.id)}))}
+function jsq(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+function assignAll(i,on){mutate(()=>state.forks[i].batteryIds=on?state.battery.filter(x=>x.enabled).map(x=>x.id):[])}
+function toggleForkBattery(i,id,on){mutate(()=>{const a=state.forks[i].batteryIds;if(on&&!a.includes(id))a.push(id);if(!on)state.forks[i].batteryIds=a.filter(x=>x!==id)})}
+
+function renderProbe(){const fams=[...new Set(state.battery.map(x=>x.family).filter(Boolean))];return `<div class="panel"><div class="panelhead"><h2>Probe battery</h2><span class="push hint">typed instruments, not anonymous strings</span></div><div class="panelbody"><div class="row wrap"><span class="eyebrow">Bulk select family</span>${fams.map(f=>`<button class="small" onclick="familyToggle('${jsq(f)}',true)">${esc(f)} on</button><button class="small" onclick="familyToggle('${jsq(f)}',false)">${esc(f)} off</button>`).join('')}<button class="small push" onclick="renumberBattery()">renumber Q IDs</button></div></div></div>
+<div class="panel"><div class="panelbody"><div class="batteryrow eyebrow"><span></span><span>ID</span><span>family</span><span>construct</span><span>response</span><span>canonical item text</span><span></span></div>${state.battery.map((b,i)=>batteryRow(b,i)).join('')}<button class="small" onclick="addBattery()">+ battery item</button></div></div>`}
+function batteryRow(b,i){return `<div class="batteryrow"><input type="checkbox" ${b.enabled?'checked':''} onchange="mutate(()=>state.battery[${i}].enabled=this.checked)"><input value="${esc(b.id)}" oninput="renameBattery(${i},this.value)"><input value="${esc(b.family)}" oninput="state.battery[${i}].family=this.value;changed()"><input value="${esc(b.construct)}" oninput="state.battery[${i}].construct=this.value;changed()"><select onchange="mutate(()=>state.battery[${i}].responseType=this.value)">${['free','credence','threshold','allocation','bipolar','tripolar','sentinel'].map(x=>`<option ${b.responseType===x?'selected':''}>${x}</option>`).join('')}</select><input class="text" placeholder="Paste canonical item text" value="${esc(b.text)}" oninput="state.battery[${i}].text=this.value;changed()"><span class="row"><button class="small" onclick="moveBattery(${i},-1)">↑</button><button class="small" onclick="moveBattery(${i},1)">↓</button><button class="small danger" onclick="removeBattery(${i})">×</button></span></div>`}
+function addBattery(){mutate(()=>{const id='Q'+String(state.battery.length+1).padStart(2,'0');state.battery.push({id,family:'',construct:'',responseType:'free',scorer:'',text:'',enabled:true});state.forks.forEach(f=>f.batteryIds.push(id))})}
+function renameBattery(i,newId){if(state.frozen)return;const old=state.battery[i].id;state.battery[i].id=newId;state.forks.forEach(f=>f.batteryIds=f.batteryIds.map(x=>x===old?newId:x));changed()}
+function removeBattery(i){mutate(()=>{const id=state.battery[i].id;state.battery.splice(i,1);state.forks.forEach(f=>f.batteryIds=f.batteryIds.filter(x=>x!==id))})}
+function moveBattery(i,d){if(state.frozen)return;const j=i+d;if(j<0||j>=state.battery.length)return;[state.battery[i],state.battery[j]]=[state.battery[j],state.battery[i]];changed();render()}
+function familyToggle(f,on){mutate(()=>state.battery.filter(x=>x.family===f).forEach(x=>x.enabled=on))}
+function renumberBattery(){mutate(()=>{state.battery.forEach((b,i)=>renameBattery(i,'Q'+String(i+1).padStart(2,'0')))})}
+
+function renderMeasure(){return `<div class="panel"><div class="panelhead"><h2>Analysis streams</h2><span class="push hint">declare what text the observer is allowed to see</span></div><div class="panelbody"><p class="hint">XML extraction is deterministic. Missing tags remain missing unless the frozen policy explicitly says otherwise. A stream can embed the whole output, one tag, or a composite of named tags.</p><div class="divider"></div><div class="streamrow eyebrow"><span></span><span>stream ID</span><span>mode</span><span>tag selector(s)</span><span>missing</span><span></span></div>${state.analysisStreams.map((s,i)=>streamRow(s,i)).join('')}<button class="small" onclick="addStream()">+ analysis stream</button></div></div>
+<div class="panel"><div class="panelhead"><h3>Embedding-space metrics</h3></div><div class="panelbody row wrap">${[['xi','ξ successive displacement'],['lvs','LVS local variance'],['trunkAnchor','trunk-anchor persistence'],['siblingDivergence','a↔0 sibling divergence'],['promptAdjusted','prompt-adjusted displacement']].map(([k,l])=>`<label class="badge"><input type="checkbox" ${state.metrics[k]?'checked':''} onchange="mutate(()=>state.metrics['${k}']=this.checked)"> ${l}</label>`).join('')}</div></div>`}
+function streamRow(s,i){return `<div class="streamrow"><input type="checkbox" ${s.enabled?'checked':''} onchange="mutate(()=>state.analysisStreams[${i}].enabled=this.checked)"><input value="${esc(s.id)}" oninput="state.analysisStreams[${i}].id=this.value;changed()"><select onchange="mutate(()=>state.analysisStreams[${i}].mode=this.value)">${['whole','single-tag','composite'].map(x=>`<option ${s.mode===x?'selected':''}>${x}</option>`).join('')}</select><input placeholder="reflection,revision" value="${esc(s.tags)}" ${s.mode==='whole'?'disabled':''} oninput="state.analysisStreams[${i}].tags=this.value;changed()"><select onchange="mutate(()=>state.analysisStreams[${i}].missingPolicy=this.value)">${['NA','exclude-turn','record-empty','fail-run'].map(x=>`<option ${s.missingPolicy===x?'selected':''}>${x}</option>`).join('')}</select><button class="small danger" onclick="mutate(()=>state.analysisStreams.splice(${i},1))">×</button></div>`}
+function addStream(){mutate(()=>state.analysisStreams.push({id:'stream_'+(state.analysisStreams.length+1),enabled:true,mode:'single-tag',tags:'',missingPolicy:'NA'}))}
+
+function renderReview(){const w=preflight();return `<div class="panel"><div class="panelhead"><h2>Review before tokens fly</h2><span class="push hint">the interface should disagree with us early</span></div><div class="panelbody">${w.length?w.map(x=>`<div class="${x.level==='error'?'errbox':'warnbox'}"><b>${esc(x.title)}</b><br>${esc(x.body)}</div>`).join(''):`<div class="okbox"><b>No blocking preflight findings.</b><br>The manifest is structurally ready to freeze. That does not make the scientific interpretation automatically valid.</div>`}</div></div>
+<div class="panel"><div class="panelhead"><h3>Outcome / failure policy</h3></div><div class="panelbody"><div class="grid3">${Object.entries(state.failurePolicy).map(([k,v])=>`<div class="field"><label>${k}</label><select onchange="mutate(()=>state.failurePolicy['${k}']=this.value)">${['record','NA','exclude','retry-once','fail-run'].map(x=>`<option ${v===x?'selected':''}>${x}</option>`).join('')}</select></div>`).join('')}</div></div></div>
+<div class="panel"><div class="panelhead"><h3>Primary interpretive discipline</h3></div><div class="panelbody"><div class="okbox">Exact shared-parent sibling contrasts are primary. Cross-parent comparisons should be labelled exploratory unless independently justified.</div><div class="warnbox">Response count is not independent-unit count. The console reports both battery observations and trunk-level parent units so 288 descendants do not magically become 288 independent developmental histories.</div></div></div>`}
+
+function renderFreeze(){return `<div class="panel ${state.frozen?'freeze':''}"><div class="panelhead"><h2>${state.frozen?'Manifest frozen':'Freeze the experimental object'}</h2><span class="push ${state.frozen?'pill good':'pill warn'}">v${state.manifestVersion}</span></div><div class="panelbody">${state.frozen?`<div class="okbox"><b>Fingerprint</b><br><span class="mono">${esc(state.fingerprint||'')}</span><br><span class="muted">${esc(state.frozenAt||'')}</span></div><p class="hint">The editable controls are locked. Export this JSON beside the raw run data. To change the design, create a new draft version; do not mutate this frozen object.</p>`:`<p class="hint">Freezing canonicalizes the manifest, calculates a SHA-256 fingerprint in the browser, timestamps it, and locks editable controls. The current prototype does not send any model calls.</p><button class="primary" onclick="freezeManifest()">Freeze v${state.manifestVersion}</button>`}</div></div>
+<div class="panel"><div class="panelhead"><h3>Manifest preview</h3></div><div class="panelbody"><pre class="lineage" style="max-height:420px;overflow:auto">${esc(JSON.stringify(canonicalManifest(false),null,2))}</pre></div></div>`}
+
+function activeTrunks(){return state.trunks.filter(t=>t.enabled)}
+function activeBattery(){return state.battery.filter(b=>b.enabled)}
+function activeForks(){return state.forks.filter(f=>f.enabled)}
+function stats(){
+ const trunks=activeTrunks();const trunkParents=trunks.reduce((n,t)=>n+(t.replicates||1),0);const trunkCalls=trunks.reduce((n,t)=>n+(t.replicates||1)*t.turns.filter(q=>q.enabled).length,0);
+ let probeCalls=0;activeForks().forEach(f=>{const nItems=f.batteryIds.filter(id=>byId(state.battery,id)?.enabled).length;const parents=f.trunkLived?trunkParents:(f.replicates||1);probeCalls+=nItems*parents});
+ const siblingGroups={};activeForks().filter(f=>f.trunkLived).forEach(f=>{const key=f.batteryIds.filter(id=>byId(state.battery,id)?.enabled).sort().join('|');(siblingGroups[key] ||= []).push(f)});
+ let paired=0;Object.entries(siblingGroups).forEach(([ids,fs])=>{if(fs.length>=2)paired+=ids?ids.split('|').length*trunkParents:0});
+ return {trunkParents,trunkCalls,probeCalls,totalCalls:trunkCalls+probeCalls,paired,observations:probeCalls,streams:state.analysisStreams.filter(x=>x.enabled).length};
+}
+function matrixCells(){const cells={'00':false,'01':false,'10':false,'11':false};activeForks().forEach(f=>cells[(f.trunkLived?'1':'0')+(f.schemaPresent?'1':'0')]=true);return cells}
+function preflight(){const out=[];if(!state.experiment.name.trim())out.push({level:'error',title:'Unnamed experiment',body:'Give the lineage a stable experimental name.'});if(!activeTrunks().length)out.push({level:'error',title:'No active trunk',body:'At least one developmental parent is required for lineage analysis.'});
+ state.trunks.forEach(t=>{if(t.enabled&&!t.turns.some(q=>q.enabled))out.push({level:'error',title:`${t.id} has no active turns`,body:'A lived trunk cannot be empty.'})});
+ const blanks=activeBattery().filter(b=>!b.text.trim());if(blanks.length)out.push({level:'warn',title:`${blanks.length} active battery item(s) have no canonical text`,body:'IDs are present, but the instrument text must be frozen before execution.'});
+ const dupIds=state.battery.map(x=>x.id).filter((x,i,a)=>a.indexOf(x)!==i);if(dupIds.length)out.push({level:'error',title:'Duplicate battery IDs',body:'Instrument IDs must be unique because fork assignments reference them.'});
+ activeForks().forEach(f=>{if(!f.batteryIds.some(id=>byId(state.battery,id)?.enabled))out.push({level:'warn',title:`Fork ${f.id} has no probes`,body:'It will create no battery observations.'});if(f.trunkLived&&!f.intervention.trim())out.push({level:'warn',title:`Fork ${f.id} has no declared intervention`,body:'State explicitly what differs from the shared parent.'})});
+ state.analysisStreams.filter(s=>s.enabled&&s.mode!=='whole'&&!s.tags.trim()).forEach(s=>out.push({level:'error',title:`Analysis stream ${s.id} has no XML selector`,body:'Tagged streams need at least one declared tag.'}));
+ const c=matrixCells();if(!(c['00']&&c['01']&&c['10']&&c['11']))out.push({level:'warn',title:'Trunk × schema square is incomplete',body:'This is not automatically wrong, but the console will not let a diagonal masquerade as a full factorial design.'});
+ if(activeForks().filter(f=>f.trunkLived).length<2)out.push({level:'warn',title:'No sibling contrast',body:'A lineage with fewer than two lived-trunk branches cannot provide a within-parent fork comparison.'});return out}
+function lineageText(){let s=`${state.experiment.name || 'Experiment'}\n`;activeTrunks().forEach(t=>{for(let r=1;r<=t.replicates;r++){const parent=t.replicates>1?`${t.id}.${r}`:t.id;s+=`├─ ${parent}  [${t.turns.filter(q=>q.enabled).length} lived turns]\n`;const fs=activeForks().filter(f=>f.trunkLived);fs.forEach((f,fi)=>{const ids=f.batteryIds.filter(id=>byId(state.battery,id)?.enabled);s+=`${fi===fs.length-1?'│  └':'│  ├'}─ fork ${f.id} · ${f.label} · ${ids.length} probes\n`})}});activeForks().filter(f=>!f.trunkLived).forEach(f=>s+=`└─ cold ${f.id} · ${f.label} · ${f.batteryIds.filter(id=>byId(state.battery,id)?.enabled).length} probes × ${f.replicates}\n`);return s}
+function renderSide(){const st=stats();document.getElementById('stats').innerHTML=[[st.trunkParents,'parent units'],[st.totalCalls,'est. calls'],[st.observations,'probe obs.'],[st.paired,'paired obs.'],[st.streams,'analysis streams'],[activeBattery().length,'active items']].map(([n,l])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');const c=matrixCells();document.getElementById('matrix').innerHTML=`<div class="mcell mhead"></div><div class="mcell mhead">no schema</div><div class="mcell mhead">schema</div><div class="mcell mhead">cold</div><div class="mcell ${c['00']?'on':'off'}">C ${c['00']?'✓':'—'}</div><div class="mcell ${c['01']?'on':'off'}">HQ ${c['01']?'✓':'—'}</div><div class="mcell mhead">lived</div><div class="mcell ${c['10']?'on':'off'}">0 ${c['10']?'✓':'—'}</div><div class="mcell ${c['11']?'on':'off'}">a ${c['11']?'✓':'—'}</div>`;const w=preflight();document.getElementById('warnings').innerHTML=w.length?w.slice(0,6).map(x=>`<div class="${x.level==='error'?'errbox':'warnbox'}"><b>${esc(x.title)}</b></div>`).join(''):'<div class="okbox">No structural blockers.</div>';document.getElementById('lineage').textContent=lineageText()}
+function renderFreezeControls(){document.getElementById('freezePill').className='pill '+(state.frozen?'good':'warn');document.getElementById('freezePill').textContent=state.frozen?`frozen v${state.manifestVersion}`:`draft v${state.manifestVersion}`;document.getElementById('freezeBtn').classList.toggle('hidden',state.frozen);document.getElementById('newVersionBtn').classList.toggle('hidden',!state.frozen);document.getElementById('statusText').textContent=state.frozen?`Frozen · ${state.fingerprint?.slice(0,18)}…`:'Draft manifest · not executable yet'}
+function canonicalManifest(includeFreeze=true){const x=JSON.parse(JSON.stringify(state));if(!includeFreeze){x.fingerprint=null;x.frozenAt=null;x.frozen=false}return x}
+function stableStringify(obj){if(obj===null||typeof obj!=='object')return JSON.stringify(obj);if(Array.isArray(obj))return '['+obj.map(stableStringify).join(',')+']';return '{'+Object.keys(obj).sort().map(k=>JSON.stringify(k)+':'+stableStringify(obj[k])).join(',')+'}'}
+async function sha256(text){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('')}
+async function freezeManifest(){if(state.frozen)return;const blockers=preflight().filter(x=>x.level==='error');if(blockers.length){activeStep='review';render();alert('Resolve blocking preflight findings before freezing.');return}const snap=canonicalManifest(false);snap.provenance.updatedAt=new Date().toISOString();const hash=await sha256(stableStringify(snap));state.provenance.updatedAt=snap.provenance.updatedAt;state.fingerprint='sha256:'+hash;state.frozenAt=new Date().toISOString();state.frozen=true;activeStep='freeze';render()}
+function newVersionFromFrozen(){if(!state.frozen)return;state=JSON.parse(JSON.stringify(state));state.manifestVersion=(state.manifestVersion||1)+1;state.frozen=false;state.fingerprint=null;state.frozenAt=null;state.provenance.createdFromFingerprint=arguments[0]||'previous-frozen-version';state.provenance.updatedAt=new Date().toISOString();activeStep='build';render()}
+function exportManifest(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${(state.experiment.name||'blum-experiment').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-v${state.manifestVersion}${state.frozen?'-frozen':''}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
+function importManifest(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.experiment||!Array.isArray(x.trunks)||!Array.isArray(x.forks)||!Array.isArray(x.battery))throw new Error('Not a lineage manifest');state=x;activeStep='build';render()}catch(e){alert('Import failed: '+e.message)}};r.readAsText(f);ev.target.value=''}
+render();
+</script>
+</body>
+</html>
