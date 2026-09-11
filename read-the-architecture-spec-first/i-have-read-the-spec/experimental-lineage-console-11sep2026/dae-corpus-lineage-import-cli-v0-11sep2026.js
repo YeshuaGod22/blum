@@ -56,6 +56,13 @@ function summarize(dataset) {
   const contrastCounts = {};
   for (const c of dataset.contrasts) contrastCounts[c.contrastType] = (contrastCounts[c.contrastType] || 0) + 1;
 
+  const unsupported = dataset.skipped.filter(x => x.reason === 'unsupported_record_kind');
+  const unsupportedKindCounts = {};
+  for (const row of unsupported) {
+    const key = row.kind === null || row.kind === undefined ? '<missing>' : String(row.kind);
+    unsupportedKindCounts[key] = (unsupportedKindCounts[key] || 0) + 1;
+  }
+
   return {
     filesSeen: dataset.filesSeen,
     rawCallsImported: all.length,
@@ -63,7 +70,9 @@ function summarize(dataset) {
     branchObservations: dataset.branchObservations.length,
     coldObservations: dataset.coldObservations.length,
     messageSnapshotsSkipped: dataset.skipped.filter(x => x.reason === 'message_snapshot_not_call').length,
-    unsupportedJsonSkipped: dataset.skipped.filter(x => x.reason === 'unsupported_record_kind').length,
+    unsupportedJsonSkipped: unsupported.length,
+    unsupportedKindCounts,
+    unsupportedExamples: unsupported.slice(0, 12).map(x => ({ path: x.path, kind: x.kind })),
     parseErrors: dataset.errors.length,
     callOutcomeCounts: outcomes,
     contrastCounts,
