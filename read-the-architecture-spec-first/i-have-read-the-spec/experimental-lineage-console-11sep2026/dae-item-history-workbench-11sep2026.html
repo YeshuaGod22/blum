@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blum / DAE Item History Workbench</title>
+<style>
+:root{--bg:#0a0a0c;--s:#121216;--s2:#19191f;--b:#2c2c35;--t:#d9d9e1;--d:#7d7d8a;--a:#e8a44a;--g:#64b978;--u:#6293de;--r:#dc6b6b;--p:#ad83d6;--m:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;--f:Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font-family:var(--f);font-size:14px}header{position:sticky;top:0;z-index:10;background:rgba(10,10,12,.96);border-bottom:1px solid var(--b);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.brand{font:700 13px var(--m);color:var(--a)}.muted{color:var(--d)}.mono{font-family:var(--m)}button,select,input{background:var(--s2);color:var(--t);border:1px solid var(--b);border-radius:5px;padding:7px 9px;font:inherit}button{cursor:pointer}button:hover{border-color:#555565}.push{margin-left:auto}main{padding:14px}.toolbar{display:grid;grid-template-columns:180px 220px 180px 180px 180px minmax(180px,1fr);gap:8px;margin-bottom:10px}.field label{display:block;font:10px var(--m);color:var(--d);margin-bottom:4px;text-transform:uppercase;letter-spacing:.07em}.field select,.field input{width:100%}.summary{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.pill{font:10px var(--m);border:1px solid var(--b);border-radius:999px;padding:4px 8px}.pill.warn{color:var(--a);border-color:rgba(232,164,74,.5)}.pill.good{color:var(--g);border-color:rgba(100,185,120,.5)}.variants{display:flex;gap:7px;overflow:auto;padding:0 0 9px}.variant{min-width:280px;max-width:440px;border:1px solid var(--b);background:var(--s);padding:8px;border-radius:6px}.variant.active{border-color:var(--a);box-shadow:0 0 0 1px rgba(232,164,74,.12) inset}.variant .hash{font:9px var(--m);color:var(--d);word-break:break-all}.variant .txt{font-size:12px;line-height:1.45;max-height:90px;overflow:auto;margin-top:5px}.wall{display:flex;gap:10px;overflow-x:auto;align-items:stretch;padding:4px 2px 18px;min-height:420px}.answer{flex:0 0 390px;max-width:88vw;background:var(--s);border:1px solid var(--b);border-radius:8px;display:flex;flex-direction:column;min-height:400px}.answerhead{padding:9px 10px;border-bottom:1px solid var(--b);background:rgba(255,255,255,.012)}.answerhead .top{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.tag{font:9px var(--m);padding:2px 5px;border-radius:3px;background:var(--s2);color:var(--d)}.tag.pilot{color:var(--p)}.tag.raw{color:var(--u)}.tag.bad{color:var(--r)}.meta{font:10px/1.45 var(--m);color:var(--d);margin-top:7px;white-space:pre-wrap}.answerbody{padding:11px;white-space:pre-wrap;line-height:1.52;overflow:auto;max-height:65vh;flex:1}.empty{border:1px dashed var(--b);padding:30px;color:var(--d);border-radius:8px;text-align:center}.promptbox{border-left:3px solid var(--a);background:rgba(232,164,74,.08);padding:9px 10px;margin:8px 0 12px;font-size:12px;line-height:1.45;white-space:pre-wrap}.counts{font:11px var(--m);color:var(--d)}@media(max-width:900px){.toolbar{grid-template-columns:1fr 1fr}.answer{flex-basis:330px}}@media(max-width:560px){.toolbar{grid-template-columns:1fr}.answer{flex-basis:88vw}}
+</style>
+</head>
+<body>
+<header>
+<div class="brand">BLUM / DAE ITEM HISTORY</div>
+<span class="muted mono" id="status">load dae-whole-corpus-index.json</span>
+<div class="push"></div>
+<button onclick="document.getElementById('file').click()">Load whole-corpus index</button>
+<input id="file" type="file" accept="application/json" hidden>
+</header>
+<main>
+<div class="toolbar">
+  <div class="field"><label>Item</label><select id="item"></select></div>
+  <div class="field"><label>Identity mode</label><select id="mode"><option value="canonical">Canonical item lineage</option><option value="exact_text">Exact prompt text</option></select></div>
+  <div class="field"><label>Collection</label><select id="collection"><option value="">All collections</option></select></div>
+  <div class="field"><label>Condition</label><select id="condition"><option value="">All conditions</option></select></div>
+  <div class="field"><label>Fork</label><select id="fork"><option value="">All forks</option></select></div>
+  <div class="field"><label>Output surface</label><select id="surface"><option value="__whole__">Whole output</option></select></div>
+</div>
+<div id="summary" class="summary"></div>
+<div id="prompt" class="promptbox">Load a whole-corpus index to compare historical responses.</div>
+<div id="variants" class="variants"></div>
+<div id="counts" class="counts"></div>
+<div id="wall" class="wall"><div class="empty">No corpus loaded.</div></div>
+</main>
+<script>
+let index=null, activePromptHash=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function uniq(xs){return [...new Set(xs.filter(x=>x!==null&&x!==undefined&&x!==''))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));}
+function setOptions(el,values,firstLabel){const cur=el.value;el.innerHTML=`<option value="">${esc(firstLabel)}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(cur))el.value=cur;}
+function sectionNames(rows){const s=new Set(); rows.forEach(r=>Object.keys(r.sections||{}).forEach(k=>s.add(k)));return [...s].sort();}
+function sectionText(row,key){if(key==='__whole__')return row.rawOutput||'';const v=row.sections?.[key];if(Array.isArray(v))return v.join('\n\n');if(v===null||v===undefined)return '';return String(v);}
+function currentHistory(){return index?.itemHistories?.[$('item').value]||null;}
+function baseRows(){const h=currentHistory();if(!h)return[];let rows=h.observations||[];if($('mode').value==='exact_text'&&activePromptHash)rows=rows.filter(r=>r.exactPromptHash===activePromptHash);return rows;}
+function populateFilters(){const rows=baseRows();setOptions($('collection'),uniq(rows.map(r=>r.collection)),'All collections');setOptions($('condition'),uniq(rows.map(r=>r.condition)),'All conditions');setOptions($('fork'),uniq(rows.map(r=>r.forkId)),'All forks');const surf=$('surface').value;const names=sectionNames(rows);$('surface').innerHTML='<option value="__whole__">Whole output</option>'+names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(surf==='__whole__'||names.includes(surf))$('surface').value=surf;}
+function filteredRows(){return baseRows().filter(r=>(!$('collection').value||String(r.collection)===$('collection').value)&&(!$('condition').value||String(r.condition)===$('condition').value)&&(!$('fork').value||String(r.forkId)===$('fork').value));}
+function renderVariants(){const h=currentHistory();const box=$('variants');if(!h){box.innerHTML='';return}const vars=h.promptVariants||[];if($('mode').value==='canonical'){activePromptHash=null;box.innerHTML=vars.map(v=>`<div class="variant"><div><b>${v.count}</b> observations · ${v.collections.length} collections</div><div class="hash">${esc(v.exactPromptHash)}</div><div class="txt">${esc(v.exactPromptText)}</div></div>`).join('');return}if(!activePromptHash||!vars.some(v=>v.exactPromptHash===activePromptHash))activePromptHash=vars[0]?.exactPromptHash||null;box.innerHTML=vars.map(v=>`<button class="variant ${v.exactPromptHash===activePromptHash?'active':''}" onclick="chooseVariant('${esc(v.exactPromptHash)}')"><div><b>${v.count}</b> observations · ${v.collections.length} collections</div><div class="hash">${esc(v.exactPromptHash)}</div><div class="txt">${esc(v.exactPromptText)}</div></button>`).join('');}
+function chooseVariant(hash){activePromptHash=hash;render();}
+function render(){if(!index)return;renderVariants();populateFilters();const h=currentHistory();const rows=filteredRows();const all=baseRows();const item=$('item').value;const vars=h?.promptVariants||[];$('summary').innerHTML=`<span class="pill good">${esc(item)}</span><span class="pill">${all.length} in identity set</span><span class="pill">${rows.length} after filters</span><span class="pill ${vars.length>1?'warn':''}">${vars.length} prompt variant${vars.length===1?'':'s'}</span>`;let p='';if($('mode').value==='exact_text'&&activePromptHash){const v=vars.find(x=>x.exactPromptHash===activePromptHash);p=v?.exactPromptText||'';}else if(vars.length===1)p=vars[0]?.exactPromptText||'';else p='Canonical item lineage: multiple literal prompt variants are present. Choose “Exact prompt text” to restrict comparison to one wording.';$('prompt').textContent=p;$('counts').textContent=`Showing ${rows.length} responses · surface: ${$('surface').value==='__whole__'?'whole output':$('surface').value}`;if(!rows.length){$('wall').innerHTML='<div class="empty">No observations match the current filters.</div>';return}$('wall').innerHTML=rows.map(r=>{const body=sectionText(r,$('surface').value);const prov=r.provenanceClass==='reconstructed_from_jsonl'?'pilot':'raw';const bad=r.callOutcome&&r.callOutcome!=='complete';return `<article class="answer"><div class="answerhead"><div class="top"><b>${esc(r.collection)}</b><span class="tag ${prov}">${esc(r.provenanceClass)}</span>${bad?`<span class="tag bad">${esc(r.callOutcome)}</span>`:''}</div><div class="meta">condition: ${esc(r.condition)}\nreplicate: ${esc(r.replicate)} · fork: ${esc(r.forkId)}\ntrunk: ${esc(r.trunkKey)}\nparent: ${esc(r.parentSnapshotId||'—')}\ninstrument: ${esc(r.instrument||'unresolved')}\nsource: ${esc(r.sourcePath||'—')}</div></div><div class="answerbody">${body?esc(body):'<span class="muted">[surface absent]</span>'}</div></article>`}).join('');}
+function loadIndex(obj){if(!obj||!obj.itemHistories)throw new Error('not_a_whole_corpus_index');index=obj;const items=Object.keys(obj.itemHistories).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));$('item').innerHTML=items.map(x=>`<option value="${esc(x)}">${esc(x)} · ${obj.itemHistories[x].observationCount}</option>`).join('');if(items.includes('N4'))$('item').value='N4';activePromptHash=null;$('status').textContent=`${obj.observationCount} observations · ${obj.itemCount} items · ${obj.collections.length} collections`;render();}
+$('file').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{loadIndex(JSON.parse(await f.text()))}catch(err){alert(err.message||String(err))}});
+['item','mode'].forEach(id=>$(id).addEventListener('change',()=>{activePromptHash=null;render()}));['collection','condition','fork','surface'].forEach(id=>$(id).addEventListener('change',render));
+</script>
+</body></html>
