@@ -3,6 +3,7 @@
 const assert = require('assert');
 const path = require('path');
 const cli = require('./dae-corpus-lineage-import-cli-v0-11sep2026.js');
+const vizModel = require('./corpus-visualization-model-v0-11sep2026.js');
 
 function basename(p) {
   return String(p || '').split('/').pop();
@@ -25,11 +26,19 @@ function main() {
     pathPrefix: 'experiments/EXP-003-the-sixth-question/raw12',
   });
   const trunkOutcomeCounts = countOutcomes(dataset.trunkTurns);
+  const visualization = vizModel.buildCorpusVisualization(dataset);
 
   console.log('REAL RAW12 DIAGNOSTIC');
   console.log(JSON.stringify({
     summary: dataset.summary,
     trunkOutcomeCounts,
+    visualization: {
+      summary: visualization.summary,
+      families: visualization.families,
+      probeCount: visualization.probes.length,
+      coverageCells: visualization.coverage.length,
+      exactContrasts: visualization.exactContrasts.length,
+    },
     errors: dataset.errors,
     skippedCount: dataset.skipped.length,
   }, null, 2));
@@ -62,10 +71,27 @@ function main() {
   assert.ok(truncated[0].xml.presentTags.includes('reply'), 'truncated row retains reply section presence');
   assert.ok(truncated[0].xml.sections.reply?.[0]?.length > 0, 'truncated row retains usable reply text');
 
+  // The corpus visualization is derived from the same imported witness and
+  // must preserve known lineage-level invariants rather than inventing a new census.
+  assert.equal(visualization.lineage.length, 12, 'raw12 renders as twelve parent trunk instances');
+  assert.equal(visualization.exactContrasts.length, 372, 'all 372 verified sibling contrasts survive into the view model');
+  assert.ok(visualization.coverage.length > 0, 'battery coverage cells are derived');
+  assert.ok(visualization.probes.length > 0, 'probe vocabulary is derived');
+  assert.ok(visualization.families.length >= 4, 'developmental families remain visible');
+  assert.ok(visualization.anomalies.some(x => basename(x.sourcePath) === 'H-r1-t5.json'), 'truncated trunk remains visible as a corpus anomaly');
+
   console.log('PASS real-dae-raw12-integration-v0');
   console.log(JSON.stringify({
     summary: dataset.summary,
     trunkOutcomeCounts,
+    visualization: {
+      trunkInstances: visualization.lineage.length,
+      families: visualization.families,
+      probes: visualization.probes.length,
+      coverageCells: visualization.coverage.length,
+      exactContrasts: visualization.exactContrasts.length,
+      anomalies: visualization.anomalies.length,
+    },
     truncated: {
       source: truncated[0].source.path,
       stopReason: truncated[0].stopReason,
