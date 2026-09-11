@@ -86,6 +86,7 @@ function runCompanionTests() {
   for (const file of [
     'test-battery-library-core-v0-11sep2026.js',
     'test-corpus-visualization-model-v0-11sep2026.js',
+    'test-dae-unified-observation-index-v0-11sep2026.js',
   ]) {
     execFileSync(process.execPath, [path.join(cwd, file)], { cwd, stdio: 'inherit' });
   }
