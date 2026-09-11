@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const cli = require('./dae-corpus-lineage-import-cli-v0-11sep2026.js');
 const vizModel = require('./corpus-visualization-model-v0-11sep2026.js');
 
@@ -43,9 +44,6 @@ function main() {
     skippedCount: dataset.skipped.length,
   }, null, 2));
 
-  // Independent expectations from RAW12-LONGITUDINAL-SUMMARY.json apply to
-  // the longitudinal trunk surface, not to the 744 branch observations that
-  // happen to live in the same raw12 directory.
   assert.equal(dataset.trunkTurns.length, 108, 'raw12 longitudinal summary records 108 trunk turn rows');
   assert.equal(trunkOutcomeCounts.complete, 107, '107 raw12 trunk turns ended normally');
   assert.equal(trunkOutcomeCounts.truncated, 1, 'one raw12 trunk turn stopped at max_tokens');
@@ -57,7 +55,6 @@ function main() {
   assert.equal(truncated[0].stopReason, 'max_tokens');
   assert.equal(truncated[0].usage.output_tokens, 8192);
 
-  // The longitudinal evidence builder records reply parser recovery on these rows.
   const f38 = dataset.trunkTurns.find(x => basename(x.source.path) === 'F-r3-t8.json');
   const f39 = dataset.trunkTurns.find(x => basename(x.source.path) === 'F-r3-t9.json');
   assert.ok(f38, 'F-r3-t8 exists');
@@ -67,12 +64,9 @@ function main() {
   assert.ok(f38.xml.sections.reply?.[0]?.length > 0, 'F-r3-t8 recovered reply text is retained');
   assert.ok(f39.xml.sections.reply?.[0]?.length > 0, 'F-r3-t9 recovered reply text is retained');
 
-  // H-r1-t5 should preserve completed earlier sections even though the call truncates.
   assert.ok(truncated[0].xml.presentTags.includes('reply'), 'truncated row retains reply section presence');
   assert.ok(truncated[0].xml.sections.reply?.[0]?.length > 0, 'truncated row retains usable reply text');
 
-  // The corpus visualization is derived from the same imported witness and
-  // must preserve known lineage-level invariants rather than inventing a new census.
   assert.equal(visualization.lineage.length, 12, 'raw12 renders as twelve parent trunk instances');
   assert.equal(visualization.exactContrasts.length, 372, 'all 372 verified sibling contrasts survive into the view model');
   assert.ok(visualization.coverage.length > 0, 'battery coverage cells are derived');
@@ -104,6 +98,13 @@ function main() {
       { source: f39.source.path, integrity: f39.xml.sectionIntegrity.reply },
     ],
   }, null, 2));
+
+  // Reuse the same pinned DAE checkout to verify the cross-collection index,
+  // including Pilot 1's older reconstructed JSONL-derived format.
+  execFileSync(process.execPath, [
+    path.join(__dirname, 'test-real-dae-whole-corpus-index-v0-11sep2026.js'),
+    daeRoot,
+  ], { cwd: __dirname, stdio: 'inherit' });
 }
 
 main();
