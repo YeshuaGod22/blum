@@ -1,21 +1,33 @@
 # READ THIS BEFORE MODIFYING THE EXPERIMENTAL LINEAGE CONSOLE
 
 **Date:** 11 Sep 2026  
-**Status:** experimental UI module  
+**Status:** experimental UI + runner-core module  
 **Parent architecture:** `blum-architecture-spec-v-14feb2026.md`
 
 This module is a human/AI-usable control surface for developmental experiments. Its central object is a **lineage**: a frozen developmental trunk, declared fork points, controlled branch interventions, probe/battery instruments, and analysis streams attached to descendants.
 
 It is deliberately separate from the room chat UI.
 
+## Start here
+
+- `blum-experimental-lineage-console-11sep2026.html` — design and freeze a lineage manifest.
+- `experimental-lineage-runner-contract-v0-11sep2026.md` — the boundary between design, execution, observations, and analysis.
+- `experimental-lineage-runner-core-v0-11sep2026.js` — provider-agnostic execution core; the caller injects model and embedding functions.
+- `test-experimental-lineage-runner-core-v0-11sep2026.js` — Node vertical-slice test.
+- `experimental-lineage-vertical-slice-rehearsal-11sep2026.html` — browser rehearsal using the real runner core with deterministic mock model/embedding functions. No API calls.
+
+The committed vertical-slice test is also run by `.github/workflows/test-experimental-lineage-console.yml`.
+
 ## Architectural boundary
 
-This console does **not** make rooms think, does **not** put another occupant inside a home, and does **not** call one home from another. In its current prototype state it is a local design-and-manifest tool only.
+This console does **not** make rooms think, does **not** put another occupant inside a home, and does **not** call one home from another.
 
-When an execution adapter is added later:
+The new runner core is orchestration logic only. It has no provider credentials and no Blum room knowledge. It receives a frozen manifest and an injected `callModel()` function. A later live adapter must decide how a consenting Blum home or external controller supplies that function without crossing constitutional boundaries.
+
+When a live execution adapter is added:
 
 - a room remains only a chatlog + participant list + dispatch;
-- a home remains the only place that orchestrates model calls;
+- a home remains the only place that orchestrates its own model calls;
 - the nucleus remains stateless;
 - experiment execution must be represented as a home-side capability/process or an external controller speaking through existing Blum boundaries, never inference inside the room server;
 - all user/agent protocol symmetry must be preserved.
@@ -30,10 +42,12 @@ When an execution adapter is added later:
 6. **Analysis streams are preregistrable.** XML-region selectors and missing-tag policies are part of the frozen manifest.
 7. **The design exposes its geometry before execution.** Call counts, paired contrasts, factorial cells, and obvious missing cells are visible before a run.
 8. **Complexity is folded, not removed.** The default workflow is Build → Fork → Probe → Measure → Review → Freeze; advanced details remain available without forcing them into the operator's working memory.
+9. **Raw output and analysis projection are different objects.** The runner preserves raw model output; XML selectors create derived projections later.
+10. **Exact means exact.** An `a ↔ 0` pair receives `exact_shared_parent` only when both observations carry the same real `parentSnapshotId`.
 
 ## Prototype scope
 
-`blum-experimental-lineage-console-11sep2026.html` is a standalone HTML/CSS/JS prototype. It currently supports:
+`blum-experimental-lineage-console-11sep2026.html` currently supports:
 
 - editable experiment metadata and developmental turns;
 - multiple trunks and replicate counts;
@@ -48,14 +62,20 @@ When an execution adapter is added later:
 - JSON import/export of the experiment manifest;
 - a lineage preview that makes parentage visible.
 
-It does **not yet execute API calls**. That boundary is intentional for this first commit: the data model and operator semantics should stabilize before an execution adapter is wired to live homes/providers.
+The runner core now supports the first executable vertical slice:
+
+`frozen manifest → lived trunk → exact parent snapshot → sibling forks → shared probe → raw observations → XML projections → optional embeddings → sibling cosine divergence`
+
+It deliberately does **not** contain a live provider adapter yet.
 
 ## Data model in one sentence
 
-`experiment → trunks → forks → probes → observations`, with `analysisStreams` attached declaratively and every frozen manifest assigned a fingerprint.
+`experiment → trunks → parent snapshots → forks → probes → observations → analysis projections`, with every frozen design assigned a fingerprint and every exact sibling comparison anchored to an immutable parent snapshot.
 
-## Before adding execution
+## Before adding live execution
 
-Do not bolt provider calls directly into random button handlers. Define the execution contract first: what a frozen manifest hands to a runner, what immutable IDs the runner returns, how retries/resumes preserve lineage, and how raw outputs/stop reasons/XML-presence metadata are written without mutating the design manifest.
+Do not bolt provider calls directly into random button handlers.
+
+The next adapter must satisfy the runner contract: a frozen manifest goes in; append-only execution rows and immutable observations come out; retries preserve failed attempts; raw output is retained; XML selection does not mutate observations; and live model execution stays on the correct side of Blum's home/room/nucleus boundaries.
 
 The console should become a laboratory instrument, not a prettier prompt launcher.
