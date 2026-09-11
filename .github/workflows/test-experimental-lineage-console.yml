@@ -32,3 +32,6 @@ jobs:
       - name: Test DAE raw-call lineage import adapter
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js
+      - name: Test imported observations through shared analysis path
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-retrospective-observation-analysis-v0-11sep2026.js
