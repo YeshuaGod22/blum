@@ -8,6 +8,13 @@ function basename(p) {
   return String(p || '').split('/').pop();
 }
 
+function countOutcomes(records) {
+  return (records || []).reduce((counts, record) => {
+    counts[record.callOutcome] = (counts[record.callOutcome] || 0) + 1;
+    return counts;
+  }, {});
+}
+
 function main() {
   const daeRoot = process.argv[2];
   if (!daeRoot) throw new Error('usage: node test-real-dae-raw12-integration-v0-11sep2026.js <DAE-repo-root>');
@@ -17,18 +24,22 @@ function main() {
     repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
     pathPrefix: 'experiments/EXP-003-the-sixth-question/raw12',
   });
+  const trunkOutcomeCounts = countOutcomes(dataset.trunkTurns);
 
   console.log('REAL RAW12 DIAGNOSTIC');
   console.log(JSON.stringify({
     summary: dataset.summary,
+    trunkOutcomeCounts,
     errors: dataset.errors,
     skippedCount: dataset.skipped.length,
   }, null, 2));
 
-  // Independent expectations from RAW12-LONGITUDINAL-SUMMARY.json.
+  // Independent expectations from RAW12-LONGITUDINAL-SUMMARY.json apply to
+  // the longitudinal trunk surface, not to the 744 branch observations that
+  // happen to live in the same raw12 directory.
   assert.equal(dataset.trunkTurns.length, 108, 'raw12 longitudinal summary records 108 trunk turn rows');
-  assert.equal(dataset.summary.callOutcomeCounts.complete, 107, '107 raw12 turns ended normally');
-  assert.equal(dataset.summary.callOutcomeCounts.truncated, 1, 'one raw12 turn stopped at max_tokens');
+  assert.equal(trunkOutcomeCounts.complete, 107, '107 raw12 trunk turns ended normally');
+  assert.equal(trunkOutcomeCounts.truncated, 1, 'one raw12 trunk turn stopped at max_tokens');
   assert.equal(dataset.summary.parseErrors, 0, 'raw12 records import without JSON/import errors');
 
   const truncated = dataset.trunkTurns.filter(x => x.callOutcome === 'truncated');
@@ -54,6 +65,7 @@ function main() {
   console.log('PASS real-dae-raw12-integration-v0');
   console.log(JSON.stringify({
     summary: dataset.summary,
+    trunkOutcomeCounts,
     truncated: {
       source: truncated[0].source.path,
       stopReason: truncated[0].stopReason,
