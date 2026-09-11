@@ -33,7 +33,11 @@ function classifyPath(file) {
 }
 
 function summarize(dataset) {
-  const all = [...dataset.trunkTurns, ...dataset.branchObservations];
+  const all = [
+    ...dataset.trunkTurns,
+    ...dataset.branchObservations,
+    ...dataset.coldObservations,
+  ];
   const outcomes = {};
   const sectionExceptions = [];
   for (const record of all) {
@@ -57,6 +61,7 @@ function summarize(dataset) {
     rawCallsImported: all.length,
     trunkTurns: dataset.trunkTurns.length,
     branchObservations: dataset.branchObservations.length,
+    coldObservations: dataset.coldObservations.length,
     messageSnapshotsSkipped: dataset.skipped.filter(x => x.reason === 'message_snapshot_not_call').length,
     unsupportedJsonSkipped: dataset.skipped.filter(x => x.reason === 'unsupported_record_kind').length,
     parseErrors: dataset.errors.length,
@@ -74,6 +79,7 @@ function importDirectory(rawDirectory, options = {}) {
   const trunkTurns = [];
   const branchEntries = [];
   const branchObservations = [];
+  const coldObservations = [];
   const skipped = [];
   const errors = [];
 
@@ -104,6 +110,8 @@ function importDirectory(rawDirectory, options = {}) {
       } else if (record.kind === 'branch') {
         branchObservations.push(A.importBranchRecord(record, source));
         branchEntries.push({ record, source });
+      } else if (record.kind === 'cold') {
+        coldObservations.push(A.importColdRecord(record, source));
       } else {
         skipped.push({ path: rel, reason: 'unsupported_record_kind', kind: record.kind ?? null });
       }
@@ -112,6 +120,8 @@ function importDirectory(rawDirectory, options = {}) {
     }
   }
 
+  // Only lived-parent branches are eligible for exact sibling contrasts.
+  // Cold observations have no parentSnapshotId and remain a separate control family.
   const branchSet = A.importBranchSet(branchEntries);
   const dataset = {
     schema: 'blum-dae-retrospective-lineage-dataset-v0',
@@ -122,6 +132,8 @@ function importDirectory(rawDirectory, options = {}) {
     filesSeen: files.length,
     trunkTurns,
     branchObservations,
+    coldObservations,
+    observations: [...branchObservations, ...coldObservations],
     contrasts: branchSet.contrasts,
     skipped,
     errors,
