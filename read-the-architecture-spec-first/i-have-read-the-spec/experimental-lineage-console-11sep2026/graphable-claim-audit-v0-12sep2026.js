@@ -62,10 +62,23 @@ function classifyPair(pair) {
     leftForkId:pair.leftForkId,
     rightForkId:pair.rightForkId,
     answerComparable:projection.comparable,
+    leftAnswerStatus:projection.left.status,
+    rightAnswerStatus:projection.right.status,
     leftAnswerSource:projection.left.source,
     rightAnswerSource:projection.right.source,
   };
-  if (!projection.comparable) return {...base,kind:'missing_answer',reason:projection.reason};
+  if (!projection.comparable) {
+    const adjudication = projection.left.status === 'adjudication_required' || projection.right.status === 'adjudication_required';
+    return {
+      ...base,
+      kind: adjudication ? 'adjudication_required' : 'answer_unavailable',
+      reason:projection.reason,
+      leftCandidateText:projection.left.candidateText || null,
+      rightCandidateText:projection.right.candidateText || null,
+      leftSourcePath:pair.left.sourcePath || null,
+      rightSourcePath:pair.right.sourcePath || null,
+    };
+  }
 
   const leftText=projection.left.text, rightText=projection.right.text;
   const behavior = Behavioral.compare(leftText,rightText);
@@ -114,52 +127,29 @@ function summarizeStratum(itemId, rows) {
   if (numeric.length) {
     const deltas=numeric.map(x=>x.signedDelta);
     graphPrimitives.push({type:'paired_slopeplot',outcome:'numeric_answer',n:numeric.length,x:[first.leftForkId,first.rightForkId]});
-    candidateClaims.push({
-      claimClass:'descriptive_paired_numeric_difference',
-      text:`${itemId} has ${numeric.length} matched numeric answer pair(s) in ${first.collection} for ${first.forkContrast}; median signed difference (${first.leftForkId}→${first.rightForkId}) is ${median(deltas)}.`,
-      drawableBy:'paired_slopeplot',n:numeric.length,
-      statistic:{medianSignedDelta:median(deltas),minSignedDelta:Math.min(...deltas),maxSignedDelta:Math.max(...deltas)},
-      causalMeaning:'undeclared_until_design_map',
-    });
+    candidateClaims.push({claimClass:'descriptive_paired_numeric_difference',text:`${itemId} has ${numeric.length} matched numeric answer pair(s) in ${first.collection} for ${first.forkContrast}; median signed difference (${first.leftForkId}→${first.rightForkId}) is ${median(deltas)}.`,drawableBy:'paired_slopeplot',n:numeric.length,statistic:{medianSignedDelta:median(deltas),minSignedDelta:Math.min(...deltas),maxSignedDelta:Math.max(...deltas)},causalMeaning:'undeclared_until_design_map'});
   }
   if (sentinel.length) {
     graphPrimitives.push({type:'paired_categorical_transition',outcome:'sentinel_answer',n:sentinel.length});
     const changed=sentinel.filter(x=>!x.exactMatch).length;
-    candidateClaims.push({
-      claimClass:'descriptive_paired_categorical_transition',
-      text:`${itemId} has ${sentinel.length} matched sentinel answer pair(s) in ${first.collection} for ${first.forkContrast}; ${changed} change category across the fork contrast.`,
-      drawableBy:'paired_categorical_transition',n:sentinel.length,
-      statistic:{changed,unchanged:sentinel.length-changed,transitions},
-      causalMeaning:'undeclared_until_design_map',
-    });
+    candidateClaims.push({claimClass:'descriptive_paired_categorical_transition',text:`${itemId} has ${sentinel.length} matched sentinel answer pair(s) in ${first.collection} for ${first.forkContrast}; ${changed} change category across the fork contrast.`,drawableBy:'paired_categorical_transition',n:sentinel.length,statistic:{changed,unchanged:sentinel.length-changed,transitions},causalMeaning:'undeclared_until_design_map'});
   }
   if (prose.length) {
     const uni=prose.map(x=>x.unigramJaccard).filter(Number.isFinite);
     graphPrimitives.push({type:'paired_text_plus_overlap_distribution',outcome:'prose_answer',n:prose.length});
-    candidateClaims.push({
-      claimClass:'descriptive_lexical_overlap',
-      text:`${itemId} has ${prose.length} matched prose answer pair(s) in ${first.collection} for ${first.forkContrast}; median unigram Jaccard is ${median(uni)}.`,
-      drawableBy:'paired_text_plus_overlap_distribution',n:prose.length,
-      statistic:{medianUnigramJaccard:median(uni),minUnigramJaccard:Math.min(...uni),maxUnigramJaccard:Math.max(...uni)},
-      causalMeaning:'undeclared_until_design_map',
-    });
+    candidateClaims.push({claimClass:'descriptive_lexical_overlap',text:`${itemId} has ${prose.length} matched prose answer pair(s) in ${first.collection} for ${first.forkContrast}; median unigram Jaccard is ${median(uni)}.`,drawableBy:'paired_text_plus_overlap_distribution',n:prose.length,statistic:{medianUnigramJaccard:median(uni),minUnigramJaccard:Math.min(...uni),maxUnigramJaccard:Math.max(...uni)},causalMeaning:'undeclared_until_design_map'});
   }
 
   return {
     schema:'blum-graphable-claim-stratum-v0',
-    itemId,
-    collection:first.collection,
-    itemCoreHash:first.itemCoreHash,
-    itemCoreText:first.itemCoreText,
-    forkContrast:first.forkContrast,
-    leftForkId:first.leftForkId,
-    rightForkId:first.rightForkId,
-    exactParentPairCount:rows.length,
-    outcomeTypeCounts:counts,
+    itemId,collection:first.collection,itemCoreHash:first.itemCoreHash,itemCoreText:first.itemCoreText,
+    forkContrast:first.forkContrast,leftForkId:first.leftForkId,rightForkId:first.rightForkId,
+    exactParentPairCount:rows.length,outcomeTypeCounts:counts,
     graphablePairCount:numeric.length+sentinel.length+prose.length,
-    graphPrimitives,
-    candidateClaims,
-    exclusions:classified.filter(x=>!['numeric','sentinel','prose'].includes(x.kind)),
+    adjudicationRequiredCount:classified.filter(x=>x.kind==='adjudication_required').length,
+    graphPrimitives,candidateClaims,
+    dueDiligenceQueue:classified.filter(x=>x.kind==='adjudication_required'),
+    exclusions:classified.filter(x=>!['numeric','sentinel','prose','adjudication_required'].includes(x.kind)),
     measurements:classified.filter(x=>['numeric','sentinel','prose'].includes(x.kind)),
   };
 }
@@ -175,12 +165,9 @@ function auditItem(history) {
   const summaries=[...strata.values()].map(rows=>summarizeStratum(history.canonicalItemId,rows))
     .sort((a,b)=>b.graphablePairCount-a.graphablePairCount || a.collection.localeCompare(b.collection) || a.forkContrast.localeCompare(b.forkContrast));
   return {
-    schema:'blum-graphable-claim-item-audit-v0',
-    itemId:history?.canonicalItemId || null,
-    observations:history?.observationCount || 0,
-    exactParentPairCount:pairs.length,
-    graphablePairCount:summaries.reduce((n,s)=>n+s.graphablePairCount,0),
-    strata:summaries,
+    schema:'blum-graphable-claim-item-audit-v0',itemId:history?.canonicalItemId || null,observations:history?.observationCount || 0,
+    exactParentPairCount:pairs.length,graphablePairCount:summaries.reduce((n,s)=>n+s.graphablePairCount,0),
+    adjudicationRequiredCount:summaries.reduce((n,s)=>n+s.adjudicationRequiredCount,0),strata:summaries,
     candidateClaims:summaries.flatMap(s=>s.candidateClaims.map(c=>({...c,collection:s.collection,itemCoreHash:s.itemCoreHash,forkContrast:s.forkContrast}))),
   };
 }
@@ -190,22 +177,15 @@ function auditIndex(index) {
     .sort((a,b)=>b.graphablePairCount-a.graphablePairCount || a.itemId.localeCompare(b.itemId));
   const claims=items.flatMap(i=>i.candidateClaims.map(c=>({...c,itemId:i.itemId})));
   return {
-    schema:'blum-graphable-claim-audit-v0',
-    sourceIndexSchema:index?.schema || null,
-    itemCount:items.length,
+    schema:'blum-graphable-claim-audit-v0',sourceIndexSchema:index?.schema || null,itemCount:items.length,
     itemsWithExactParentPairs:items.filter(x=>x.exactParentPairCount>0).length,
     itemsWithGraphableClaims:items.filter(x=>x.candidateClaims.length>0).length,
     exactParentPairCount:items.reduce((n,x)=>n+x.exactParentPairCount,0),
     graphablePairCount:items.reduce((n,x)=>n+x.graphablePairCount,0),
-    candidateClaimCount:claims.length,
-    items,
-    candidateClaims:claims,
-    policy:{
-      pairing:'same collection + same parentSnapshotId + same itemCoreHash + different forkId',
-      pooling:'none across collections or item-core variants',
-      causalLabels:'not assigned without declared design map',
-      outcomeProjection:'designated reply/answer section when structured; whole response only when genuinely unstructured',
-    },
+    adjudicationRequiredCount:items.reduce((n,x)=>n+x.adjudicationRequiredCount,0),
+    candidateClaimCount:claims.length,items,candidateClaims:claims,
+    dueDiligenceQueue:items.flatMap(i=>i.strata.flatMap(s=>s.dueDiligenceQueue.map(x=>({...x,itemId:i.itemId,itemCoreText:s.itemCoreText})))),
+    policy:{pairing:'same collection + same parentSnapshotId + same itemCoreHash + different forkId',pooling:'none across collections or item-core variants',causalLabels:'not assigned without declared design map',outcomeProjection:'designated reply/answer section when mechanically available; plain response when genuinely unstructured; structured substantive responses without a designated answer are queued for adjudication rather than declared missing'},
   };
 }
 
