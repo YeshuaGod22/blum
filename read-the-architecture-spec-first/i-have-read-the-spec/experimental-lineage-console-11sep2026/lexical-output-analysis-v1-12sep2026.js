@@ -3,6 +3,7 @@
 // LEXICAL OUTPUT ANALYSIS v1 — 12 Sep 2026
 // Deterministic, model-free text comparison with explicit applicability.
 // Bare numeric/sentinel surfaces are classified as behavioral rather than prose.
+// Serialization markup is excluded from lexical content.
 
 (function(root, factory) {
   const api = factory();
@@ -26,7 +27,7 @@
   function normalizeAblationTerms(terms) {
     if (typeof terms === 'string') terms = terms.split(/[\s,;]+/g);
     const out = new Set();
-    for (const t of (terms || [])) for (const token of tokenize(t)) if (token) out.add(token);
+    for (const t of (terms || [])) for (const token of tokenize(stripMarkup(t))) if (token) out.add(token);
     return out;
   }
   function ablateTokens(tokens, terms) {
@@ -57,9 +58,10 @@
   function counts(values){const m=new Map();for(const v of values||[])m.set(v,(m.get(v)||0)+1);return m;}
   function repeatedNgrams(tokens,n=2){return [...counts(ngrams(tokens||[],n)).entries()].filter(([,c])=>c>1).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([gram,count])=>({gram,count}));}
   function profile(text,options={}) {
-    const tokens=tokenize(text), unique=sortedSet(tokens), behavior=behavioralSurface(text);
+    const content = stripMarkup(text);
+    const tokens=tokenize(content), unique=sortedSet(tokens), behavior=behavioralSurface(content);
     return {
-      schema:'blum-lexical-profile-v1', tokenizer:'unicode-word-lowercase-nfkc-v0',
+      schema:'blum-lexical-profile-v1', tokenizer:'unicode-word-lowercase-nfkc-v0', markupPolicy:'strip-before-tokenize',
       tokenCount:tokens.length, uniqueTokenCount:unique.length,
       typeTokenRatio:tokens.length?unique.length/tokens.length:0,
       tokens, uniqueTokens:unique, uniqueBigrams:sortedSet(ngrams(tokens,2)),
@@ -86,7 +88,7 @@
     const leftAblated=ablateTokens(left.tokens,ablationTerms), rightAblated=ablateTokens(right.tokens,ablationTerms);
     const afterAblation=compareTokenSequences(leftAblated,rightAblated);
     return {
-      schema:'blum-lexical-comparison-v1', tokenizer:left.tokenizer,
+      schema:'blum-lexical-comparison-v1', tokenizer:left.tokenizer, markupPolicy:left.markupPolicy,
       applicability:{
         pairProseEligible,
         reason:pairProseEligible?null:(left.behavioralSurface.behavioralLike||right.behavioralSurface.behavioralLike?'behavioral_surface':'insufficient_text'),
