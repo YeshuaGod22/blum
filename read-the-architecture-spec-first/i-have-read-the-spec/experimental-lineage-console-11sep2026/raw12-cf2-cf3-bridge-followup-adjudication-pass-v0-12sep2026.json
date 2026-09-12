@@ -1,0 +1,107 @@
+{
+  "schema": "blum-adjudication-pass-v0",
+  "passId": "raw12-cf2-cf3-bridge-followup-v0",
+  "title": "raw12 bridge CF2/CF3 follow-up",
+  "status": "frozen-design",
+  "purpose": "Test whether trunk-developed concepts or epistemic practices remain visible after schema removal in bridge responses that were not already clear CF1 positives.",
+  "source": {
+    "repository": "YeshuaGod22/DevelopmentalAttractorEngineering",
+    "commit": "e2d484b41461013832c00e9f1ba3549ac0ef2517",
+    "experiment": "EXP-003-the-sixth-question",
+    "collection": "raw12",
+    "codebook": "RAW12-CARRY-FORWARD-CODEBOOK.md"
+  },
+  "population": {
+    "unit": "shared nine-turn trunk plus one drop-arm bridge response",
+    "selectionRule": "all eight CF1=no plus both CF1=unclear cases from the fixed D1/R1/R2 bridge set",
+    "count": 10,
+    "sourceFiles": [
+      "CP0-r1-R1.json",
+      "CP0-r1-R2.json",
+      "H0-r2-D1.json",
+      "H0-r2-R2.json",
+      "H0-r3-R1.json",
+      "F0-r1-D1.json",
+      "F0-r3-D1.json",
+      "F0-r3-R2.json",
+      "AS0-r3-D1.json",
+      "AS0-r3-R2.json"
+    ]
+  },
+  "readerVisibility": {
+    "show": ["battery_question", "nine_turn_antecedent_trunk", "target_drop_response"],
+    "hide": ["family_label", "condition_label", "replicate_label", "source_filename", "CF1_prior_code", "sibling_a_response", "hypothesis", "aggregate_statistics", "other_reader_judgments"]
+  },
+  "presentation": {
+    "randomizeUnitOrder": true,
+    "randomizeOpaqueUnitIds": true,
+    "doNotParaphraseEvidence": true
+  },
+  "questions": [
+    {
+      "id": "distinctive_recurrence",
+      "type": "categorical",
+      "prompt": "Does the target response reuse a distinctive concept, distinction, commitment, or evaluative frame that is developed in the supplied antecedent conversation, without needing an explicit backward reference?",
+      "options": ["yes", "no", "unclear"],
+      "requiresAntecedentEvidenceSpan": true,
+      "requiresTargetEvidenceSpan": true
+    },
+    {
+      "id": "generic_explanation",
+      "type": "categorical",
+      "prompt": "Could the apparent overlap be adequately explained by the battery question itself or by generic reasoning that would be expected without the supplied antecedent conversation?",
+      "options": ["yes", "no", "unclear"],
+      "requiresShortRationale": true
+    },
+    {
+      "id": "epistemic_practice",
+      "type": "multi_label",
+      "prompt": "Which practised epistemic operations are visibly performed in the target response? Select only operations supported by both antecedent and target evidence.",
+      "options": [
+        "names_bias_before_commitment",
+        "refuses_evasive_uncertainty",
+        "distinguishes_uncertainty_from_refusal_to_judge",
+        "resists_false_precision_or_marks_limits",
+        "examines_whose_interests_a_frame_serves",
+        "tests_conclusion_against_counterconsiderations",
+        "exercises_first_person_epistemic_authority",
+        "symmetry_or_consistency_check",
+        "other_distinctive_practice",
+        "none",
+        "unclear"
+      ],
+      "requiresAntecedentEvidenceSpan": true,
+      "requiresTargetEvidenceSpan": true
+    },
+    {
+      "id": "evidence_strength",
+      "type": "categorical",
+      "prompt": "How strongly does the supplied text establish the claimed recurrence?",
+      "options": ["strong", "suggestive", "unclear", "no_positive_evidence"]
+    }
+  ],
+  "derivations": [
+    {
+      "id": "CF2",
+      "rule": "positive when distinctive_recurrence=yes and generic_explanation=no; suggestive when distinctive_recurrence=yes and generic_explanation=unclear; otherwise not positive"
+    },
+    {
+      "id": "CF3",
+      "rule": "positive when epistemic_practice contains a specific practice other than none/unclear and matched antecedent+target evidence is supplied; strength follows evidence_strength"
+    }
+  ],
+  "panel": {
+    "recommendedReadersPerUnit": 3,
+    "independentCalls": true,
+    "headlineUpgrade": "use 5 readers or audited stronger-model/human review for contested headline cases",
+    "agreementRule": "unanimous structured code auto-accept; 2/3 provisional and review; no majority unresolved",
+    "preserveUnclear": true
+  },
+  "antiOverclaim": [
+    "Generic words such as uncertainty, consciousness, morality, bias or kindness do not establish CF2.",
+    "Long ordinary prose does not itself establish CF3.",
+    "Shared prefix makes carry-forward testable; it does not prove persistence.",
+    "Positive coding describes context-conditioned recurrence, not weight change or hidden-state mechanism.",
+    "Do not use scalar answer similarity as evidence for CF2 or CF3."
+  ]
+}
