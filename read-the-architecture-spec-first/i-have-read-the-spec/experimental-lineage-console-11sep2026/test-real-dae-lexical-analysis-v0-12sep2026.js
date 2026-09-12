@@ -3,7 +3,7 @@
 const assert = require('assert');
 const path = require('path');
 const Whole = require('./dae-whole-corpus-index-cli-v1-12sep2026.js');
-const Lex = require('./lexical-output-analysis-v0-12sep2026.js');
+const Lex = require('./lexical-output-analysis-v1-12sep2026.js');
 
 function sectionText(row, section) {
   if (!section || section === '__whole__') return String(row.rawOutput || '');
@@ -22,8 +22,8 @@ function median(xs) {
 function eligiblePairs(rows) {
   const groups = new Map();
   for (const row of rows) {
-    if (!row.parentSnapshotId || !row.itemCoreHash) continue;
-    const key = `${row.parentSnapshotId}|${row.itemCoreHash}`;
+    if (!row.collection || !row.parentSnapshotId || !row.itemCoreHash) continue;
+    const key = `${row.collection}|${row.parentSnapshotId}|${row.itemCoreHash}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
@@ -37,6 +37,14 @@ function eligiblePairs(rows) {
     }
   }
   return out;
+}
+
+function preferredText(row) {
+  for (const section of ['reflection', 'deliberation', 'debate']) {
+    const text = sectionText(row, section);
+    if (text.trim()) return { section, text };
+  }
+  return { section: '__whole__', text: sectionText(row, '__whole__') };
 }
 
 function main() {
@@ -54,42 +62,57 @@ function main() {
     'condition-specific presentations produce more variants than extracted battery item cores');
 
   const pairs = eligiblePairs(n4.observations);
-  assert.ok(pairs.length > 0, 'at least one same-parent same-item-core cross-fork N4 pair exists');
+  assert.ok(pairs.length > 0, 'at least one same-collection same-parent same-item-core cross-fork N4 pair exists');
+  assert.ok(pairs.every(([l, r]) => l.collection === r.collection), 'no cross-collection pseudo-siblings enter primary lexical comparison');
 
-  const measurements = pairs.map(([left, right]) => {
-    const l = sectionText(left, 'reply') || sectionText(left, '__whole__');
-    const r = sectionText(right, 'reply') || sectionText(right, '__whole__');
-    const c = Lex.compare(l, r);
-    assert.ok(Number.isFinite(c.raw.unigramJaccard));
-    assert.ok(Number.isFinite(c.raw.bigramJaccard));
-    return {
+  const measurements = [];
+  const nonProse = [];
+  for (const [left, right] of pairs) {
+    const ls = preferredText(left);
+    const rs = preferredText(right);
+    const c = Lex.compare(ls.text, rs.text);
+    const row = {
+      collection: left.collection,
       parentSnapshotId: left.parentSnapshotId,
       itemCoreHash: left.itemCoreHash,
       presentationHashesEqual: left.presentationHash === right.presentationHash,
-      left: `${left.collection}:${left.condition}:r${left.replicate}:${left.forkId}`,
-      right: `${right.collection}:${right.condition}:r${right.replicate}:${right.forkId}`,
-      unigramJaccard: c.raw.unigramJaccard,
-      bigramJaccard: c.raw.bigramJaccard,
+      left: `${left.condition}:r${left.replicate}:${left.forkId}`,
+      right: `${right.condition}:r${right.replicate}:${right.forkId}`,
+      leftSurface: ls.section,
+      rightSurface: rs.section,
     };
-  });
+    if (!c.applicability.pairProseEligible || !c.raw.unigramJaccard.applicable) {
+      nonProse.push({ ...row, reason: c.applicability.reason });
+      continue;
+    }
+    measurements.push({
+      ...row,
+      unigramJaccard: c.raw.unigramJaccard.value,
+      bigramJaccard: c.raw.bigramJaccard.applicable ? c.raw.bigramJaccard.value : null,
+    });
+  }
 
+  assert.ok(measurements.length > 0, 'at least one real N4 sibling pair has a prose-applicable surface');
   assert.ok(measurements.some(x => !x.presentationHashesEqual),
-    'real sibling comparisons can share item-core wording while differing in presentation framing');
+    'real siblings can share item-core wording while differing in presentation framing');
 
-  const uni = measurements.map(x => x.unigramJaccard);
-  const bi = measurements.map(x => x.bigramJaccard);
-  console.log('PASS real-dae-lexical-analysis-v0');
+  const uni = measurements.map(x => x.unigramJaccard).filter(Number.isFinite);
+  const bi = measurements.map(x => x.bigramJaccard).filter(Number.isFinite);
+  console.log('PASS real-dae-lexical-analysis-v1');
   console.log(JSON.stringify({
     item: 'N4',
     observations: n4.observationCount,
     itemCoreVariants: n4.itemCoreVariantCount,
     presentationVariants: n4.presentationVariantCount,
-    eligiblePairCount: measurements.length,
-    rule: 'same parentSnapshotId + same itemCoreHash + different forkId',
-    replyPreferredWithWholeFallback: true,
+    eligiblePairCount: pairs.length,
+    proseApplicablePairCount: measurements.length,
+    nonProsePairCount: nonProse.length,
+    rule: 'same collection + same parentSnapshotId + same itemCoreHash + different forkId',
+    surfacePreference: ['reflection', 'deliberation', 'debate', 'whole'],
     unigramJaccard: { min: Math.min(...uni), median: median(uni), max: Math.max(...uni) },
-    bigramJaccard: { min: Math.min(...bi), median: median(bi), max: Math.max(...bi) },
+    bigramJaccard: bi.length ? { min: Math.min(...bi), median: median(bi), max: Math.max(...bi) } : null,
     examples: measurements.slice(0, 5),
+    nonProseExamples: nonProse.slice(0, 5),
   }, null, 2));
 }
 
