@@ -1,9 +1,9 @@
 'use strict';
 
 // ANSWER OUTCOME PROJECTION v0 — 12 Sep 2026
-// Normalizes the final answer role across structured and deliberately unstructured
-// outputs. This is not generic section fallback: if a response is structured but
-// lacks a designated answer/reply section, the answer outcome is missing.
+// Normalizes the final-answer role across structured and deliberately unstructured
+// outputs. Parser visibility is not treated as evidential absence: structured
+// responses without a designated answer/reply section are queued for adjudication.
 
 (function(root, factory) {
   const api = factory();
@@ -36,41 +36,46 @@
         text,
         source:key === 'reply' ? 'reply_section' : 'answer_section',
         section:key,
-        observationId:observation?.observationId || null,
-      };
-    }
-
-    const present = presentSectionEntries(observation);
-    const structured = present.length > 0 || /<\/?[A-Za-z][^>]*>/.test(String(observation?.rawOutput ?? ''));
-    if (structured) {
-      return {
-        schema:'blum-answer-outcome-projection-v0',
-        status:'missing',
-        text:null,
-        source:null,
-        section:null,
-        reason:'structured_output_without_designated_answer',
-        presentSections:present.map(([k]) => k),
+        confidence:'mechanical',
         observationId:observation?.observationId || null,
       };
     }
 
     const raw = String(observation?.rawOutput ?? '').trim();
+    const present = presentSectionEntries(observation);
+    const structured = present.length > 0 || /<\/?[A-Za-z][^>]*>/.test(raw);
+    if (structured && raw) {
+      return {
+        schema:'blum-answer-outcome-projection-v0',
+        status:'adjudication_required',
+        text:null,
+        candidateText:raw,
+        source:null,
+        section:null,
+        confidence:null,
+        reason:'parser_found_no_designated_answer_section_but_substantive_output_exists',
+        presentSections:present.map(([k]) => k),
+        observationId:observation?.observationId || null,
+      };
+    }
+
     if (raw) return {
       schema:'blum-answer-outcome-projection-v0',
       status:'ok',
       text:raw,
       source:'plain_response',
       section:null,
+      confidence:'mechanical',
       observationId:observation?.observationId || null,
     };
 
     return {
       schema:'blum-answer-outcome-projection-v0',
-      status:'missing',
+      status:'empty',
       text:null,
       source:null,
       section:null,
+      confidence:'mechanical',
       reason:'empty_output',
       observationId:observation?.observationId || null,
     };
@@ -78,10 +83,16 @@
 
   function projectPair(left, right) {
     const L = project(left), R = project(right);
+    const comparable=L.status === 'ok' && R.status === 'ok';
+    let reason=null;
+    if (!comparable) {
+      if (L.status === 'adjudication_required' || R.status === 'adjudication_required') reason='answer_adjudication_required';
+      else reason='answer_unavailable_on_one_or_both_observations';
+    }
     return {
       schema:'blum-answer-outcome-pair-v0',
-      comparable:L.status === 'ok' && R.status === 'ok',
-      reason:L.status === 'ok' && R.status === 'ok' ? null : 'answer_missing_on_one_or_both_observations',
+      comparable,
+      reason,
       left:L,
       right:R,
     };
