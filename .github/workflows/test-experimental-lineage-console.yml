@@ -18,7 +18,7 @@ permissions:
 jobs:
   vertical-slice:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout Blum branch
         uses: actions/checkout@v4
@@ -71,3 +71,6 @@ jobs:
       - name: Verify lexical analyzer against real DAE item history
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-real-dae-lexical-analysis-v0-12sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+      - name: Build and verify portable lab bundles
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-portable-dae-lab-bundle-v0-12sep2026.mjs "$GITHUB_WORKSPACE/dae-witness"
