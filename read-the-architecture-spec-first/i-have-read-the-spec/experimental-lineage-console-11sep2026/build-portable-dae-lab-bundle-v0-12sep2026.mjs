@@ -4,7 +4,8 @@
  * Blum portable DAE lab bundle builder v0 — 12 Sep 2026
  *
  * Provider-free. Network-free. Reads local Blum + DAE checkouts and stages a
- * reproducible static bundle with a SHA-256 inventory.
+ * reproducible static bundle with a populated normalized corpus index and a
+ * SHA-256 inventory.
  *
  * Usage:
  *   node build-portable-dae-lab-bundle-v0-12sep2026.mjs \
@@ -56,14 +57,13 @@ async function copyFileChecked(src, dst) {
   await fs.copyFile(src, dst);
 }
 
-async function copyTree(src, dst, predicate = () => true) {
+async function copyTree(src, dst) {
   if (!(await exists(src))) throw new Error(`Required source directory missing: ${src}`);
   const entries = await fs.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
     const from = path.join(src, entry.name);
     const to = path.join(dst, entry.name);
-    if (!predicate(from, entry)) continue;
-    if (entry.isDirectory()) await copyTree(from, to, predicate);
+    if (entry.isDirectory()) await copyTree(from, to);
     else if (entry.isFile()) await copyFileChecked(from, to);
   }
 }
@@ -100,12 +100,30 @@ async function writeJson(p, value) {
   await fs.writeFile(p, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
-function isRawWitnessPath(absPath) {
-  return /[/\\]raw\d+[/\\]/.test(absPath) || /[/\\]pilot/i.test(absPath);
-}
-
 function usage() {
   console.error('Required: --blum-root PATH --dae-root PATH --out PATH [--profile portable-analysis|full-witness] [--allow-unpinned-dae true]');
+}
+
+async function buildNormalizedIndex({ labSource, daeExp, daeCommit, output }) {
+  const cli = path.join(labSource, 'dae-whole-corpus-index-cli-v1-12sep2026.js');
+  if (!(await exists(cli))) throw new Error(`Whole-corpus index CLI missing: ${cli}`);
+  await mkdirp(path.dirname(output));
+  await execFileAsync(process.execPath, [cli, daeExp, output], { maxBuffer: 16 * 1024 * 1024 });
+  const index = JSON.parse(await fs.readFile(output, 'utf8'));
+  index.source = {
+    ...(index.source || {}),
+    repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
+    commit: daeCommit,
+    experimentPath: DAE_EXP_REL
+  };
+  await writeJson(output, index);
+  if (!Number.isInteger(index.observationCount) || index.observationCount < 1) {
+    throw new Error('Generated whole-corpus index has no valid observationCount');
+  }
+  if (!Number.isInteger(index.itemCount) || index.itemCount < 1) {
+    throw new Error('Generated whole-corpus index has no valid itemCount');
+  }
+  return index;
 }
 
 async function main() {
@@ -133,6 +151,7 @@ async function main() {
   await mkdirp(outRoot);
 
   const labSource = path.join(blumRoot, LAB_REL);
+  const daeExp = path.join(daeRoot, DAE_EXP_REL);
   const appDest = path.join(outRoot, 'app');
 
   const appFiles = [
@@ -147,14 +166,15 @@ async function main() {
     'adjudication-pass-core-v0-12sep2026.js',
     'battery-library-core-v0-11sep2026.js',
     'dae-raw-call-lineage-import-adapter-v0-11sep2026.js',
+    'dae-corpus-lineage-import-cli-v0-11sep2026.js',
     'dae-unified-observation-index-v1-12sep2026.js',
+    'dae-whole-corpus-index-cli-v1-12sep2026.js',
     'output-surface-projection-v0-12sep2026.js',
     'lexical-output-analysis-v1-12sep2026.js',
     'behavioral-output-analysis-v0-12sep2026.js',
     'nli-output-analysis-core-v0-12sep2026.js',
     'answer-outcome-projection-v0-12sep2026.js'
   ];
-
   for (const rel of appFiles) await copyFileChecked(path.join(labSource, rel), path.join(appDest, rel));
 
   const methodFiles = [
@@ -168,7 +188,9 @@ async function main() {
   ];
   for (const rel of methodFiles) await copyFileChecked(path.join(labSource, rel), path.join(outRoot, 'methodology', rel));
 
-  const daeExp = path.join(daeRoot, DAE_EXP_REL);
+  const indexPath = path.join(outRoot, 'data', 'dae-whole-corpus-index-v1.json');
+  const corpusIndex = await buildNormalizedIndex({ labSource, daeExp, daeCommit, output: indexPath });
+
   const daeMethodDest = path.join(outRoot, 'source-methodology', 'EXP-003-the-sixth-question');
   const daeMethodNames = [
     'BLIND-CODING-AND-CORRECTION.md',
@@ -194,20 +216,21 @@ async function main() {
   if (profile === 'full-witness') {
     await copyTree(daeExp, path.join(outRoot, 'witness', 'EXP-003-the-sixth-question'));
   } else {
-    omittedWitnessClasses.push('EXP-003 archived raw call trees (raw2…raw12 and other raw witness directories)');
-    omittedWitnessClasses.push('Pilot raw witness payloads not explicitly copied as methodology');
+    omittedWitnessClasses.push('EXP-003 archived raw-call trees, including raw2…raw12');
+    omittedWitnessClasses.push('Pilot raw witness payloads not explicitly included as normalized index or methodology');
   }
 
-  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Open the lab\n\nStart with:\n\n\`app/blum-experimental-lineage-lab-entrance-11sep2026.html\`\n\nThe bundle is static and provider-free for inspection. Some browser security settings restrict local-file fetches; if a workbench needs to load sibling JSON, serve this directory locally, for example:\n\n\`python3 -m http.server 8000\`\n\nthen open \`http://localhost:8000/app/blum-experimental-lineage-lab-entrance-11sep2026.html\`.\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. Source provenance is retained; use the full-witness profile for independent reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
+  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Open the lab\n\nStart with:\n\n\`app/blum-experimental-lineage-lab-entrance-11sep2026.html\`\n\nThe populated normalized corpus is bundled at:\n\n\`data/dae-whole-corpus-index-v1.json\`\n\nThe bundle is static and provider-free for inspection. Some browser security settings restrict local-file fetches; if a workbench needs to load sibling JSON, serve this directory locally, for example:\n\n\`python3 -m http.server 8000\`\n\nthen open \`http://localhost:8000/app/blum-experimental-lineage-lab-entrance-11sep2026.html\`.\n\n## Corpus census generated during this build\n\n- observations: **${corpusIndex.observationCount}**\n- canonical items: **${corpusIndex.itemCount}**\n- discovered collections: \`${(corpusIndex.collectionDiscovery || []).join(', ')}\`\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. The normalized 2,028-observation-style corpus index is present; source provenance is retained. Use the full-witness profile for independent witness reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
   await fs.writeFile(path.join(outRoot, 'START-HERE.md'), startHere, 'utf8');
 
-  const preInventory = await inventory(outRoot);
+  const stagedInventory = await inventory(outRoot);
   const manifest = {
     schemaVersion: BUNDLE_SCHEMA_VERSION,
     profile,
     createdAt: new Date().toISOString(),
     dataset: 'DAE EXP-003 developmental-attractor corpus',
     appEntryPoint: 'app/blum-experimental-lineage-lab-entrance-11sep2026.html',
+    normalizedCorpusIndex: 'data/dae-whole-corpus-index-v1.json',
     blum: { repository: 'YeshuaGod22/blum', commit: blumCommit, labPath: LAB_REL },
     sourceCorpus: {
       repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -216,20 +239,18 @@ async function main() {
       pinned: daeCommit === PINNED_DAE_COMMIT,
       experimentPath: DAE_EXP_REL
     },
-    knownCorpusCensus: {
-      batteryObservations: 2028,
-      canonicalItemIds: 27,
-      raw12Calls: 852,
-      raw12BranchObservations: 744,
-      raw12ExactSharedParentPairs: 372,
-      note: 'Known census from the currently exercised pinned corpus; the manifest does not substitute for rebuilding the index.'
+    generatedCorpusCensus: {
+      batteryObservations: corpusIndex.observationCount,
+      canonicalItemIds: corpusIndex.itemCount,
+      discoveredCollections: corpusIndex.collectionDiscovery || [],
+      collectionSummaries: corpusIndex.collectionSummaries || []
     },
     includedSourceMethodology: copiedDaeMethod,
     omittedWitnessClasses,
     rebuildableFromBundledWitnesses: profile === 'full-witness',
     providerRequiredForInspection: false,
-    inventoryStatus: 'verified',
-    files: preInventory
+    inventoryStatus: 'verified-staged-files-excluding-manifest-itself',
+    files: stagedInventory
   };
   await writeJson(path.join(outRoot, 'BUNDLE-MANIFEST.json'), manifest);
 
@@ -240,6 +261,8 @@ async function main() {
     output: outRoot,
     blumCommit,
     daeCommit,
+    observations: corpusIndex.observationCount,
+    items: corpusIndex.itemCount,
     files: finalInventory.length,
     bytes: finalInventory.reduce((n, x) => n + x.bytes, 0)
   }, null, 2));
