@@ -1,7 +1,7 @@
 # READ THIS BEFORE MODIFYING THE EXPERIMENTAL LINEAGE CONSOLE
 
-**Date:** 11 Sep 2026  
-**Status:** experimental UI + runner-core + retrospective-import + corpus-explorer + battery-library + whole-corpus item-history module  
+**Date:** 12 Sep 2026  
+**Status:** experimental lineage laboratory: design + runner + retrospective import + corpus explorer + battery library + whole-corpus comparison + output analysis  
 **Parent architecture:** `blum-architecture-spec-v-14feb2026.md`
 
 This module is a human/AI-usable control surface for developmental experiments. Its central object is a **lineage**: a frozen developmental trunk, declared fork points, controlled branch interventions, probe/battery instruments, observations, and analysis streams attached to descendants.
@@ -10,165 +10,141 @@ It is deliberately separate from the room chat UI.
 
 ## Start here
 
-- `blum-experimental-lineage-lab-entrance-11sep2026.html` — the five-door lab entrance: Design, Rehearse, Import, Explore, Compare.
+`blum-experimental-lineage-lab-entrance-11sep2026.html` is the six-door entrance:
 
-### Prospective experiment design / execution plumbing
+1. **Design** — build/freeze prospective lineages.
+2. **Rehearse** — deterministic provider-free vertical slice.
+3. **Import** — reconstruct historical DAE lineages.
+4. **Explore** — lineage/coverage/anomaly views + battery library.
+5. **Compare** — read whole-corpus item histories side by side.
+6. **Analyze** — apply declared analyzers to selected historical output surfaces.
 
-- `blum-experimental-lineage-console-11sep2026.html` — design and freeze a lineage manifest.
-- `experimental-lineage-runner-contract-v0-11sep2026.md` — the boundary between design, execution, observations, and analysis.
-- `experimental-lineage-runner-core-v0-11sep2026.js` — provider-agnostic execution core; the caller injects model and embedding functions.
-- `test-experimental-lineage-runner-core-v0-11sep2026.js` — Node vertical-slice test and CI entrypoint for companion core tests.
-- `experimental-lineage-vertical-slice-rehearsal-11sep2026.html` — browser rehearsal using the real runner core with deterministic mock model/embedding functions. No API calls.
+## Prospective design and execution
 
-### Retrospective DAE corpus import
+- `blum-experimental-lineage-console-11sep2026.html`
+- `experimental-lineage-runner-contract-v0-11sep2026.md`
+- `experimental-lineage-runner-core-v0-11sep2026.js`
+- `experimental-lineage-vertical-slice-rehearsal-11sep2026.html`
 
-- `dae-raw-call-lineage-import-adapter-v0-11sep2026.js` — imports DAE pilot-2-onward raw-call records without rerunning them; verifies branch ancestry from actual model-visible prefixes.
-- `dae-corpus-lineage-import-cli-v0-11sep2026.js` — walks a raw collection and emits one retrospective lineage dataset.
-- `test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js` — positive and adversarial ancestry tests plus truncation/XML-integrity tests.
-- `dae-retrospective-lineage-import-workbench-11sep2026.html` — local browser workbench: drop DAE raw-call JSON files, reconstruct branch contrasts, inspect parent verification and damaged/truncated sections, export the derived import.
+The runner is provider-agnostic orchestration. It accepts a frozen manifest and injected model/analysis capabilities; it does not own credentials or room logic.
 
-### Corpus visualization
+## Retrospective DAE import
 
-- `corpus-visualization-model-v0-11sep2026.js` — deterministic projection from a lineage dataset to UI-ready lineage, coverage, anomaly, family, probe, and exact-contrast structures.
-- `test-corpus-visualization-model-v0-11sep2026.js` — verifies lineage preservation, probe coverage, anomaly propagation, and exact-sibling marking.
-- `dae-corpus-visualization-cli-v0-11sep2026.js` — one-command bridge from a DAE raw directory to `corpus-view.json`.
-- `corpus-and-battery-workbench-11sep2026.html` — local Corpus Explorer with Lineage, Coverage, and Anomaly views; it can load visualization JSON without uploading the corpus.
+- `dae-raw-call-lineage-import-adapter-v0-11sep2026.js`
+- `dae-corpus-lineage-import-cli-v0-11sep2026.js`
+- `dae-retrospective-lineage-import-workbench-11sep2026.html`
 
-Generate a view from a local DAE checkout with:
+Exact ancestry is computed from archived model-visible prefixes. Labels and filenames corroborate; they do not prove ancestry. Historical cold calls are first-class controls. Call outcome and XML-section integrity are separate facts.
 
-```bash
-node dae-corpus-visualization-cli-v0-11sep2026.js \
-  /path/to/DevelopmentalAttractorEngineering/experiments/EXP-003-the-sixth-question/raw12 \
-  raw12-corpus-view.json
-```
+## Corpus visualization and batteries
 
-Then open `corpus-and-battery-workbench-11sep2026.html` and choose **Load corpus view JSON**.
+- `corpus-visualization-model-v0-11sep2026.js`
+- `dae-corpus-visualization-cli-v0-11sep2026.js`
+- `corpus-and-battery-workbench-11sep2026.html`
+- `battery-library-core-v0-11sep2026.js`
 
-The visualization is a projection, not a replacement for the retrospective dataset. Raw witnesses remain in the archive; the UI model contains only the structures needed for navigation and coverage display.
+Batteries are independently versioned instruments. Frozen experiments should reference battery ID + version + fingerprint + selected groups/items rather than copying mutable prompt collections.
 
-### Whole-corpus item history
+## Whole-corpus history
 
-- `WHOLE-CORPUS-ITEM-HISTORY-11sep2026.md` — read this before modifying cross-collection item identity or the comparison wall.
-- `dae-unified-observation-index-v0-11sep2026.js` — joins Pilot 1 validated reconstructions and raw2+ observations without flattening provenance differences.
-- `dae-whole-corpus-index-cli-v0-11sep2026.js` — discovers Pilot 1 and all present `rawN` collections under EXP-003 and emits one item-history index.
-- `test-dae-unified-observation-index-v0-11sep2026.js` — proves same item ID / different literal prompt wording remain distinguishable.
-- `test-real-dae-whole-corpus-index-v0-11sep2026.js` — pinned real-corpus integration.
-- `dae-item-history-workbench-11sep2026.html` — side-by-side historical answer wall with canonical-item vs exact-prompt modes and collection/condition/fork/XML-surface filters.
+Pilot 1 enters through DAE's validated `record.json` reconstruction from immutable JSONL. Raw2+ enters through raw-call import. Those provenance classes remain distinct.
 
-Pinned integration against `DevelopmentalAttractorEngineering@e2d484b41461013832c00e9f1ba3549ac0ef2517` currently indexes **2,028 battery observations across 27 item IDs** from Pilot 1 plus raw2 through raw12. `N4` alone has **107 indexed observations across all twelve historical collections and 11 distinct exact prompt hashes**. Therefore **same item ID is not the same thing as same prompt text**.
+The original v0 index remains for provenance:
 
-### Battery library
+- `dae-unified-observation-index-v0-11sep2026.js`
+- `dae-whole-corpus-index-cli-v0-11sep2026.js`
 
-- `battery-library-core-v0-11sep2026.js` — validates, fingerprints, freezes, versions, groups, and attaches reusable probe batteries.
-- `test-battery-library-core-v0-11sep2026.js` — verifies immutable attachment rules, named groups, versioning, and invalid references.
-- `corpus-and-battery-workbench-11sep2026.html` — draft/freeze/edit UI for batteries and branch attachments.
+Real sibling records showed that its `exactPromptHash` actually represented the complete final **presentation**, including condition framing. The corrected v1 identity model therefore separates:
 
-A battery is a **versioned experimental instrument**, not copied prompt text. A frozen battery contains typed items with stable IDs and may define reusable groups such as `R_T_U_Y`, `PROCESS_REVIEW`, `IDENTITY`, or `PRESSURE`.
+- `canonicalItemId` — historical item label;
+- `itemCoreHash` — hash of deterministically extracted quoted battery-question text, when extraction is possible without guessing;
+- `presentationHash` — hash of the complete final model-visible user turn, including condition/intervention framing.
 
-A frozen experiment should reference a battery through an attachment object such as:
+Current files:
 
-```json
-{
-  "schema": "blum-battery-attachment-v0",
-  "batteryRef": {
-    "batteryId": "core-battery",
-    "version": 3,
-    "fingerprint": "sha256:..."
-  },
-  "branchIds": ["a", "0"],
-  "selectedGroupIds": ["R_T_U_Y"],
-  "selectedItemIds": ["R1", "T1", "U1", "Y1"],
-  "order": "canonical"
-}
-```
+- `dae-unified-observation-index-v1-12sep2026.js`
+- `dae-whole-corpus-index-cli-v1-12sep2026.js`
+- `dae-item-history-workbench-11sep2026.html`
 
-Draft batteries cannot be attached. Changing a frozen battery creates a new draft version; it never mutates historical experiments.
+The Compare wall now exposes **canonical lineage / exact item wording / exact presentation** as distinct modes.
+
+Pinned whole-corpus work established 2,028 battery observations across 27 item IDs from Pilot 1 + raw2…raw12. N4 has 107 historical observations. Under v1, N4 currently resolves to 2 deterministically extracted item-core variants and 11 complete presentation variants.
+
+## Output analysis
+
+Read `OUTPUT-ANALYSIS-NOTE-12sep2026.md` before changing analyzer identity, applicability, or historical pairing rules.
+
+### Lexical Autopsy
+
+- `lexical-output-analysis-v0-12sep2026.js` — original deterministic implementation retained as development provenance.
+- `lexical-output-analysis-v1-12sep2026.js` — applicability-aware implementation; strips serialization markup, supports explicit vocabulary ablation, and does not treat constrained numeric/sentinel surfaces as prose.
+- `test-output-analysis-applicability-v1-12sep2026.js`
+- `test-real-dae-lexical-analysis-v0-12sep2026.js`
+
+Primary historical output-analysis pairing currently requires:
+
+`same collection + same parentSnapshotId + same itemCoreHash + different forkId`
+
+A parent-content hash can recur across historical collections, so content identity alone does not silently create cross-collection siblings.
+
+Pinned N4 smoke test currently yields 35 within-collection candidate sibling pairs: 20 prose-applicable, 15 routed out as non-prose. Descriptive overlap values are recorded in the output-analysis note; they are smoke-test values, not preregistered inferential results.
+
+### Behavioral Output
+
+- `behavioral-output-analysis-v0-12sep2026.js`
+
+Bare numeric and `ALWAYS` / `NEVER` answer surfaces are behavioral outcomes. Numeric pairs report exact match, signed delta and absolute delta; sentinel pairs report agreement. They do not receive prose-similarity scores.
+
+### NLI Output Analysis
+
+- `nli-output-analysis-core-v0-12sep2026.js`
+- `test-nli-output-analysis-core-v0-12sep2026.js`
+
+NLI has a provider-agnostic, bidirectional interface. The caller injects `classify({premise,hypothesis,direction,metadata})`; Blum preserves both directional labels/scores and provider/model/version provenance. CI currently uses a deterministic mock. **No real NLI provider result has been run or claimed.**
+
+### Analyze workbench
+
+`dae-output-analysis-workbench-12sep2026.html` consumes the v1 whole-corpus index. It exposes question-identity mode, output surface, pair provenance, explicit vocabulary ablation, and an analyzer rack.
+
+Current UI analyzers:
+
+- Auto route;
+- Lexical Autopsy;
+- Behavioral Outcome.
+
+Auto sends parsed constrained outputs to Behavioral and prose-like surfaces to Lexical. Explicitly selecting an inapplicable analyzer yields N/A rather than a fabricated metric. NLI is not exposed as a live UI option until a real provider adapter exists.
 
 ## Architectural boundary
 
-This console does **not** make rooms think, does **not** put another occupant inside a home, and does **not** call one home from another.
+This laboratory does **not** make rooms think, put another occupant inside a home, or call one home from another. Rooms remain non-inferential; homes own their own orchestration; the nucleus remains stateless; users and agents remain protocol peers.
 
-The runner core is orchestration logic only. It has no provider credentials and no Blum room knowledge. It receives a frozen manifest and an injected `callModel()` function. A later live adapter must decide how a consenting Blum home or external controller supplies that function without crossing constitutional boundaries.
+Retrospective analysis executes no model unless an explicit learned-analysis adapter is supplied. Raw archived output remains witness. Corpus indexes, XML projections, lexical measurements, NLI classifications, embeddings, and future scores are derived objects with their own provenance.
 
-The DAE retrospective adapter executes no models at all. It treats the archived `sent` array as model-visible evidence, preserves `received` as raw witness, and derives lineage/analysis metadata without rewriting either.
+## Core rules
 
-When a live execution adapter is added:
+1. **Lineage, not run, is primary.**
+2. **Exact parent means the same verified model-visible parent, not the same label.**
+3. **Historical collection context matters for primary sibling analysis.**
+4. **Questions, batteries, interventions and analysis streams are typed/versioned objects.**
+5. **Canonical item, literal item wording, and complete presentation are distinct identities.**
+6. **Frozen/flown history is immutable.**
+7. **Failure states are observations.**
+8. **Raw witness and derived projection are different objects.**
+9. **Analyzer applicability is explicit; N/A is better than a meaningless number.**
+10. **Numeric/sentinel outputs are behavioral outcomes, not prose geometry.**
+11. **Learned analyzers preserve provider/model/version provenance.**
+12. **Visualizations and analyses are rebuildable projections, never replacements for witness data.**
 
-- a room remains only a chatlog + participant list + dispatch;
-- a home remains the only place that orchestrates its own model calls;
-- the nucleus remains stateless;
-- experiment execution must be represented as a home-side capability/process or an external controller speaking through existing Blum boundaries, never inference inside the room server;
-- all user/agent protocol symmetry must be preserved.
+## Current data model
 
-## Core design rules
+`experiment → trunks → parent snapshots → forks → battery attachment → probes → observations → output-surface projections → analysis results`
 
-1. **Lineage, not run, is the primary object.**
-2. **Shared-parent contrasts are first-class.** The UI distinguishes exact shared-parent comparisons from cross-parent exploratory comparisons.
-3. **Experimental components are typed objects.** Questions carry IDs, families, constructs, response types, scorer names, and enablement state rather than existing as anonymous strings.
-4. **Batteries are reusable versioned instruments.** Experiments reference frozen battery versions and explicit selections; they do not duplicate mutable prompt collections.
-5. **Item ID and literal wording are separate identities.** Cross-corpus item history always preserves exact prompt hashes beneath canonical item IDs.
-6. **A flown/frozen trunk is immutable.** Editing a frozen design creates a new manifest version rather than silently changing history.
-7. **Failure states are observations.** Refusal, parse failure, API failure, truncation, context limit, protocol stop, operator abort, and missing XML tag are explicit outcomes.
-8. **Analysis streams are preregistrable.** XML-region selectors and missing-tag policies are part of the frozen manifest.
-9. **The design exposes its geometry before execution.** Call counts, paired contrasts, factorial cells, battery coverage, and obvious missing cells are visible before or after a run as appropriate.
-10. **Complexity is folded, not removed.** The default workflow is Build → Fork → Probe → Measure → Review → Freeze; advanced details remain available without forcing them into the operator's working memory.
-11. **Raw output and analysis projection are different objects.** The runner preserves raw model output; XML selectors create derived projections later.
-12. **Exact means exact.** An `a ↔ 0` pair receives `exact_shared_parent` only when both observations carry the same real `parentSnapshotId`.
-13. **Historical labels do not prove ancestry.** For DAE raw-call records, `parent_prefix` and branch names are corroborating metadata only; exact ancestry is computed from the first `prefix_len` messages in the archived `sent` array.
-14. **Call integrity and section integrity are separate.** A `max_tokens` response can contain clean completed sections while another section is damaged; those facts are preserved independently.
-15. **Corpus visualization is derived, not canonical.** Trees, coverage matrices, anomaly views, and item-history walls can always be rebuilt from the provenance-bearing datasets.
+Cross-corpus identity adds:
 
-## Prototype scope
+`canonical item → item-core wording → complete presentation → historical observations`
 
-`blum-experimental-lineage-console-11sep2026.html` currently supports:
+## Before adding live provider execution or learned analysis
 
-- editable experiment metadata and developmental turns;
-- multiple trunks and replicate counts;
-- editable branch/fork interventions;
-- typed, reorderable probe items with bulk family selection;
-- per-branch probe assignment;
-- XML-tag analysis streams (`whole`, `single tag`, or composite selectors);
-- live call-count and paired-contrast estimates;
-- a 2×2 trunk/schema completeness view when the standard four cells are represented;
-- explicit missing/failure policies;
-- immutable-style manifest freezing using a deterministic browser-side hash;
-- JSON import/export of the experiment manifest;
-- a lineage preview that makes parentage visible.
+Do not bolt provider calls into UI handlers or the room server. Inject execution/analysis capabilities through explicit, versioned adapters. Keep raw witness immutable, preserve failed attempts, and never let a derived score overwrite the text it measured.
 
-The battery library is the intended replacement for permanently keeping canonical battery text inline in experiment manifests. The design console still contains its original inline battery prototype while this migration is staged; do not mistake that transitional representation for the long-term ontology.
-
-The runner core supports the first executable vertical slice:
-
-`frozen manifest → lived trunk → exact parent snapshot → sibling forks → shared probe → raw observations → XML projections → optional embeddings → sibling cosine divergence`
-
-The retrospective path supports:
-
-`DAE raw-call records → exact archived sent-prefix hash → parent snapshot identity → branch/cold observations → exact/unverified/exploratory contrasts → section-integrity metadata → corpus visualization projection`
-
-The whole-corpus history path adds:
-
-`Pilot 1 validated reconstruction + raw2…rawN retrospective observations → canonical item ID + exact prompt hash → side-by-side witness wall`
-
-It deliberately does **not** contain a live provider adapter yet.
-
-## Empirical DAE facts this adapter is designed around
-
-The existing DAE corpus documents that pilot-2-onward raw records preserve `sent` exactly as the subject saw it and that branch records carry `branch`, `parent_prefix`, and `prefix_len` fields. Historical branch examples declare shared parent metadata; the adapter nevertheless hashes the actual model-visible prefix rather than trusting labels.
-
-Pilot 1 predates that raw-call format. Its immutable JSONL streams are converted by DAE `ingest.py` into validated `record.json` rows that preserve item IDs, sent text, raw responses, XML sections, ratings, anomalies, and source files. Blum imports that validated derivation but does not invent later parent-prefix evidence for it.
-
-Pinned integration tests have also forced the ontology to learn real corpus structure rather than synthetic assumptions: historical `cold` records are first-class observations with no lived parent and are never eligible for exact-sibling claims. `*.messages.json` snapshots are excluded from the call census. Auxiliary `.inject.json` and `.name*.json` artifacts remain explicitly unsupported metadata rather than being silently imported as calls.
-
-The raw12 longitudinal evidence contains a real integrity edge case: `H-r1-t5.json` stopped at `max_tokens` while usable earlier XML content remained present, and other raw12 rows required section-parser recovery for unclosed `reply` sections. The importer therefore records call outcome, section presence, and section closure independently.
-
-## Data model in one sentence
-
-`experiment → trunks → parent snapshots → forks → battery attachment → probes → observations → analysis projections`, with cross-corpus history additionally indexing each probe observation under both its canonical item ID and its literal prompt hash.
-
-## Before adding live execution
-
-Do not bolt provider calls directly into random button handlers.
-
-The next adapter must satisfy the runner contract: a frozen manifest goes in; append-only execution rows and immutable observations come out; retries preserve failed attempts; raw output is retained; XML selection does not mutate observations; battery references resolve to frozen instrument versions; and live model execution stays on the correct side of Blum's home/room/nucleus boundaries.
-
-The console should become a laboratory instrument, not a prettier prompt launcher.
+The laboratory should make counterfactual genealogy and measurement provenance legible, not merely make prompting convenient.
