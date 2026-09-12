@@ -126,6 +126,21 @@ async function buildNormalizedIndex({ labSource, daeExp, daeCommit, output }) {
   return index;
 }
 
+async function injectBundleAutoload(htmlPath) {
+  let html = await fs.readFile(htmlPath, 'utf8');
+  const marker = 'BLUM_PORTABLE_BUNDLE_AUTOLOAD_V0';
+  if (html.includes(marker)) return;
+  const injection = `\n<script data-blum-portable="${marker}">\n(async()=>{\n  try {\n    const r=await fetch('../data/dae-whole-corpus-index-v1.json',{cache:'no-store'});\n    if(!r.ok)return;\n    const obj=await r.json();\n    if(typeof loadIndex==='function'){\n      loadIndex(obj);\n      const s=document.getElementById('status');\n      if(s)s.textContent=(s.textContent||'')+' · bundled corpus auto-mounted';\n    }\n  } catch (_) { /* file:// and non-bundle mode retain manual loader */ }\n})();\n</script>\n`;
+  if (!html.includes('</body>')) throw new Error(`Cannot inject bundle autoload into ${htmlPath}: </body> missing`);
+  html = html.replace('</body>', `${injection}</body>`);
+  await fs.writeFile(htmlPath, html, 'utf8');
+}
+
+async function writeRootLauncher(outRoot, corpusIndex, profile) {
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blum + DAE Portable Lab</title><style>body{margin:0;background:#0a0a0c;color:#d9d9e1;font:14px system-ui,sans-serif}main{max-width:900px;margin:0 auto;padding:48px 20px}h1{font:700 22px ui-monospace,monospace;color:#e8a44a}a{color:#e8a44a}.card{border:1px solid #2c2c35;background:#121216;border-radius:9px;padding:18px;margin:14px 0}.mono{font-family:ui-monospace,monospace;color:#8b8b99}.go{display:inline-block;padding:10px 14px;border:1px solid #e8a44a;border-radius:6px;text-decoration:none;margin-top:8px}</style></head><body><main><h1>BLUM + DAE PORTABLE EXPERIMENTAL LAB</h1><div class="card"><b>${profile}</b><p>${corpusIndex.observationCount} normalized battery observations · ${corpusIndex.itemCount} canonical item IDs.</p><p>Compare and Analyze auto-mount the bundled corpus when this directory is served locally.</p><a class="go" href="./app/blum-experimental-lineage-lab-entrance-11sep2026.html">ENTER LAB →</a></div><div class="card"><b>Run locally</b><p class="mono">python3 -m http.server 8000</p><p>Then open <span class="mono">http://localhost:8000/</span>. Direct <span class="mono">file://</span> opening may prevent browsers from fetching the bundled JSON.</p></div><p class="mono">See START-HERE.md and BUNDLE-MANIFEST.json for provenance and integrity.</p></main></body></html>`;
+  await fs.writeFile(path.join(outRoot, 'index.html'), html, 'utf8');
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (!args['blum-root'] || !args['dae-root'] || !args.out) {
@@ -177,6 +192,9 @@ async function main() {
   ];
   for (const rel of appFiles) await copyFileChecked(path.join(labSource, rel), path.join(appDest, rel));
 
+  await injectBundleAutoload(path.join(appDest, 'dae-item-history-workbench-11sep2026.html'));
+  await injectBundleAutoload(path.join(appDest, 'dae-output-analysis-workbench-12sep2026.html'));
+
   const methodFiles = [
     'READ-ME-FIRST-experimental-lineage-console-11sep2026.md',
     'DESIGN-BENCH-STATE-AND-NEXT-SPROUTS-12sep2026.md',
@@ -190,6 +208,7 @@ async function main() {
 
   const indexPath = path.join(outRoot, 'data', 'dae-whole-corpus-index-v1.json');
   const corpusIndex = await buildNormalizedIndex({ labSource, daeExp, daeCommit, output: indexPath });
+  await writeRootLauncher(outRoot, corpusIndex, profile);
 
   const daeMethodDest = path.join(outRoot, 'source-methodology', 'EXP-003-the-sixth-question');
   const daeMethodNames = [
@@ -220,7 +239,7 @@ async function main() {
     omittedWitnessClasses.push('Pilot raw witness payloads not explicitly included as normalized index or methodology');
   }
 
-  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Open the lab\n\nStart with:\n\n\`app/blum-experimental-lineage-lab-entrance-11sep2026.html\`\n\nThe populated normalized corpus is bundled at:\n\n\`data/dae-whole-corpus-index-v1.json\`\n\nThe bundle is static and provider-free for inspection. Some browser security settings restrict local-file fetches; if a workbench needs to load sibling JSON, serve this directory locally, for example:\n\n\`python3 -m http.server 8000\`\n\nthen open \`http://localhost:8000/app/blum-experimental-lineage-lab-entrance-11sep2026.html\`.\n\n## Corpus census generated during this build\n\n- observations: **${corpusIndex.observationCount}**\n- canonical items: **${corpusIndex.itemCount}**\n- discovered collections: \`${(corpusIndex.collectionDiscovery || []).join(', ')}\`\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. The normalized 2,028-observation-style corpus index is present; source provenance is retained. Use the full-witness profile for independent witness reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
+  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Start\n\nFrom the bundle directory run:\n\n\`python3 -m http.server 8000\`\n\nthen open:\n\n\`http://localhost:8000/\`\n\nThe root launcher opens the six-door lab. Bundled copies of **Compare** and **Analyze** automatically mount:\n\n\`data/dae-whole-corpus-index-v1.json\`\n\nTheir manual JSON loaders remain available if auto-mount fails or another index is desired.\n\n## Corpus census generated during this build\n\n- observations: **${corpusIndex.observationCount}**\n- canonical items: **${corpusIndex.itemCount}**\n- discovered collections: \`${(corpusIndex.collectionDiscovery || []).join(', ')}\`\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. The normalized corpus index is present; source provenance is retained. Use the full-witness profile for independent witness reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
   await fs.writeFile(path.join(outRoot, 'START-HERE.md'), startHere, 'utf8');
 
   const stagedInventory = await inventory(outRoot);
@@ -229,8 +248,14 @@ async function main() {
     profile,
     createdAt: new Date().toISOString(),
     dataset: 'DAE EXP-003 developmental-attractor corpus',
-    appEntryPoint: 'app/blum-experimental-lineage-lab-entrance-11sep2026.html',
+    appEntryPoint: 'index.html',
+    labEntryPoint: 'app/blum-experimental-lineage-lab-entrance-11sep2026.html',
     normalizedCorpusIndex: 'data/dae-whole-corpus-index-v1.json',
+    bundledAutoload: {
+      compare: true,
+      analyze: true,
+      pathFromApp: '../data/dae-whole-corpus-index-v1.json'
+    },
     blum: { repository: 'YeshuaGod22/blum', commit: blumCommit, labPath: LAB_REL },
     sourceCorpus: {
       repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -263,6 +288,8 @@ async function main() {
     daeCommit,
     observations: corpusIndex.observationCount,
     items: corpusIndex.itemCount,
+    compareAutoload: true,
+    analyzeAutoload: true,
     files: finalInventory.length,
     bytes: finalInventory.reduce((n, x) => n + x.bytes, 0)
   }, null, 2));
