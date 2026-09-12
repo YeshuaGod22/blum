@@ -76,7 +76,7 @@ async function main() {
   const daeRoot = process.argv[2];
   if (!daeRoot) throw new Error('Usage: node test-portable-dae-lab-bundle-v0-12sep2026.mjs <dae-repo-root>');
   const labDir = path.dirname(new URL(import.meta.url).pathname);
-  const blumRoot = path.resolve(labDir, '../../../..');
+  const blumRoot = path.resolve(labDir, '../../..');
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'blum-portable-lab-'));
   try {
     const results = [];
