@@ -4,13 +4,7 @@ const assert = require('assert');
 const path = require('path');
 const Whole = require('./dae-whole-corpus-index-cli-v1-12sep2026.js');
 const Lex = require('./lexical-output-analysis-v1-12sep2026.js');
-
-function sectionText(row, section) {
-  if (!section || section === '__whole__') return String(row.rawOutput || '');
-  const value = row.sections?.[section];
-  if (Array.isArray(value)) return value.join('\n\n');
-  return value == null ? '' : String(value);
-}
+const Surface = require('./output-surface-projection-v0-12sep2026.js');
 
 function median(xs) {
   if (!xs.length) return null;
@@ -39,14 +33,6 @@ function eligiblePairs(rows) {
   return out;
 }
 
-function preferredText(row) {
-  for (const section of ['reflection', 'deliberation', 'debate']) {
-    const text = sectionText(row, section);
-    if (text.trim()) return { section, text };
-  }
-  return { section: '__whole__', text: sectionText(row, '__whole__') };
-}
-
 function main() {
   const daeRoot = process.argv[2];
   if (!daeRoot) throw new Error('usage: node test-real-dae-lexical-analysis-v0-12sep2026.js <DAE-repo-root>');
@@ -65,12 +51,13 @@ function main() {
   assert.ok(pairs.length > 0, 'at least one same-collection same-parent same-item-core cross-fork N4 pair exists');
   assert.ok(pairs.every(([l, r]) => l.collection === r.collection), 'no cross-collection pseudo-siblings enter primary lexical comparison');
 
+  const requestedSurface = 'reflection';
   const measurements = [];
+  const missingSurface = [];
   const nonProse = [];
+
   for (const [left, right] of pairs) {
-    const ls = preferredText(left);
-    const rs = preferredText(right);
-    const c = Lex.compare(ls.text, rs.text);
+    const projection = Surface.projectPair(left, right, requestedSurface);
     const row = {
       collection: left.collection,
       parentSnapshotId: left.parentSnapshotId,
@@ -78,9 +65,15 @@ function main() {
       presentationHashesEqual: left.presentationHash === right.presentationHash,
       left: `${left.condition}:r${left.replicate}:${left.forkId}`,
       right: `${right.condition}:r${right.replicate}:${right.forkId}`,
-      leftSurface: ls.section,
-      rightSurface: rs.section,
+      surface: requestedSurface,
+      leftSurfaceStatus: projection.left.status,
+      rightSurfaceStatus: projection.right.status,
     };
+    if (!projection.comparable) {
+      missingSurface.push({ ...row, reason: projection.reason });
+      continue;
+    }
+    const c = Lex.compare(projection.left.text, projection.right.text);
     if (!c.applicability.pairProseEligible || !c.raw.unigramJaccard.applicable) {
       nonProse.push({ ...row, reason: c.applicability.reason });
       continue;
@@ -92,26 +85,32 @@ function main() {
     });
   }
 
-  assert.ok(measurements.length > 0, 'at least one real N4 sibling pair has a prose-applicable surface');
+  assert.ok(measurements.length > 0, 'at least one real N4 sibling pair has comparable reflection prose');
+  assert.ok(measurements.every(x => x.surface === 'reflection'), 'every metric is reflection-to-reflection');
+  assert.ok(measurements.every(x => x.leftSurfaceStatus === 'ok' && x.rightSurfaceStatus === 'ok'), 'every measured pair has the requested section on both sides');
   assert.ok(measurements.some(x => !x.presentationHashesEqual),
     'real siblings can share item-core wording while differing in presentation framing');
 
   const uni = measurements.map(x => x.unigramJaccard).filter(Number.isFinite);
   const bi = measurements.map(x => x.bigramJaccard).filter(Number.isFinite);
-  console.log('PASS real-dae-lexical-analysis-v1');
+  console.log('PASS real-dae-lexical-analysis-v2-symmetric-surface');
   console.log(JSON.stringify({
     item: 'N4',
     observations: n4.observationCount,
     itemCoreVariants: n4.itemCoreVariantCount,
     presentationVariants: n4.presentationVariantCount,
     eligiblePairCount: pairs.length,
+    requestedSurface,
+    comparableSurfacePairCount: measurements.length + nonProse.length,
     proseApplicablePairCount: measurements.length,
     nonProsePairCount: nonProse.length,
+    missingSurfacePairCount: missingSurface.length,
     rule: 'same collection + same parentSnapshotId + same itemCoreHash + different forkId',
-    surfacePreference: ['reflection', 'deliberation', 'debate', 'whole'],
+    surfacePolicy: 'locked symmetric projection; no fallback',
     unigramJaccard: { min: Math.min(...uni), median: median(uni), max: Math.max(...uni) },
     bigramJaccard: bi.length ? { min: Math.min(...bi), median: median(bi), max: Math.max(...bi) } : null,
     examples: measurements.slice(0, 5),
+    missingSurfaceExamples: missingSurface.slice(0, 5),
     nonProseExamples: nonProse.slice(0, 5),
   }, null, 2));
 }
