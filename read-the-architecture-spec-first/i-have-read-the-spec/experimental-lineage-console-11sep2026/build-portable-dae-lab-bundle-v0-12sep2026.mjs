@@ -168,10 +168,10 @@ async function buildNormalizedIndex({ labSource, daeExp, daeCommit, output }) {
 async function patchBundledWorkbench(file, label) {
   let html = await fs.readFile(file, 'utf8');
   if (html.includes('../data/dae-whole-corpus-index-v1.json')) return;
-  const marker = "</script></body></html>";
-  if (!html.includes(marker)) throw new Error(`${label}: expected script/body closing marker not found`);
-  const autoMount = `\n<script>\n(async()=>{try{const r=await fetch('../data/dae-whole-corpus-index-v1.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);loadIndex(await r.json());}catch(err){console.warn('Portable bundle auto-mount unavailable; manual loader remains available.',err);}})();\n</script>`;
-  html = html.replace(marker, `</script>${autoMount}</body></html>`);
+  const closeBody = /<\/body\s*>/i;
+  if (!closeBody.test(html)) throw new Error(`${label}: closing body tag not found`);
+  const autoMount = `\n<script>\n(async()=>{try{const r=await fetch('../data/dae-whole-corpus-index-v1.json',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);loadIndex(await r.json());}catch(err){console.warn('Portable bundle auto-mount unavailable; manual loader remains available.',err);}})();\n</script>\n`;
+  html = html.replace(closeBody, `${autoMount}</body>`);
   await fs.writeFile(file, html, 'utf8');
 }
 
