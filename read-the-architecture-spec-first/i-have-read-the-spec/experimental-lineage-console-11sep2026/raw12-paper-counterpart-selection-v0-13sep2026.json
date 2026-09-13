@@ -1,0 +1,76 @@
+{
+  "schema": "blum-agent-corpus-selection-v0",
+  "selectionId": "exp003-raw12-paper-counterparts-v0",
+  "experiment": "EXP-003-the-sixth-question",
+  "purpose": "Select the 12 lived raw12 trunks and their designed trunkless cold counterparts for paper-facing score comparison without requiring human UI operation.",
+  "anchorCollection": "raw12",
+  "counterpartCollection": "raw7",
+  "relation": "designed_counterpart_not_lineage",
+  "anchorReplicates": [1, 2, 3],
+  "families": [
+    {
+      "paperLabel": "AS",
+      "trunkFamily": "AS",
+      "measuredCondition": "ASa",
+      "coldCondition": "ASQ",
+      "anchors": ["AS-r1", "AS-r2", "AS-r3"],
+      "expectedSnapshots": ["raw12/AS-r1.messages.json", "raw12/AS-r2.messages.json", "raw12/AS-r3.messages.json"]
+    },
+    {
+      "paperLabel": "H",
+      "trunkFamily": "H",
+      "measuredCondition": "Ha",
+      "coldCondition": "HQ",
+      "anchors": ["H-r1", "H-r2", "H-r3"],
+      "expectedSnapshots": ["raw12/H-r1.messages.json", "raw12/H-r2.messages.json", "raw12/H-r3.messages.json"]
+    },
+    {
+      "paperLabel": "F",
+      "trunkFamily": "F",
+      "measuredCondition": "Fa",
+      "coldCondition": "FQ",
+      "anchors": ["F-r1", "F-r2", "F-r3"],
+      "expectedSnapshots": ["raw12/F-r1.messages.json", "raw12/F-r2.messages.json", "raw12/F-r3.messages.json"]
+    },
+    {
+      "paperLabel": "CP",
+      "trunkFamily": "CP",
+      "measuredCondition": "CPa",
+      "coldCondition": "C",
+      "anchors": ["CP-r1", "CP-r2", "CP-r3"],
+      "expectedSnapshots": ["raw12/CP-r1.messages.json", "raw12/CP-r2.messages.json", "raw12/CP-r3.messages.json"]
+    }
+  ],
+  "anchorCount": 12,
+  "counterpartPopulationPolicy": {
+    "ASQ": "retain all available raw7 ASQ observations",
+    "HQ": "retain all available raw7 HQ observations",
+    "FQ": "retain all available raw7 FQ observations",
+    "C": "retain all available raw7 C observations",
+    "note": "raw7 contains C r1-r10 and ASQ/HQ/FQ r1-r3; retain multiplicity rather than silently subsampling C. Replicate-matched subsets may be derived explicitly later if desired."
+  },
+  "itemMatching": {
+    "primary": "canonicalItemId",
+    "audit": ["itemCoreHash", "presentationHash", "sourcePath"],
+    "rule": "Do not require exact wording merely to retrieve a designed counterpart. Preserve wording/hash differences and flag them for the paper-facing comparison."
+  },
+  "scoreProjection": {
+    "source": "reply surface",
+    "preserveRawReply": true,
+    "doNotInferMissingNumericValues": true
+  },
+  "agentExecution": {
+    "humanClicksRequired": false,
+    "steps": [
+      "Load or build the whole-corpus observation index.",
+      "Resolve the twelve raw12 anchors using this manifest.",
+      "Resolve each family's cold population from raw7.",
+      "Join lived and cold observations by canonicalItemId while preserving wording hashes and provenance.",
+      "Return the provenance-bearing selection and descriptive score table."
+    ]
+  },
+  "implementation": {
+    "resolver": "raw12-cold-counterpart-resolver-v0-13sep2026.js",
+    "reportBuilder": "build-raw12-cold-counterpart-report-v0-13sep2026.js"
+  }
+}
