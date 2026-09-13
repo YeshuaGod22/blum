@@ -13,10 +13,11 @@ const broken=Core.segmentOutput('x <reflection>y <reply>z','obs2');
 assert.equal(broken.unclosedTags.length,2);
 assert(broken.anomalyCount>=2);
 
-const graph=Core.buildSurfaceGraph({schema:'fixture',observations:[
+const observations=[
   {observationId:'o1',rawOutput:'a <reply>b</reply> c',collection:'c1',canonicalItemId:'Q1',trunkKey:'t1'},
   {observationId:'o2',rawOutput:'<reflection>d</reflection>',collection:'c1',canonicalItemId:'Q1',trunkKey:'t2'}
-]});
+];
+const graph=Core.buildSurfaceGraph({schema:'fixture',observations});
 assert.equal(graph.observationCount,2);
 assert.equal(graph.nodeCount,4);
 assert.equal(graph.edges.filter(e=>e.kind==='sequence').length,2);
@@ -24,4 +25,11 @@ const census=Core.census(graph);
 assert.equal(census.untagged,2);
 assert.equal(census.tagged,2);
 assert.equal(census.observationsWithUntagged,1);
+
+const compact=Core.buildSurfaceGraph({schema:'portable-fixture',itemHistories:{Q1:{observations}}});
+assert.equal(compact.observationCount,2);
+assert.equal(compact.nodeCount,4);
+const both=Core.flattenIndexObservations({observations:[observations[0]],itemHistories:{Q1:{observations}}});
+assert.equal(both.length,2);
+
 console.log('PASS test-surface-span-graph-core-v0-13sep2026');
