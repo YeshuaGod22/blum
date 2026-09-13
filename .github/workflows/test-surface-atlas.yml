@@ -8,6 +8,10 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/run-semantic-surface-map-v0-13sep2026.py'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/requirements-semantic-surface-map-v0-13sep2026.txt'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/materialize-raw12-cf1-rereview-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-materialize-raw12-cf1-rereview-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cf1-rereview-adjudication-pass-v0-13sep2026.json'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/adjudication-execution-core-v2-13sep2026.js'
       - '.github/workflows/test-surface-atlas.yml'
   push:
     branches:
@@ -18,6 +22,10 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/run-semantic-surface-map-v0-13sep2026.py'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/requirements-semantic-surface-map-v0-13sep2026.txt'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/materialize-raw12-cf1-rereview-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-materialize-raw12-cf1-rereview-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cf1-rereview-adjudication-pass-v0-13sep2026.json'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/adjudication-execution-core-v2-13sep2026.js'
       - '.github/workflows/test-surface-atlas.yml'
 
 permissions:
@@ -37,6 +45,9 @@ jobs:
       - name: Test auditable tagged and untagged span projection
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-surface-span-graph-core-v0-13sep2026.js
+      - name: Test CF1 rereview packet materialization
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-materialize-raw12-cf1-rereview-v0-13sep2026.js
       - name: Compile local semantic map runner
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: python -m py_compile run-semantic-surface-map-v0-13sep2026.py
