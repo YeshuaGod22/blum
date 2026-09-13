@@ -69,6 +69,7 @@ function summarize(dataset) {
     trunkTurns: dataset.trunkTurns.length,
     branchObservations: dataset.branchObservations.length,
     coldObservations: dataset.coldObservations.length,
+    coldSchemaObservations: dataset.coldObservations.filter(x => x.ancestryType === 'cold_schema_no_lived_parent').length,
     messageSnapshotsSkipped: dataset.skipped.filter(x => x.reason === 'message_snapshot_not_call').length,
     unsupportedJsonSkipped: unsupported.length,
     unsupportedKindCounts,
@@ -119,7 +120,7 @@ function importDirectory(rawDirectory, options = {}) {
       } else if (record.kind === 'branch') {
         branchObservations.push(A.importBranchRecord(record, source));
         branchEntries.push({ record, source });
-      } else if (record.kind === 'cold') {
+      } else if (record.kind === 'cold' || record.kind === 'cold_schema') {
         coldObservations.push(A.importColdRecord(record, source));
       } else {
         skipped.push({ path: rel, reason: 'unsupported_record_kind', kind: record.kind ?? null });
@@ -130,7 +131,7 @@ function importDirectory(rawDirectory, options = {}) {
   }
 
   // Only lived-parent branches are eligible for exact sibling contrasts.
-  // Cold observations have no parentSnapshotId and remain a separate control family.
+  // Cold and cold-schema observations have no parentSnapshotId and remain separate controls.
   const branchSet = A.importBranchSet(branchEntries);
   const dataset = {
     schema: 'blum-dae-retrospective-lineage-dataset-v0',
