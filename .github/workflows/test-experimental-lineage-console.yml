@@ -32,6 +32,9 @@ jobs:
       - name: Test adjudication execution core v1
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-adjudication-execution-core-v1-13sep2026.js
+      - name: Test adjudication execution core v2
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-adjudication-execution-core-v2-13sep2026.js
       - name: Test lexical output analysis v0
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-lexical-output-analysis-v0-12sep2026.js
@@ -83,14 +86,15 @@ jobs:
       - name: Build downloadable full-witness bundle
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node build-portable-dae-lab-bundle-v0-12sep2026.mjs --blum-root "$GITHUB_WORKSPACE" --dae-root "$GITHUB_WORKSPACE/dae-witness" --out "$GITHUB_WORKSPACE/dist/blum-dae-full-witness" --profile full-witness
-      - name: Add latest matrix and adjudication tools to downloadable bundles
+      - name: Add latest census, matrix and adjudication tools to downloadable bundles
         shell: bash
         run: |
           LAB="$GITHUB_WORKSPACE/read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026"
           for OUT in "$GITHUB_WORKSPACE/dist/blum-dae-portable-analysis" "$GITHUB_WORKSPACE/dist/blum-dae-full-witness"; do
+            cp "$LAB/dae-reply-census-13sep2026.html" "$OUT/app/"
             cp "$LAB/dae-battery-collection-matrix-12sep2026.html" "$OUT/app/"
-            cp "$LAB/adjudication-jury-room-v0-13sep2026.html" "$OUT/app/"
-            cp "$LAB/adjudication-execution-core-v1-13sep2026.js" "$OUT/app/"
+            cp "$LAB/adjudication-jury-room-v1-13sep2026.html" "$OUT/app/"
+            cp "$LAB/adjudication-execution-core-v2-13sep2026.js" "$OUT/app/"
             cp "$LAB/threshold-sentinel-semantics-adjudication-pass-v0-13sep2026.json" "$OUT/methodology/"
             cp "$LAB/raw12-cf2-cf3-bridge-followup-adjudication-pass-v0-12sep2026.json" "$OUT/methodology/"
             cp "$LAB/RAW12-CF2-CF3-EXPLORATORY-READ-12sep2026.md" "$OUT/methodology/"
