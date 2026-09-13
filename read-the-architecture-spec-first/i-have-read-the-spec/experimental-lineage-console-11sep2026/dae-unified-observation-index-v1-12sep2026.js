@@ -41,6 +41,10 @@ function identityFields(promptText) {
 function normalizeRawObservation(observation, collection, instrument = null) {
   const promptText = lastUserText(observation.modelVisibleMessages);
   const canonicalItemId = String(observation.probeId ?? observation.questionId ?? 'unknown');
+  // The adapter's source descriptor preserves the original DAE `cell`. Use it
+  // when the imported observation has no explicit family field (historically
+  // true for branch records), so Fa/Ha/ASa/CPa remain recoverable in the index.
+  const family = observation.family || observation.source?.originalCell || null;
   return {
     indexSchema: 'blum-dae-observation-index-row-v1',
     observationId: observation.observationId || sha256Text(`${collection}|${sourcePath(observation)}|${canonicalItemId}`),
@@ -49,8 +53,8 @@ function normalizeRawObservation(observation, collection, instrument = null) {
     canonicalItemId,
     ...identityFields(promptText),
     instrument: instrument || null,
-    condition: observation.family || observation.trunkKey || null,
-    family: observation.family || null,
+    condition: family || observation.trunkKey || null,
+    family,
     replicate: observation.replicate ?? null,
     trunkKey: observation.trunkKey || null,
     ancestryType: observation.ancestryType || null,
