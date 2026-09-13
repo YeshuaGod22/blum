@@ -7,6 +7,7 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cold-counterpart-resolver-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/build-raw12-cold-counterpart-report-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-corpus-lineage-import-cli-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
@@ -20,6 +21,7 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cold-counterpart-resolver-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/build-raw12-cold-counterpart-report-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-corpus-lineage-import-cli-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
@@ -27,6 +29,9 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-four-cohort-battery-comparison-13sep2026.html'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/START-FOUR-COHORT-LANDSCAPE.command'
       - '.github/workflows/test-four-cohort-battery-comparison.yml'
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -56,3 +61,23 @@ jobs:
         run: |
           grep -q 'four-cohort-battery-comparison-core-v0-13sep2026.js' dae-four-cohort-battery-comparison-13sep2026.html
           grep -q 'dae-four-cohort-battery-comparison-13sep2026.html' START-FOUR-COHORT-LANDSCAPE.command
+      - name: Checkout current DAE corpus
+        uses: actions/checkout@v4
+        with:
+          repository: YeshuaGod22/DevelopmentalAttractorEngineering
+          ref: main
+          path: dae-current
+      - name: Build real raw12 ↔ cold counterpart report
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist/raw12-cold-counterparts"
+          node build-raw12-cold-counterpart-report-v0-13sep2026.js \
+            "$GITHUB_WORKSPACE/dae-current/experiments/EXP-003-the-sixth-question" \
+            "$GITHUB_WORKSPACE/dist/raw12-cold-counterparts/raw12-cold-counterpart-report-v0.json"
+      - name: Upload real counterpart report
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw12-cold-counterpart-report
+          path: dist/raw12-cold-counterparts
+          if-no-files-found: error
+          retention-days: 30
