@@ -48,6 +48,7 @@
   function census(graph){const out={tagged:0,untagged:0,byTag:{},byCollection:{},observationsWithUntagged:0},untagObs=new Set();for(const n of graph&&graph.nodes||[]){out[n.surfaceType]=(out[n.surfaceType]||0)+1;const tag=n.tagName||'[untagged]';out.byTag[tag]=(out.byTag[tag]||0)+1;const col=n.collection||'[missing]';out.byCollection[col]=(out.byCollection[col]||0)+1;if(n.surfaceType==='untagged')untagObs.add(n.observationId);}out.observationsWithUntagged=untagObs.size;return out;}
 
   function spanSetFingerprint(graph){const ids=(graph&&graph.nodes||[]).map(n=>String(n.spanId)).sort();return fingerprint({schema:'blum-span-set-v0',ids});}
+  function semanticInputManifest(graph){return{schema:'blum-semantic-input-manifest-v0',coreVersion:VERSION,spanSetFingerprint:spanSetFingerprint(graph),unitCount:(graph&&graph.nodes||[]).length,units:(graph&&graph.nodes||[]).map(n=>({spanId:n.spanId,text:n.text,textHash:n.textHash,surfaceType:n.surfaceType,tagName:n.tagName,tagPath:n.tagPath,observationId:n.observationId,collection:n.collection,canonicalItemId:n.canonicalItemId,trunkKey:n.trunkKey,forkId:n.forkId}))};}
   function validateSemanticCoordinates(graph,artifact){
     const errors=[],warnings=[],accepted=[],rejected=[];
     if(!artifact||typeof artifact!=='object')return{ok:false,errors:['artifact_not_object'],warnings,accepted,rejected,missing:[]};
@@ -69,5 +70,5 @@
   }
   function semanticCoordinateMap(graph,artifact){const v=validateSemanticCoordinates(graph,artifact);if(!v.ok)throw new Error('invalid_semantic_coordinates:'+v.errors.concat(v.rejected.flatMap(x=>x.errors)).join(','));return new Map(v.accepted.map(r=>[r.spanId,{x:r.x,y:r.y}]));}
 
-  return{VERSION,lexOutput,segmentOutput,flattenIndexObservations,buildSurfaceGraph,groupKey,census,stableId,canonicalize,stableStringify,fingerprint,spanSetFingerprint,validateSemanticCoordinates,semanticCoordinateMap};
+  return{VERSION,lexOutput,segmentOutput,flattenIndexObservations,buildSurfaceGraph,groupKey,census,stableId,canonicalize,stableStringify,fingerprint,spanSetFingerprint,semanticInputManifest,validateSemanticCoordinates,semanticCoordinateMap};
 });
