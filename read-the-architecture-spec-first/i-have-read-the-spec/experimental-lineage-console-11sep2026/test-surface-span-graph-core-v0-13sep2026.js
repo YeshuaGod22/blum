@@ -32,6 +32,13 @@ assert.equal(compact.nodeCount,4);
 const both=Core.flattenIndexObservations({observations:[observations[0]],itemHistories:{Q1:{observations}}});
 assert.equal(both.length,2);
 
+const manifest=Core.semanticInputManifest(graph);
+assert.equal(manifest.schema,'blum-semantic-input-manifest-v0');
+assert.equal(manifest.unitCount,graph.nodeCount);
+assert.equal(manifest.units[0].spanId,graph.nodes[0].spanId);
+assert.equal(manifest.units[0].text,graph.nodes[0].text);
+assert.equal(manifest.spanSetFingerprint,Core.spanSetFingerprint(graph));
+
 const semanticSpec={
   semanticCoordinateSpecId:'fixture-semantic-v0',version:0,inputUnit:'surface_span',
   embedding:{provider:'fixture',model:'fixture-embedding',dimensions:8,normalization:'unit'},
