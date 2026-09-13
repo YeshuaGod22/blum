@@ -32,4 +32,31 @@ assert.equal(compact.nodeCount,4);
 const both=Core.flattenIndexObservations({observations:[observations[0]],itemHistories:{Q1:{observations}}});
 assert.equal(both.length,2);
 
+const semanticSpec={
+  semanticCoordinateSpecId:'fixture-semantic-v0',version:0,inputUnit:'surface_span',
+  embedding:{provider:'fixture',model:'fixture-embedding',dimensions:8,normalization:'unit'},
+  projection:{method:'fixture-2d',dimensions:2,seed:'42',parameters:{}},coverage:'complete'
+};
+const semanticArtifact={
+  schema:'blum-semantic-coordinate-artifact-v0',
+  spec:semanticSpec,
+  specFingerprint:Core.fingerprint(semanticSpec),
+  spanSetFingerprint:Core.spanSetFingerprint(graph),
+  coordinates:graph.nodes.map((n,i)=>({spanId:n.spanId,x:i/10,y:-i/20}))
+};
+let semanticCheck=Core.validateSemanticCoordinates(graph,semanticArtifact);
+assert.equal(semanticCheck.ok,true);
+assert.equal(semanticCheck.accepted.length,graph.nodeCount);
+assert.equal(Core.semanticCoordinateMap(graph,semanticArtifact).size,graph.nodeCount);
+
+const wrongSet={...semanticArtifact,spanSetFingerprint:'fnv1a:deadbeef'};
+assert(Core.validateSemanticCoordinates(graph,wrongSet).errors.includes('span_set_fingerprint_mismatch'));
+const duplicate={...semanticArtifact,coordinates:[...semanticArtifact.coordinates,semanticArtifact.coordinates[0]]};
+assert.equal(Core.validateSemanticCoordinates(graph,duplicate).ok,false);
+const partialSpec={...semanticSpec,coverage:'partial'};
+const partial={schema:'blum-semantic-coordinate-artifact-v0',spec:partialSpec,specFingerprint:Core.fingerprint(partialSpec),spanSetFingerprint:Core.spanSetFingerprint(graph),coordinates:semanticArtifact.coordinates.slice(0,2)};
+semanticCheck=Core.validateSemanticCoordinates(graph,partial);
+assert.equal(semanticCheck.ok,true);
+assert.equal(semanticCheck.missing.length,2);
+
 console.log('PASS test-surface-span-graph-core-v0-13sep2026');
