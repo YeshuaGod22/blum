@@ -11,7 +11,7 @@
 </head><body>
 <header><div class="brand">BLUM / FOUR-COHORT BATTERY LANDSCAPE</div><span id="status" class="muted">load v1 whole-corpus index</span><div class="push"></div><button id="loadBtn">Load index</button><input id="file" type="file" accept="application/json" hidden></header>
 <main>
-<div class="note"><b>Purpose:</b> compare numeric battery outcomes across four explicitly declared historical cohorts while preserving exact item wording and observation provenance. This view does not infer experimental roles from labels. Edit the cohort matchers until they express the comparison you intend. Rows are ranked by the range of cohort medians; every individual score remains clickable.</div>
+<div class="note"><b>Purpose:</b> compare numeric battery outcomes across four explicitly declared historical cohorts while preserving exact item wording and observation provenance. The paper-facing labels are <b>F / FQ / CP / C</b>; by default the lived F and CP columns are populated from their measured <b>Fa</b> and <b>CPa</b> battery descendants. FQ and C are the cold battery populations. The matchers remain visible and editable. Rows are ranked by the range of cohort medians; every individual score remains clickable.</div>
 <div class="recipe" id="recipe"></div>
 <div class="actions"><button id="run">Build landscape</button><label><input id="complete" type="checkbox" checked> complete four-cohort rows only</label><span id="summary" class="summary"></span></div>
 <div class="tablewrap"><table><thead><tr><th>Exact item wording</th><th>F</th><th>FQ</th><th>CP</th><th>C</th><th>Separation</th></tr></thead><tbody id="body"><tr><td colspan="6" class="empty">Load the corpus index.</td></tr></tbody></table></div>
@@ -21,9 +21,9 @@
 let index=null,last=null;
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const cohorts=[
- {id:'F',conditionRegex:'^F(?:0|a)?$'},
+ {id:'F',conditionRegex:'^Fa$'},
  {id:'FQ',conditionRegex:'^FQ(?:\\d+)?$'},
- {id:'CP',conditionRegex:'^CP(?:0|a)?$'},
+ {id:'CP',conditionRegex:'^CPa$'},
  {id:'C',conditionRegex:'^C(?:\\d+)?$'}
 ];
 function recipeUI(){
