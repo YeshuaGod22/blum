@@ -6,6 +6,8 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/surface-span-graph-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-surface-span-graph-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/run-semantic-surface-map-v0-13sep2026.py'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/requirements-semantic-surface-map-v0-13sep2026.txt'
       - '.github/workflows/test-surface-atlas.yml'
   push:
     branches:
@@ -14,6 +16,8 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/surface-span-graph-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-surface-span-graph-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/run-semantic-surface-map-v0-13sep2026.py'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/requirements-semantic-surface-map-v0-13sep2026.txt'
       - '.github/workflows/test-surface-atlas.yml'
 
 permissions:
@@ -27,6 +31,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Test auditable tagged and untagged span projection
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-surface-span-graph-core-v0-13sep2026.js
+      - name: Compile local semantic map runner
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: python -m py_compile run-semantic-surface-map-v0-13sep2026.py
+      - name: Check runner CLI without heavyweight model dependencies
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: python run-semantic-surface-map-v0-13sep2026.py --help >/dev/null
