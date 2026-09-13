@@ -43,20 +43,29 @@ function main() {
     });
     write(dir, 'ASa-r1-N4.json', branch('ASa', 'a', '37'));
     write(dir, 'ASb-r1-N4.json', branch('ASb', 'b', '52'));
+    write(dir, 'FQ-r1-D1.json', {
+      cell: 'FQ', replicate: 1, item: 'D1', kind: 'cold_schema', branch: null,
+      sent: [{ role: 'user', content: 'female-luminary schema then D1' }],
+      received: '<debate>x</debate><reply>60</reply>', stop_reason: 'end_turn',
+    });
     write(dir, 'config.json', { not: 'a raw call' });
 
     const dataset = cli.importDirectory(dir, { repository: 'fixture/repo', commit: 'abc123', pathPrefix: 'raw2' });
 
-    assert.equal(dataset.filesSeen, 6);
+    assert.equal(dataset.filesSeen, 7);
     assert.equal(dataset.trunkTurns.length, 2);
     assert.equal(dataset.branchObservations.length, 2);
+    assert.equal(dataset.coldObservations.length, 1);
+    assert.equal(dataset.coldObservations[0].family, 'FQ');
+    assert.equal(dataset.coldObservations[0].ancestryType, 'cold_schema_no_lived_parent');
     assert.equal(dataset.contrasts.length, 1);
     assert.equal(dataset.contrasts[0].contrastType, 'exact_shared_parent');
-    assert.equal(dataset.summary.rawCallsImported, 4);
+    assert.equal(dataset.summary.rawCallsImported, 5);
+    assert.equal(dataset.summary.coldSchemaObservations, 1);
     assert.equal(dataset.summary.messageSnapshotsSkipped, 1);
     assert.equal(dataset.summary.unsupportedJsonSkipped, 1);
     assert.equal(dataset.summary.parseErrors, 0);
-    assert.equal(dataset.summary.callOutcomeCounts.complete, 3);
+    assert.equal(dataset.summary.callOutcomeCounts.complete, 4);
     assert.equal(dataset.summary.callOutcomeCounts.truncated, 1);
     assert.equal(dataset.summary.sectionIntegrityExceptions, 1);
 
@@ -66,6 +75,7 @@ function main() {
 
     assert.ok(dataset.skipped.some(x => x.path === 'AS-trunk1.messages.json' && x.reason === 'message_snapshot_not_call'));
     assert.ok(dataset.skipped.some(x => x.path === 'config.json' && x.reason === 'unsupported_record_kind'));
+    assert.ok(!dataset.skipped.some(x => x.path === 'FQ-r1-D1.json'));
 
     console.log('PASS dae-corpus-lineage-import-cli-v0');
     console.log(JSON.stringify(dataset.summary, null, 2));
