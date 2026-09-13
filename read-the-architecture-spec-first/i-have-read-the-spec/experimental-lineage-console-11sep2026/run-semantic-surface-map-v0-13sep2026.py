@@ -13,13 +13,10 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-import math
 import os
 import platform
 import sys
 from pathlib import Path
-
-import numpy as np
 
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 SCHEMA_IN = "blum-semantic-input-manifest-v0"
@@ -89,7 +86,8 @@ def load_model(model_name: str, device: str, max_seq_length: int, local_files_on
     return model
 
 
-def validate_embeddings(x: np.ndarray, expected_rows: int) -> None:
+def validate_embeddings(x, expected_rows: int) -> None:
+    import numpy as np
     if x.ndim != 2 or x.shape[0] != expected_rows or x.shape[1] < 2:
         raise RuntimeError(f"embedding_shape_invalid:{tuple(x.shape)}")
     if not np.isfinite(x).all():
@@ -105,7 +103,8 @@ def validate_embeddings(x: np.ndarray, expected_rows: int) -> None:
             raise RuntimeError("embedding_rows_indistinguishable")
 
 
-def embed(model, texts: list[str], batch_size: int) -> np.ndarray:
+def embed(model, texts: list[str], batch_size: int):
+    import numpy as np
     out = model.encode(
         texts,
         batch_size=batch_size,
@@ -124,7 +123,8 @@ def construct_supported(cls, **kwargs):
     return cls(**accepted), accepted
 
 
-def project(x: np.ndarray, method: str, seed: int, n_neighbors: int):
+def project(x, method: str, seed: int, n_neighbors: int):
+    import numpy as np
     import pacmap
     np.random.seed(seed)
     common = dict(n_components=2, n_neighbors=n_neighbors, random_state=seed, apply_pca=True)
