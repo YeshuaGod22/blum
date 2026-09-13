@@ -1,0 +1,32 @@
+name: Test surface atlas
+
+on:
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/surface-span-graph-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-surface-span-graph-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
+      - '.github/workflows/test-surface-atlas.yml'
+  push:
+    branches:
+      - experimental-lineage-console-11sep2026
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/surface-span-graph-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-surface-span-graph-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-surface-atlas-13sep2026.*'
+      - '.github/workflows/test-surface-atlas.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  surface-atlas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test auditable tagged and untagged span projection
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-surface-span-graph-core-v0-13sep2026.js
