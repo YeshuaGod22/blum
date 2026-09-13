@@ -47,8 +47,46 @@ mkdir -p "$DATA_DIR"
 echo "BLUM SURFACE ATLAS"
 echo ""
 echo "Found DAE corpus: $DAE_ROOT"
-echo "Building the corpus index automatically..."
-node "$LAB_DIR/dae-whole-corpus-index-cli-v1-12sep2026.js" "$DAE_ROOT/$EXP_REL" "$INDEX_FILE" || die "The DAE corpus index could not be built."
+echo "Building a compact corpus index automatically..."
+
+LAB_DIR="$LAB_DIR" EXP_ROOT="$DAE_ROOT/$EXP_REL" INDEX_FILE="$INDEX_FILE" node <<'NODE' || exit 70
+const fs=require('fs');
+const path=require('path');
+const lab=process.env.LAB_DIR;
+const exp=process.env.EXP_ROOT;
+const out=process.env.INDEX_FILE;
+const Whole=require(path.join(lab,'dae-whole-corpus-index-cli-v1-12sep2026.js'));
+const full=Whole.buildWholeCorpusIndex(exp);
+const itemHistories={};
+for(const [itemId,h] of Object.entries(full.itemHistories||{})){
+  itemHistories[itemId]={...h,observations:(h.observations||[]).map(o=>{const {modelVisibleMessages,...rest}=o||{};return rest;})};
+}
+const compact={
+  schema:full.schema,
+  identitySemantics:full.identitySemantics,
+  generatedAt:full.generatedAt,
+  observationCount:full.observationCount,
+  itemCount:full.itemCount,
+  collections:full.collections,
+  itemHistories,
+  source:full.source||null,
+  collectionSummaries:full.collectionSummaries||[],
+  collectionDiscovery:full.collectionDiscovery||[],
+  knownInstrumentMap:full.knownInstrumentMap||{},
+  surfaceAtlasProjection:{
+    schema:'blum-surface-atlas-index-projection-v0',
+    topLevelObservationsOmitted:true,
+    modelVisibleMessagesOmitted:true,
+    rawOutputRetained:true,
+    rationale:'Retain literal outputs and lineage needed for span mapping while avoiding duplicated heavyweight payloads.'
+  }
+};
+fs.writeFileSync(out,JSON.stringify(compact)+'\n','utf8');
+console.error(`Wrote ${out}`);
+console.error(JSON.stringify({observations:compact.observationCount,items:compact.itemCount}));
+NODE
+STATUS=$?
+[ "$STATUS" -eq 0 ] || die "The DAE corpus index could not be built."
 
 PORT=8765
 while /usr/sbin/lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; do
