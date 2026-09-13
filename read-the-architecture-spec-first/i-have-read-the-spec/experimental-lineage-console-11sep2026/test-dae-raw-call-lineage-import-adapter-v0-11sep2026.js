@@ -76,6 +76,20 @@ function main() {
   assert.equal(t.xml.sections.reply[0], 'usable answer');
   assert.ok(t.xml.sections.reflection[0].includes('tail cut here'));
 
+  // Cold-schema controls are no-lived-parent observations, not unsupported JSON.
+  const coldSchema = A.importColdRecord({
+    cell: 'FQ', replicate: 1, item: 'D1', kind: 'cold_schema', branch: null,
+    sent: [{ role: 'user', content: 'schema plus D1' }],
+    received: '<debate>x</debate><reply>60</reply>', stop_reason: 'end_turn',
+  }, { path: 'raw7/FQ-r1-D1.json', commit: 'fixture' });
+  assert.equal(coldSchema.recordType, 'retrospective_cold_schema_observation');
+  assert.equal(coldSchema.family, 'FQ');
+  assert.equal(coldSchema.replicate, 1);
+  assert.equal(coldSchema.parentSnapshotId, null);
+  assert.equal(coldSchema.ancestryType, 'cold_schema_no_lived_parent');
+  assert.equal(coldSchema.xml.sections.reply[0], '60');
+  assert.equal(coldSchema.source.originalKind, 'cold_schema');
+
   // Missing prefix metadata must never be promoted to exact by matching labels.
   const noPrefix = branch({ cell: 'ASa', branch: 'a', answer: '1' });
   delete noPrefix.prefix_len;
@@ -98,6 +112,7 @@ function main() {
     adversarialMismatch: mismatch.contrastType,
     truncatedCallOutcome: t.callOutcome,
     reflectionIntegrity: t.xml.sectionIntegrity.reflection,
+    coldSchemaFamily: coldSchema.family,
   }, null, 2));
 }
 
