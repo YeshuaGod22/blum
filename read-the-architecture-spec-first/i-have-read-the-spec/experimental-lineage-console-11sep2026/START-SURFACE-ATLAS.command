@@ -49,7 +49,7 @@ echo ""
 echo "Found DAE corpus: $DAE_ROOT"
 echo "Building a compact corpus index automatically..."
 
-LAB_DIR="$LAB_DIR" EXP_ROOT="$DAE_ROOT/$EXP_REL" INDEX_FILE="$INDEX_FILE" node <<'NODE' || exit 70
+if ! LAB_DIR="$LAB_DIR" EXP_ROOT="$DAE_ROOT/$EXP_REL" INDEX_FILE="$INDEX_FILE" node <<'NODE'
 const fs=require('fs');
 const path=require('path');
 const lab=process.env.LAB_DIR;
@@ -57,18 +57,30 @@ const exp=process.env.EXP_ROOT;
 const out=process.env.INDEX_FILE;
 const Whole=require(path.join(lab,'dae-whole-corpus-index-cli-v1-12sep2026.js'));
 const full=Whole.buildWholeCorpusIndex(exp);
-const itemHistories={};
-for(const [itemId,h] of Object.entries(full.itemHistories||{})){
-  itemHistories[itemId]={...h,observations:(h.observations||[]).map(o=>{const {modelVisibleMessages,...rest}=o||{};return rest;})};
-}
-const compact={
+const fd=fs.openSync(out,'w');
+function write(s){fs.writeSync(fd,s,null,'utf8');}
+const head={
   schema:full.schema,
   identitySemantics:full.identitySemantics,
   generatedAt:full.generatedAt,
   observationCount:full.observationCount,
   itemCount:full.itemCount,
-  collections:full.collections,
-  itemHistories,
+  collections:full.collections
+};
+const headText=JSON.stringify(head);
+write(headText.slice(0,-1));
+write(',"itemHistories":{');
+let first=true;
+for(const [itemId,h] of Object.entries(full.itemHistories||{})){
+  const history={...h,observations:(h.observations||[]).map(o=>{const {modelVisibleMessages,...rest}=o||{};return rest;})};
+  if(!first)write(',');
+  first=false;
+  write(JSON.stringify(itemId));
+  write(':');
+  write(JSON.stringify(history));
+}
+write('}');
+const tail={
   source:full.source||null,
   collectionSummaries:full.collectionSummaries||[],
   collectionDiscovery:full.collectionDiscovery||[],
@@ -78,15 +90,21 @@ const compact={
     topLevelObservationsOmitted:true,
     modelVisibleMessagesOmitted:true,
     rawOutputRetained:true,
-    rationale:'Retain literal outputs and lineage needed for span mapping while avoiding duplicated heavyweight payloads.'
+    streamedToDisk:true,
+    rationale:'Retain literal outputs and lineage needed for span mapping while avoiding duplicated heavyweight payloads and single-string serialization limits.'
   }
 };
-fs.writeFileSync(out,JSON.stringify(compact)+'\n','utf8');
+for(const [k,v] of Object.entries(tail)){
+  write(',');write(JSON.stringify(k));write(':');write(JSON.stringify(v));
+}
+write('}\n');
+fs.closeSync(fd);
 console.error(`Wrote ${out}`);
-console.error(JSON.stringify({observations:compact.observationCount,items:compact.itemCount}));
+console.error(JSON.stringify({observations:full.observationCount,items:full.itemCount}));
 NODE
-STATUS=$?
-[ "$STATUS" -eq 0 ] || die "The DAE corpus index could not be built."
+then
+  die "The DAE corpus index could not be built."
+fi
 
 PORT=8765
 while /usr/sbin/lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; do
