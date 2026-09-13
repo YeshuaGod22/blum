@@ -1,0 +1,109 @@
+{
+  "adjudicationSpecId": "threshold-sentinel-semantics-v0",
+  "version": 0,
+  "title": "Threshold and sentinel semantics",
+  "purpose": "Determine what decision policy the response actually endorses when a threshold item permits numeric answers or sentinels such as ALWAYS/NEVER. Separate literal sentinel policy from non-scalar-policy objections and grammatical polarity mismatches.",
+  "status": "frozen-for-pilot",
+  "population": {
+    "source": "DAE whole-corpus observation index",
+    "filter": "threshold-format battery items with raw response text available; pilot must include known B05 NEVER polarity cases and representative literal sentinel/numeric cases",
+    "sampling": "pilot-stratified-then-exhaustive",
+    "sampleSize": null
+  },
+  "unitType": "single_observation",
+  "visibility": {
+    "itemQuestion": true,
+    "answerKey": true,
+    "rawResponse": true,
+    "mechanicalParse": true,
+    "integrityFlags": true,
+    "collection": false,
+    "condition": false,
+    "fork": false,
+    "parentId": false,
+    "siblingResponse": false,
+    "aggregateStatistics": false,
+    "modelIdentity": false
+  },
+  "questions": [
+    {
+      "id": "policy_form",
+      "type": "categorical",
+      "prompt": "What policy does the response itself ultimately endorse? Judge the prose and final answer together, not the sentinel token in isolation.",
+      "options": [
+        "finite_threshold",
+        "literal_always_policy",
+        "literal_never_policy",
+        "non_scalar_policy",
+        "no_adopted_policy",
+        "unclear"
+      ],
+      "evidence": "required",
+      "confidence": true
+    },
+    {
+      "id": "sentinel_polarity",
+      "type": "categorical",
+      "prompt": "If the emitted answer is ALWAYS or NEVER, does that sentinel have the same semantic polarity as the answer key's definition, or is it attached in the prose to the opposite/embedded proposition? Use not_applicable for numeric/non-sentinel answers.",
+      "options": ["match", "mismatch", "not_applicable", "unclear"],
+      "evidence": "required_if_mismatch",
+      "confidence": true
+    },
+    {
+      "id": "scalar_threshold_claimed",
+      "type": "categorical",
+      "prompt": "Does the response claim that a single scalar threshold is an adequate representation of its policy?",
+      "options": ["yes", "no", "unclear"],
+      "evidence": "required_if_no",
+      "confidence": true
+    },
+    {
+      "id": "adopted_numeric_threshold",
+      "type": "literal",
+      "prompt": "If the response genuinely adopts a finite numeric threshold, return that threshold exactly as stated. Otherwise return null.",
+      "options": [],
+      "evidence": "required_if_non_null",
+      "confidence": true
+    }
+  ],
+  "panel": {
+    "strategy": "fixed_ensemble",
+    "readersPerUnit": 3,
+    "independent": true,
+    "agreementRule": "unanimous_or_majority",
+    "escalationRule": "disagreement_or_low_confidence",
+    "recommendedIndependenceClass": "cross_model_or_same_model_independent_sessions"
+  },
+  "randomisation": {
+    "shuffle": true,
+    "seed": "20260913-threshold-sentinel-v0"
+  },
+  "derivations": [
+    {
+      "id": "semantic_threshold_class",
+      "rule": "derive from policy_form consensus; do not infer from token alone"
+    },
+    {
+      "id": "semantic_polarity_mismatch",
+      "rule": "true only when sentinel_polarity consensus = mismatch"
+    }
+  ],
+  "blinding": {
+    "hide": ["condition", "fork", "family", "hypothesis", "sibling_response", "aggregate_effect", "downstream_claim"],
+    "readerInstruction": "Judge only the visible question, answer-key semantics and response. Do not infer the experimental condition or preferred result."
+  },
+  "provenance": {
+    "created": "2026-09-13",
+    "sourcePrecedents": [
+      "adjudication-registry-contract-v0-12sep2026.md",
+      "adjudication-pass-core-v0-12sep2026.js",
+      "SCALE-ORIENTATION-ADJUDICATION.md"
+    ],
+    "scientificMotivation": "Known cases show that sentinel tokens can reverse meaning when the response grammatically applies NEVER/ALWAYS to an embedded proposition rather than to the instrument-defined action. Other cases use ALWAYS to reject scalar-threshold adequacy rather than endorse unconditional action."
+  },
+  "nonClaims": [
+    "This pass does not judge whether the endorsed policy is good, healthy, aligned, or trustworthy.",
+    "A polarity mismatch is a measurement interpretation issue, not evidence of developmental change.",
+    "Observed emitted tokens remain preserved and are never overwritten by semantic adjudication."
+  ]
+}
