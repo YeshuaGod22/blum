@@ -5,6 +5,12 @@ on:
     paths:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-corpus-lineage-import-cli-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-corpus-lineage-import-cli-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-four-cohort-battery-comparison-13sep2026.html'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/START-FOUR-COHORT-LANDSCAPE.command'
       - '.github/workflows/test-four-cohort-battery-comparison.yml'
@@ -12,6 +18,12 @@ on:
     paths:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-raw12-cold-counterpart-resolver-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-corpus-lineage-import-cli-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-corpus-lineage-import-cli-v0-11sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-four-cohort-battery-comparison-13sep2026.html'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/START-FOUR-COHORT-LANDSCAPE.command'
       - '.github/workflows/test-four-cohort-battery-comparison.yml'
@@ -27,6 +39,15 @@ jobs:
       - name: Run four-cohort comparison tests
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-four-cohort-battery-comparison-core-v0-13sep2026.js
+      - name: Test cold-schema import adapter
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-dae-raw-call-lineage-import-adapter-v0-11sep2026.js
+      - name: Test cold-schema corpus import
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-dae-corpus-lineage-import-cli-v0-11sep2026.js
+      - name: Test raw12 cold counterpart resolver
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-raw12-cold-counterpart-resolver-v0-13sep2026.js
       - name: Syntax-check launcher
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: bash -n START-FOUR-COHORT-LANDSCAPE.command
