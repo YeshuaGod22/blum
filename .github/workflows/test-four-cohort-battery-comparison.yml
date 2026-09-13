@@ -5,11 +5,15 @@ on:
     paths:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-four-cohort-battery-comparison-13sep2026.html'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/START-FOUR-COHORT-LANDSCAPE.command'
       - '.github/workflows/test-four-cohort-battery-comparison.yml'
   pull_request:
     paths:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/four-cohort-battery-comparison-core-v0-13sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-four-cohort-battery-comparison-core-v0-13sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-four-cohort-battery-comparison-13sep2026.html'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/START-FOUR-COHORT-LANDSCAPE.command'
       - '.github/workflows/test-four-cohort-battery-comparison.yml'
 
 jobs:
@@ -23,3 +27,11 @@ jobs:
       - name: Run four-cohort comparison tests
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-four-cohort-battery-comparison-core-v0-13sep2026.js
+      - name: Syntax-check launcher
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: bash -n START-FOUR-COHORT-LANDSCAPE.command
+      - name: Check browser wires core
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: |
+          grep -q 'four-cohort-battery-comparison-core-v0-13sep2026.js' dae-four-cohort-battery-comparison-13sep2026.html
+          grep -q 'dae-four-cohort-battery-comparison-13sep2026.html' START-FOUR-COHORT-LANDSCAPE.command
