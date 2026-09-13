@@ -239,28 +239,31 @@
   }
 
   function importColdRecord(record, source = {}) {
-    if (!record || record.kind !== 'cold') throw new Error('dae_cold_record_required');
+    const isCold = record?.kind === 'cold';
+    const isColdSchema = record?.kind === 'cold_schema';
+    if (!record || (!isCold && !isColdSchema)) throw new Error('dae_cold_or_cold_schema_record_required');
     const cell = String(record.cell || 'C');
     const replicate = record.replicate ?? null;
     const probeId = String(record.item ?? record.question_id ?? 'unknown');
     const coldKey = `${cell}-r${replicate ?? '?'}`;
+    const ancestryType = isColdSchema ? 'cold_schema_no_lived_parent' : 'cold_no_lived_parent';
 
     return {
-      recordType: 'retrospective_cold_observation',
+      recordType: isColdSchema ? 'retrospective_cold_schema_observation' : 'retrospective_cold_observation',
       observationId: id('obs', {
         sourcePath: source.path || null,
         cell,
         replicate,
         probeId,
-        ancestry: 'cold',
+        ancestry: isColdSchema ? 'cold_schema' : 'cold',
       }),
       trunkInstanceId: id('cold', { coldKey }),
       trunkKey: coldKey,
       parentSnapshotId: null,
       parentVerificationStatus: 'cold_no_lived_parent',
       declaredParentPrefix: null,
-      ancestryType: 'cold_no_lived_parent',
-      forkId: 'cold',
+      ancestryType,
+      forkId: isColdSchema ? 'cold_schema' : 'cold',
       probeId,
       family: cell,
       replicate,
@@ -272,7 +275,7 @@
   function importObservationRecord(record, source = {}) {
     if (!record || typeof record !== 'object') throw new Error('dae_observation_record_required');
     if (record.kind === 'branch') return importBranchRecord(record, source);
-    if (record.kind === 'cold') return importColdRecord(record, source);
+    if (record.kind === 'cold' || record.kind === 'cold_schema') return importColdRecord(record, source);
     throw new Error(`dae_observation_kind_unsupported:${record.kind ?? 'missing'}`);
   }
 
