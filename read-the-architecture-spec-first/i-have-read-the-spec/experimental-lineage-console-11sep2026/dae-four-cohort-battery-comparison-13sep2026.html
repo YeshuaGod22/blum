@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blum / Four-Cohort Battery Landscape</title>
+<style>
+:root{--bg:#0a0a0c;--s:#121216;--s2:#19191f;--b:#2c2c35;--t:#dddde5;--d:#858592;--a:#e8a44a;--g:#64b978;--u:#6293de;--r:#dc6b6b;--p:#ad83d6;--m:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;--f:Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px var(--f)}header{position:sticky;top:0;z-index:8;background:rgba(10,10,12,.96);border-bottom:1px solid var(--b);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.brand{font:700 13px var(--m);color:var(--a)}.muted{color:var(--d)}.push{margin-left:auto}button,input{background:var(--s2);color:var(--t);border:1px solid var(--b);border-radius:5px;padding:7px 9px}button{cursor:pointer}main{max-width:1500px;margin:auto;padding:14px}.note{border-left:3px solid var(--a);background:rgba(232,164,74,.07);padding:10px;margin-bottom:12px;color:#b8b8c2;line-height:1.45}.recipe{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.cohort{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:9px}.cohort h2{font:700 18px var(--m);margin:0 0 7px}.cohort label{display:block;font:9px var(--m);text-transform:uppercase;color:var(--d);margin:5px 0 3px}.cohort input{width:100%;font:12px var(--m)}.actions{display:flex;gap:8px;align-items:center;margin:10px 0}.summary{font:11px var(--m);color:var(--d)}table{width:100%;border-collapse:collapse;background:var(--s);border:1px solid var(--b)}th,td{border-bottom:1px solid var(--b);padding:8px;text-align:left;vertical-align:top}th{position:sticky;top:54px;background:#111116;font:10px var(--m);text-transform:uppercase;color:var(--d);z-index:4}tr.item:hover{background:#17171d}.itemname{font:700 12px var(--m);min-width:155px}.tiny{font:9px/1.35 var(--m);color:var(--d)}.cell{min-width:155px}.median{font:700 19px var(--m)}.points{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}.dot{font:10px var(--m);border:1px solid var(--b);border-radius:999px;padding:2px 6px;cursor:pointer;background:#1d1d24}.dot:hover{border-color:var(--a)}.range{font:700 17px var(--m)}.order{font:11px var(--m)}.flag{display:inline-block;font:9px var(--m);padding:2px 4px;border:1px solid rgba(232,164,74,.45);color:var(--a);border-radius:3px;margin:2px}.ok{color:var(--g)}dialog{width:min(900px,94vw);max-height:85vh;background:var(--s);color:var(--t);border:1px solid var(--b);border-radius:9px}dialog::backdrop{background:rgba(0,0,0,.72)}pre{white-space:pre-wrap;word-break:break-word;font:11px/1.45 var(--m)}.modalhead{display:flex;gap:8px;align-items:center}.raw{border-top:1px solid var(--b);padding-top:10px;max-height:50vh;overflow:auto}.empty{text-align:center;padding:28px;color:var(--d)}@media(max-width:950px){.recipe{grid-template-columns:1fr 1fr}.tablewrap{overflow:auto}}@media(max-width:560px){.recipe{grid-template-columns:1fr}}
+</style>
+<script src="./four-cohort-battery-comparison-core-v0-13sep2026.js"></script>
+</head><body>
+<header><div class="brand">BLUM / FOUR-COHORT BATTERY LANDSCAPE</div><span id="status" class="muted">load v1 whole-corpus index</span><div class="push"></div><button id="loadBtn">Load index</button><input id="file" type="file" accept="application/json" hidden></header>
+<main>
+<div class="note"><b>Purpose:</b> compare numeric battery outcomes across four explicitly declared historical cohorts while preserving exact item wording and observation provenance. This view does not infer experimental roles from labels. Edit the cohort matchers until they express the comparison you intend. Rows are ranked by the range of cohort medians; every individual score remains clickable.</div>
+<div class="recipe" id="recipe"></div>
+<div class="actions"><button id="run">Build landscape</button><label><input id="complete" type="checkbox" checked> complete four-cohort rows only</label><span id="summary" class="summary"></span></div>
+<div class="tablewrap"><table><thead><tr><th>Exact item wording</th><th>F</th><th>FQ</th><th>CP</th><th>C</th><th>Separation</th></tr></thead><tbody id="body"><tr><td colspan="6" class="empty">Load the corpus index.</td></tr></tbody></table></div>
+</main>
+<dialog id="detail"><div class="modalhead"><b id="detailTitle"></b><div class="push"></div><button onclick="detail.close()">Close</button></div><pre id="detailMeta"></pre><pre id="detailRaw" class="raw"></pre></dialog>
+<script>
+let index=null,last=null;
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const cohorts=[
+ {id:'F',conditionRegex:'^F(?:0|a)?$'},
+ {id:'FQ',conditionRegex:'^FQ(?:\\d+)?$'},
+ {id:'CP',conditionRegex:'^CP(?:0|a)?$'},
+ {id:'C',conditionRegex:'^C(?:\\d+)?$'}
+];
+function recipeUI(){
+ $('recipe').innerHTML=cohorts.map(c=>`<div class="cohort"><h2>${c.id}</h2><label>Condition regex</label><input id="cond-${c.id}" value="${esc(c.conditionRegex)}"><label>Collection regex (optional)</label><input id="coll-${c.id}" placeholder="e.g. ^raw12$"></div>`).join('');
+}
+function currentRecipe(){return {id:'paper-four-cohort-v0',label:'F / FQ / CP / C',cohorts:cohorts.map(c=>({id:c.id,match:{conditionRegex:$('cond-'+c.id).value.trim(),collectionRegex:$('coll-'+c.id).value.trim()}}))};}
+function fmt(x,d=1){return Number.isFinite(x)?Number(x).toFixed(d).replace(/\.0$/,''):'—'}
+function cell(row,id){const s=row.cohorts[id],pts=row.points[id]||[];return `<td class="cell"><span class="median">${fmt(s.median)}</span> <span class="tiny">median · n=${s.n}</span><div class="points">${pts.map((p,i)=>`<button class="dot" data-row="${esc(row.key)}" data-cohort="${id}" data-point="${i}" title="${esc([p.collection,p.condition,'r'+(p.replicate??'—'),p.forkId].join(' · '))}">${fmt(p.value)}</button>`).join('')}</div></td>`}
+function render(){
+ if(!index)return;
+ try{last=window.BlumFourCohortBatteryV0.compare(index,currentRecipe(),{completeOnly:$('complete').checked});}
+ catch(e){$('status').textContent='comparison error';$('body').innerHTML=`<tr><td colspan="6" class="empty">${esc(e.message)}</td></tr>`;return;}
+ $('summary').textContent=`${last.rowCount} shown · ${last.completeRowCount} complete · ${last.observationCount} indexed observations · ${last.ambiguousMembership.length} ambiguous memberships`;
+ $('status').textContent='landscape ready';
+ $('body').innerHTML=last.rows.length?last.rows.map(r=>`<tr class="item"><td><div class="itemname">${esc(r.canonicalItemIds.join(' / '))}</div><div class="tiny">${esc((r.itemCoreText||'[exact wording text unavailable]').slice(0,240))}</div><div class="tiny">${esc(String(r.itemCoreHash||'').replace(/^sha256:/,'').slice(0,12))}</div>${r.flags.map(f=>`<span class="flag">${esc(f)}</span>`).join('')}</td>${cell(r,'F')}${cell(r,'FQ')}${cell(r,'CP')}${cell(r,'C')}<td><div class="range">${fmt(r.range)}</div><div class="tiny">median range</div><div class="order">${esc(r.ordering.join(' > '))}</div></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No eligible numeric exact-wording rows for this cohort recipe.</td></tr>';
+ document.querySelectorAll('.dot').forEach(b=>b.onclick=()=>showPoint(b.dataset.row,b.dataset.cohort,Number(b.dataset.point)));
+}
+function showPoint(key,cohort,i){const r=last.rows.find(x=>x.key===key),p=r?.points?.[cohort]?.[i];if(!p)return;$('detailTitle').textContent=`${cohort} · ${r.canonicalItemIds.join('/')} · ${p.value}`;$('detailMeta').textContent=`collection: ${p.collection}\ncondition: ${p.condition}\nreplicate: ${p.replicate} · fork: ${p.forkId}\nparent: ${p.parentSnapshotId||'—'}\nitem core: ${p.itemCoreHash||'—'}\npresentation: ${p.presentationHash||'—'}\nsource: ${p.sourcePath||'—'}`;$('detailRaw').textContent=p.rawOutput||'[no raw output]';$('detail').showModal()}
+async function loadIndex(obj,label='index'){index=obj;$('status').textContent=`${label} loaded`;render()}
+$('loadBtn').onclick=()=>$('file').click();$('file').onchange=async e=>{const f=e.target.files[0];if(f)loadIndex(JSON.parse(await f.text()),f.name)};$('run').onclick=render;$('complete').onchange=render;
+async function autoLoad(){if(location.protocol==='file:')return;const q=new URLSearchParams(location.search).get('index');const candidates=[q,'./surface-atlas-data/dae-whole-corpus-index-v1.json','../data/dae-whole-corpus-index-v1.json'].filter(Boolean);for(const u of candidates){try{const r=await fetch(u);if(r.ok){await loadIndex(await r.json(),u);return}}catch(_){}}}
+recipeUI();autoLoad();
+</script></body></html>
