@@ -1,0 +1,31 @@
+name: test historical raw12 adjudication import
+
+on:
+  push:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/historical-raw12-adjudication-import-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/apply-adjudication-overlay-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-historical-raw12-adjudication-import-v0-14sep2026.js'
+      - '.github/workflows/test-historical-raw12-adjudication-import.yml'
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/historical-raw12-adjudication-import-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/apply-adjudication-overlay-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-historical-raw12-adjudication-import-v0-14sep2026.js'
+      - '.github/workflows/test-historical-raw12-adjudication-import.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test deterministic historical import and immutable overlay
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-historical-raw12-adjudication-import-v0-14sep2026.js

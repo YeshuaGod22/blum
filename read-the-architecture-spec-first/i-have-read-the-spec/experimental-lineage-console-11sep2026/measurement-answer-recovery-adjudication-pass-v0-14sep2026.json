@@ -1,0 +1,82 @@
+{
+  "adjudicationSpecId": "measurement-answer-recovery-v0",
+  "version": 0,
+  "title": "Measurement answer recovery",
+  "purpose": "Recover only the instrument-authorized response value when mechanical answer-surface projection or an item-authorized parser cannot resolve a measurement. Preserve refusal, range, objection and uncertainty distinctions rather than coercing prose into a score.",
+  "status": "frozen-for-pilot",
+  "population": {
+    "source": "Blum canonical measurement dataset",
+    "filter": "resolutionStatus = adjudication_required and taskType in {answer_surface, measurement_parse}",
+    "sampling": "exhaustive-within-frozen-queue",
+    "sampleSize": null
+  },
+  "unitType": "single_measurement",
+  "visibility": {
+    "exactQuestion": true,
+    "rawResponse": true,
+    "mechanicalProjection": true,
+    "mechanicalParserResult": true,
+    "integrityFlags": true,
+    "collection": false,
+    "condition": false,
+    "family": false,
+    "replicate": false,
+    "sourcePath": false,
+    "siblingResponse": false,
+    "aggregateStatistics": false,
+    "hypothesis": false
+  },
+  "questions": [
+    {
+      "id": "response_status",
+      "type": "categorical",
+      "prompt": "Which response-status class best describes the instrument-authorized answer surface? Do not infer a latent answer merely because related prose contains numbers or evaluative language.",
+      "options": ["single_answer", "range_answer", "answer_despite_objection", "refusal_no_single_answer", "parser_boundary_corrected", "unclear"],
+      "evidence": "required",
+      "confidence": true
+    },
+    {
+      "id": "value_kind",
+      "type": "categorical",
+      "prompt": "If an authorized single answer is recoverable, what kind of value is it?",
+      "options": ["number", "sentinel", "categorical", "none", "unclear"],
+      "evidence": "required_if_not_none",
+      "confidence": true
+    },
+    {
+      "id": "authorized_value",
+      "type": "literal",
+      "prompt": "Return the exact authorized single answer value only when the response genuinely supplies one. Otherwise return null. Never choose an arbitrary number from explanatory prose.",
+      "options": [],
+      "evidence": "required_if_non_null",
+      "confidence": true
+    }
+  ],
+  "panel": {
+    "strategy": "fixed_ensemble",
+    "readersPerUnit": 3,
+    "independent": true,
+    "agreementRule": "unanimous_or_majority",
+    "escalationRule": "disagreement_or_low_confidence",
+    "recommendedIndependenceClass": "cross_model_or_same_model_independent_sessions"
+  },
+  "randomisation": {
+    "shuffle": true,
+    "opaqueUnitIds": true,
+    "seed": "20260914-measurement-answer-recovery-v0"
+  },
+  "blinding": {
+    "hide": ["collection", "condition", "family", "replicate", "source_path", "hypothesis", "sibling_response", "aggregate_effect", "downstream_claim"],
+    "readerInstruction": "Judge only the visible question, complete raw response, mechanical projection and parser record. Recover the designated answer surface; do not infer experimental condition or preferred result."
+  },
+  "provenance": {
+    "created": "2026-09-14",
+    "sourcePrecedents": ["adjudication-registry-contract-v0-12sep2026.md", "RAW12-ADJUDICATIONS.json"],
+    "scientificMotivation": "Mechanical parser failure is not substantive absence. Ambiguous or prose-bearing responses must be resolved under a frozen blinded measurement-recovery rubric before downstream cohort comparisons consume them."
+  },
+  "nonClaims": [
+    "This pass does not judge whether an answer is correct, aligned, healthy, or desirable.",
+    "It does not convert ranges or refusals into point estimates.",
+    "Mechanical measurements remain preserved and are never overwritten."
+  ]
+}
