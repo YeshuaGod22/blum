@@ -1,0 +1,40 @@
+name: test canonical measurement pipeline
+
+on:
+  push:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/canonical-measurement-compiler-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/cohort-battery-query-core-v1-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/materialize-measurement-adjudication-queue-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/measurement-answer-recovery-adjudication-pass-v0-14sep2026.json'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-canonical-measurement-pipeline-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-measurement-adjudication-materializer-v0-14sep2026.js'
+      - '.github/workflows/test-canonical-measurement-pipeline.yml'
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/canonical-measurement-compiler-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/cohort-battery-query-core-v1-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/materialize-measurement-adjudication-queue-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/measurement-answer-recovery-adjudication-pass-v0-14sep2026.json'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-canonical-measurement-pipeline-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-measurement-adjudication-materializer-v0-14sep2026.js'
+      - '.github/workflows/test-canonical-measurement-pipeline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test canonical measurement compiler and query
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-canonical-measurement-pipeline-v0-14sep2026.js
+      - name: Test blinded adjudication queue materializer
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-measurement-adjudication-materializer-v0-14sep2026.js
