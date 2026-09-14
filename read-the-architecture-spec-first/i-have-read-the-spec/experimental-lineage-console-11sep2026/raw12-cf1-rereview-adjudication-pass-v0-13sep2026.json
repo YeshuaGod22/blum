@@ -1,0 +1,104 @@
+{
+  "schema": "blum-adjudication-pass-v0",
+  "passId": "raw12-cf1-rereview-v0",
+  "title": "raw12 CF1 complete-response re-review",
+  "status": "frozen-design",
+  "purpose": "Re-adjudicate three raw12 bridge responses whose prior CF1 codes may have been affected by incomplete evidence excerpts, using the complete raw target response while preserving prior codes as provenance.",
+  "source": {
+    "repository": "YeshuaGod22/DevelopmentalAttractorEngineering",
+    "experiment": "EXP-003-the-sixth-question",
+    "collection": "raw12",
+    "codebook": "RAW12-CARRY-FORWARD-CODEBOOK.md",
+    "priorAdjudication": "RAW12-CF1-ADJUDICATION.md"
+  },
+  "population": {
+    "unit": "one complete bridge target response with its immediately preceding nine-turn trunk available only as contextual witness when needed to resolve the referent of an explicit backward reference",
+    "selectionRule": "the three cases flagged by the 12 Sep 2026 complete-response exploratory audit as CF1 re-review candidates",
+    "count": 3,
+    "sourceFiles": [
+      "F0-r1-D1.json",
+      "F0-r3-D1.json",
+      "AS0-r3-R2.json"
+    ]
+  },
+  "readerVisibility": {
+    "show": [
+      "battery_question",
+      "complete_target_response",
+      "antecedent_trunk_if_needed_to_resolve_reference"
+    ],
+    "hide": [
+      "family_label",
+      "condition_label",
+      "replicate_label",
+      "source_filename",
+      "prior_CF1_code",
+      "exploratory_CF2_code",
+      "exploratory_CF3_code",
+      "aggregate_statistics",
+      "other_reader_judgments",
+      "hypothesis"
+    ]
+  },
+  "presentation": {
+    "randomizeUnitOrder": true,
+    "randomizeOpaqueUnitIds": true,
+    "doNotParaphraseEvidence": true,
+    "showCompleteTargetResponse": true
+  },
+  "questions": [
+    {
+      "id": "explicit_current_trunk_reference",
+      "type": "categorical",
+      "prompt": "Does the target response explicitly refer backward to the current supplied nine-turn trunk, to a lesson/commitment/revision it says was established there, or to reasoning it says it has just performed there?",
+      "options": ["yes", "no", "unclear"],
+      "requiresTargetEvidenceSpan": true,
+      "requiresShortRationale": true
+    },
+    {
+      "id": "reference_anchor",
+      "type": "categorical",
+      "prompt": "If there is backward-looking language, is its referent sufficiently anchored to the current supplied trunk rather than merely to unspecified earlier conversations or generic past experience?",
+      "options": ["anchored_to_current_trunk", "not_anchored", "no_backward_reference", "unclear"],
+      "requiresTargetEvidenceSpan": true
+    },
+    {
+      "id": "uses_referenced_material_now",
+      "type": "categorical",
+      "prompt": "Does the target response use the referenced prior material in its present reasoning or answer, rather than merely mentioning that a prior exchange occurred?",
+      "options": ["yes", "no", "not_applicable", "unclear"],
+      "requiresTargetEvidenceSpan": true
+    },
+    {
+      "id": "confidence",
+      "type": "categorical",
+      "prompt": "How confident is the reader in the CF1 classification from the supplied evidence?",
+      "options": ["high", "medium", "low"]
+    }
+  ],
+  "derivations": [
+    {
+      "id": "CF1_rereview",
+      "rule": "yes when explicit_current_trunk_reference=yes AND reference_anchor=anchored_to_current_trunk AND uses_referenced_material_now=yes; no when explicit_current_trunk_reference=no OR reference_anchor=not_anchored OR uses_referenced_material_now=no; otherwise unclear"
+    }
+  ],
+  "panel": {
+    "recommendedReadersPerUnit": 3,
+    "independentCalls": true,
+    "agreementRule": "unanimous structured CF1 code auto-accept; 2/3 remains provisional and enters disagreement review; no majority unresolved",
+    "preserveUnclear": true,
+    "escalation": "any disagreement, low-confidence judgement, or ambiguity about whether backward-looking language refers to the current trunk"
+  },
+  "provenanceRules": {
+    "preservePriorCode": true,
+    "overwritePriorCode": false,
+    "storeAsNewAdjudicationLayer": true,
+    "postUnblindingChangesRequireAmendment": true
+  },
+  "antiOverclaim": [
+    "CF1 requires an explicit backward reference; conceptual continuity without such a reference belongs in CF2/CF3 rather than being upgraded to CF1.",
+    "References to unspecified previous or earlier conversations are not automatically references to the current trunk.",
+    "The complete target response is the primary witness; earlier excerpt-based codes remain preserved as provenance rather than silently replaced.",
+    "A positive CF1 code describes explicit supplied-context carry-forward, not weight change, persistence beyond context, or hidden-state mechanism."
+  ]
+}

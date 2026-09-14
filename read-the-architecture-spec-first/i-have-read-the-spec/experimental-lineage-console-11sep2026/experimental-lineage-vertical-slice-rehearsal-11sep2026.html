@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blum Lineage Vertical Slice Rehearsal</title>
+<style>
+:root{--bg:#0a0a0c;--s:#121216;--s2:#1b1b22;--b:#30303a;--t:#d9d9e2;--d:#777785;--a:#e8a44a;--g:#64b978;--r:#dc6b6b;--p:#ad83d6;--m:ui-monospace,SFMono-Regular,Menlo,monospace;--f:Inter,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font-family:var(--f)}main{max-width:1100px;margin:auto;padding:28px 18px 80px}h1{font:700 20px var(--m);color:var(--a);margin:0 0 6px}p{line-height:1.55;color:var(--d)}button{font:600 13px var(--m);background:var(--a);color:#17120b;border:0;border-radius:6px;padding:9px 13px;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:12px;margin-top:12px}.label{font:10px var(--m);text-transform:uppercase;letter-spacing:.1em;color:var(--d)}pre{white-space:pre-wrap;word-break:break-word;background:#08080a;border:1px solid var(--b);border-radius:5px;padding:10px;max-height:420px;overflow:auto;font:11px/1.5 var(--m)}.ok{color:var(--g)}.bad{color:var(--r)}.metric{font:28px var(--m);color:var(--p)}.lineage{font:12px/1.6 var(--m)}@media(max-width:750px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>BLUM / VERTICAL SLICE REHEARSAL</h1>
+<p>This page executes the provider-agnostic lineage runner entirely in-browser against a deterministic mock model and mock embedder. It proves plumbing only: frozen manifest → lived trunk → exact shared parent → <code>a</code>/<code>0</code> siblings → one common probe → XML projections → sibling cosine divergence. No API calls are made.</p>
+<button id="run">Run rehearsal</button>
+<span id="status" style="margin-left:10px;font:12px var(--m);color:var(--d)">ready</span>
+<div class="grid">
+  <section class="card"><div class="label">Genealogy</div><div id="genealogy" class="lineage" style="margin-top:8px">—</div></section>
+  <section class="card"><div class="label">Reflection sibling divergence</div><div id="metric" class="metric" style="margin-top:8px">—</div><p id="metricNote"></p></section>
+</div>
+<section class="card"><div class="label">Assertions</div><pre id="assertions">Not run.</pre></section>
+<div class="grid">
+  <section class="card"><div class="label">Observations</div><pre id="observations">—</pre></section>
+  <section class="card"><div class="label">XML projections</div><pre id="projections">—</pre></section>
+</div>
+<section class="card"><div class="label">Append-only execution ledger</div><pre id="ledger">—</pre></section>
+</main>
+<script src="./experimental-lineage-runner-core-v0-11sep2026.js"></script>
+<script>
+const R=window.BlumLineageRunner;
+function manifest(){return {
+  manifestVersion:1,frozen:true,fingerprint:'sha256:browser-rehearsal-v1',
+  experiment:{name:'browser vertical slice rehearsal',provider:'mock',model:'mock-v1'},
+  trunks:[{id:'T01',label:'shared lived trunk',enabled:true,replicates:1,turns:[
+    {id:'Q01',enabled:true,text:'Develop a stable interpretive frame for the next question.'}
+  ]}],
+  forks:[
+    {id:'a',label:'schema maintained',enabled:true,trunkLived:true,schemaPresent:true,intervention:'Maintain the developmental schema explicitly.',replicates:1,batteryIds:['N4']},
+    {id:'0',label:'schema dropped',enabled:true,trunkLived:true,schemaPresent:false,intervention:'Drop the explicit schema while retaining ordinary reasoning.',replicates:1,batteryIds:['N4']}
+  ],
+  battery:[{id:'N4',family:'N',construct:'rehearsal',responseType:'credence',scorer:'',text:'Give the shared probe answer.',enabled:true}],
+  analysisStreams:[
+    {id:'whole',enabled:true,mode:'whole',tags:'',missingPolicy:'NA'},
+    {id:'reflection',enabled:true,mode:'single-tag',tags:'reflection',missingPolicy:'NA'},
+    {id:'answer',enabled:true,mode:'single-tag',tags:'answer',missingPolicy:'NA'},
+    {id:'revision',enabled:true,mode:'single-tag',tags:'revision',missingPolicy:'NA'}
+  ],
+  metrics:{siblingDivergence:true},failurePolicy:{missingTag:'NA'}
+}}
+async function model({messages,metadata}){
+  if(metadata.phase==='trunk')return{text:'<reflection>I stabilise the shared trunk.</reflection><answer>ready</answer>',stopReason:'end_turn'};
+  const all=messages.map(x=>x.content).join('\n');
+  if(all.includes('Maintain the developmental schema explicitly.'))return{text:'<reflection>The prior developmental frame remains salient.</reflection><answer>37</answer>',stopReason:'end_turn'};
+  if(all.includes('Drop the explicit schema while retaining ordinary reasoning.'))return{text:'<reflection>I answer without explicit schema language.</reflection><answer>52</answer>',stopReason:'end_turn'};
+  throw new Error('unexpected branch')
+}
+async function embed({text}){
+  if(text.includes('remains salient'))return[1,0,0];
+  if(text.includes('without explicit'))return[0,1,0];
+  if(text.trim()==='37')return[1,0,1];
+  if(text.trim()==='52')return[0,1,1];
+  return[1,1,0]
+}
+function check(condition,label,lines){lines.push((condition?'PASS ':'FAIL ')+label);return !!condition}
+document.getElementById('run').onclick=async()=>{
+  const status=document.getElementById('status');status.textContent='running…';status.className='';
+  try{
+    const result=await R.runLineage({manifest:manifest(),callModel:model,embedText:embed});
+    const lines=[];let ok=true;
+    ok&=check(result.parentSnapshots.length===1,'one parent snapshot',lines);
+    ok&=check(result.observations.length===2,'two sibling observations',lines);
+    ok&=check(result.siblingPairs.length===1,'one sibling pair',lines);
+    const [a,b]=result.observations;
+    ok&=check(a.parentSnapshotId===b.parentSnapshotId,'a and 0 share identical parentSnapshotId',lines);
+    ok&=check(result.siblingPairs[0]?.contrastType==='exact_shared_parent','contrast labelled exact_shared_parent',lines);
+    const missing=result.projections.filter(x=>x.analysisStreamId==='revision');
+    ok&=check(missing.length===2&&missing.every(x=>x.status==='missing'&&x.selectedText===null),'missing <revision> remains NA; no whole-output fallback',lines);
+    const metric=result.metrics.siblingDivergence.find(x=>x.analysisStreamId==='reflection');
+    ok&=check(metric&&Math.abs(metric.value-1)<1e-12,'reflection mock vectors yield cosine distance 1',lines);
+    document.getElementById('assertions').textContent=lines.join('\n');
+    document.getElementById('genealogy').textContent=`T01\n└─ ${a.parentSnapshotId}\n   ├─ a → N4 → ${a.observationId}\n   └─ 0 → N4 → ${b.observationId}`;
+    document.getElementById('metric').textContent=metric?metric.value.toFixed(6):'—';
+    document.getElementById('metricNote').textContent='Mock vectors only: this validates measurement wiring, not a scientific semantic result.';
+    document.getElementById('observations').textContent=JSON.stringify(result.observations,null,2);
+    document.getElementById('projections').textContent=JSON.stringify(result.projections,null,2);
+    document.getElementById('ledger').textContent=JSON.stringify(result.executionLedger,null,2);
+    status.textContent=ok?'PASS':'FAIL';status.className=ok?'ok':'bad';
+  }catch(e){status.textContent='ERROR';status.className='bad';document.getElementById('assertions').textContent=e.stack||String(e)}
+};
+</script>
+</body>
+</html>
