@@ -1,235 +1,289 @@
-# Message lineage + instance identity design note — 15 Sep 2026
+# Inference package + trajectory identity design note — 15 Sep 2026
 
-## Why this exists
+## Core correction
 
-February Blum established a strong traceability rule: **every datum has a UID**, maximum-detail ground truth is retained, and foveation/projection happens at read time rather than by deleting the underlying evidence.
+February Blum established the invariant: **every scientific datum is addressable, provenance survives normalization, and compression happens at read/distribution time rather than by deleting evidence.**
 
-EXP-003's September observation index had strong observation/trunk/snapshot provenance but no first-class identity for individual model-visible messages or generated outputs. The portable projection then removed repeated `modelVisibleMessages` arrays entirely. This made elementary questions such as “what was the first message to every model instance, and did anything come after it?” depend on witness archaeology.
+The September EXP-003 work initially restored identity at the individual-message level. That was useful but still one layer too low. The experimentally administered unit is the **complete package sent to inference**.
 
-This note freezes the correction.
+The canonical hierarchy is now:
 
-## Council disagreements that changed the design
+```text
+CALL
+  callUid
+    |
+    +--> INPUT PACKAGE
+    |      inputPackageUid
+    |      package content hash
+    |      ordered section/event refs
+    |
+    +--> OUTPUT PACKAGE
+           outputPackageUid
+           raw-output content hash
+           optional parsed section/event refs
 
-### 1. Content identity is not event identity
+TRAJECTORY
+  instanceUid
+  ordered owned callUids[]
+  parent trajectory relation when applicable
+```
 
-**Rejected:** use message text/content hash as the message UID.
+System framing, prior conversation, and the current user input are subdivisions of one input package. `<reply>`, `<reflection>`, `<debate>`, etc. are subdivisions of one output package. Sections are addressable second-layer objects, not peers of the package they belong to.
 
-Two independently administered prompts may have byte-identical text while remaining distinct experimental events.
+Frozen raw witnesses remain authoritative for exact provider serialization. The retrospective normalized package layer reconstructs the canonical structured inference input retained by the importer: system framing plus ordered model-visible messages.
 
-Therefore:
+## Identity rules
 
-- `messageUid` = datum/event identity;
-- `contentHash` = textual identity;
-- equal `contentHash` does not imply equal `messageUid`.
+### Event identity != content identity
 
-### 2. Historical labels are not instance identities
+Two independently administered calls may receive byte/text-identical packages and remain different experimental events.
 
-`parentSnapshotId` is content-addressed from the exact sent prefix, so two independent treatments with identical prefixes can share a snapshot hash.
+```text
+callUid          = one administered inference event
+inputPackageUid  = this input-package event
+outputPackageUid = this output-package event
+contentHash      = normalized content identity
+```
 
-`trunkKey` is a historical label, not a globally unique treatment instance. The pinned corpus reuses labels such as `CP-r1`, `F-r1`, and `H-r1` across raw collections with genuinely different treatment openings.
+Equal content hashes never imply equal event UIDs.
 
-The pre-existing field named `trunkInstanceId` is not sufficient either: the raw adapter derives it from `{ trunkKey }`, so it inherits the same collision. Cold calls had the same problem: `C-r1-N4`, `C-r1-A1`, etc. were all being assigned a pseudo-instance identity derived only from `C-r1`, even though they are independent subject calls.
+The same principle applies to sections. A repeated user/history fragment can occur as a section event in many packages while its text is stored once by content hash in the portable projection.
 
-**Rejected:** treating replicate/trunk labels as model-instance IDs.
+### Historical labels are not identities
 
-### 3. Do not infer ancestry from matching strings
+`trunkKey`, replicate labels such as `C-r1`, and the older field named `trunkInstanceId` are analysis/provenance labels, not globally unique inference or trajectory identities.
 
-A graph edge is a scientific claim about lineage, not a compression trick.
+Concrete correction:
 
-Text equality may support content comparison but never establishes conversational ancestry. Shared ancestor identity is admitted only from existing lineage evidence.
+```text
+raw7 C    = 250 independent one-call trajectories
+raw7 C-r1 = 25 independent one-call trajectories
+```
 
-### 4. There are two useful identity levels
+The 25 calls may share condition/replicate metadata. They do not thereby become one conversation or one inference event.
 
-The corpus needs both:
+## Package sections
 
-1. **message / datum identity** — exact model-visible inputs and outputs;
-2. **model-instance / trajectory identity** — the conversational root, trunk, or branch in which those messages occur.
+An input package is represented canonically as:
 
-These must not be confused with analysis groupings such as family, replicate, condition, or battery item.
+```text
+InputPackage
+  inputPackageUid
+  callUid
+  contentHash
+  ordered sectionUids[]
 
-## Primary instance ontology
+InputSection
+  sectionUid
+  packageUid
+  sectionType = system | message
+  role = system | user | assistant | ...
+  ordinal
+  contentHash
+```
 
-For the question “what was the first message to every instance, and are there later input-output pairs?” the primary object is now `instanceStartCensus`.
+The package is the scientific intervention unit. Sections answer second-layer questions such as “what was the current user prompt?” or “what prior assistant response was present?”.
+
+An output package is parallel:
+
+```text
+OutputPackage
+  outputPackageUid
+  callUid
+  raw-output contentHash
+  sectionUids[]
+  callOutcome
+  stopReason
+
+OutputSection
+  sectionUid
+  packageUid
+  tag = reply | reflection | debate | deliberation | ...
+  ordinal
+  contentHash
+  integrity
+```
+
+The raw output remains primary. Parsed XML-ish sections are derived subdivisions and never replace it.
+
+## Trajectory semantics
+
+A trajectory is an experimental conversational lineage made of **administered calls**, not a count of user/assistant-looking messages visible inside one package.
 
 ### Root lived trunk
 
-One developmental conversation per collection + trunk lineage. Raw2+ trunk turns are stored as separate call files, but their successively growing `sent` contexts belong to one lived conversation instance.
+A lived trunk owns multiple inference calls:
 
 ```text
-instanceKind = root_lived_trunk
-firstInput
-firstOutput
-ioPairCount
-hasFurtherInputOutputPairs
-downstreamInputOutputPairCount
-parentInstanceUid = null
+call 1: inputPackage_1 -> outputPackage_1
+call 2: inputPackage_2 -> outputPackage_2
+...
 ```
+
+Later input packages contain the growing conversational history, but trajectory depth counts calls, not the number of messages copied into those packages.
 
 ### Root single call
 
-Every cold or cold-schema subject call is its **own** model instance.
-
-`C-r1` is a replicate grouping, not an instance. For example, raw7 contains:
+Cold/cold-schema observations are ordinary one-call root trajectories:
 
 ```text
-C: r1-r10 × 25 battery items = 250 independent model instances
-C-r1: 25 independent model instances
+callCount = 1
+hasFurtherInferenceCalls = false
 ```
 
-Each normally has:
+“Cold” means no inherited lived parent. It says nothing exotic about the existence of a first inference package.
+
+### Branch call
+
+A branch is normally a new inference call whose input package contains inherited conversational history.
+
+Crucial distinction:
 
 ```text
-instanceKind = root_single_call
-ioPairCount = 1
-hasFurtherInputOutputPairs = false
-parentInstanceUid = null
+branch callCount                         = 1
+branch downstreamInferenceCallCount      = 0
+branch visibleContextExchangePairCount   = potentially many
+parent trajectory calls                  = ancestry reference
 ```
 
-“Cold” therefore means **no inherited lived parent**. It does not mean “no first turn,” “not applicable,” or “one multi-question C conversation.”
+Inherited history is content inside the branch input package. It is not silently reclassified as calls owned by the branch trajectory.
 
-### Branch instance
-
-Every branch observation is its own forked model instance/trajectory. Its model-visible trajectory retains the inherited trunk prefix plus its branch input/output.
+Pilot 1 makes the distinction concrete. `record.json` explicitly links:
 
 ```text
-instanceKind = branch_from_lived_trunk
-parentInstanceUid = lived trunk instance when mechanically joinable
-inheritedPrefixMessageCount
-ioPairCount
-hasFurtherInputOutputPairs
+ASb-r1-N9.raw.jsonl -> AS-r1-trunk.raw.jsonl
+ASb-r2-N9.raw.jsonl -> AS-r2-trunk.raw.jsonl
 ```
 
-### Pilot 1
+Each AS trunk owns 5 inference calls. Each ASb branch owns 1 inference call whose input package contains those 5 prior exchanges plus N9. Thus an ASb package exposes 6 visible exchange pairs while the ASb trajectory itself has only 1 inference call.
 
-Pilot 1 uses session-event JSONL rather than one-file-per-call storage. `record.json` reconstructs the dialogue.
+## Pinned corpus census
 
-Crucially, the two ASb branch records are **not first-turn roots**:
+Against DAE commit `e2d484b41461013832c00e9f1ba3549ac0ef2517`:
+
+### Inference events
+
+- **2,659 calls**
+- **2,659 input packages**
+- **2,659 output packages**
+- **38,222 section events** in the current canonical section projection
+
+Call source classes:
 
 ```text
-ASb-r1-N9.raw.jsonl -> parent_trunk = AS-r1-trunk.raw.jsonl
-ASb-r2-N9.raw.jsonl -> parent_trunk = AS-r2-trunk.raw.jsonl
+raw2_plus_branch     1706
+raw2_plus_cold        662
+raw2_plus_trunk       271
+pilot1_trunk_turn      10
+pilot1_branch_call      2
+pilot1_cold_call        8
 ```
 
-The instance census joins those explicit parent links. Each AS trunk is a five-pair developmental instance; each ASb branch trajectory contains those five inherited pairs plus its N9 branch pair, for six complete pairs total.
+Every call owns exactly one input package and one output package. Every call is owned by exactly one trajectory.
 
-The older treatment-origin query still reports these Pilot-1 rows as incomplete **within the stripped normalized battery-row projection**. That is a limitation of that secondary projection, not a corpus-level uncertainty about whether the ASb files were first turns.
+### Trajectories
 
-## Pinned instance-start census
+- **2,420 trajectories**
+- **42** own more than one inference call
+- **2,378** are one-call trajectories
+- **2,420 / 2,420** are bound to package-bearing calls
 
-On the pinned EXP-003 corpus:
-
-- **2,420 actual model instances / trajectories**;
-- **1,750** have further complete input-output pairs downstream of the first pair;
-- **670** do not;
-- **0** instances are missing a first input.
-
-By instance kind:
-
-- **42** `root_lived_trunk`;
-- **670** `root_single_call`;
-- **1,708** `branch_from_lived_trunk`.
-
-By ancestry metadata:
-
-- 2 `pilot1_lived_trunk`;
-- 40 `lived_trunk`;
-- 320 `cold_no_lived_parent`;
-- 350 `cold_schema_no_lived_parent`;
-- 2 `pilot1_lived_trunk_branch`;
-- 1,706 `lived_trunk_branch`.
-
-Hard examples:
-
-- raw7 `C` = **250 independent instances**;
-- raw7 `C-r1` = **25 independent one-pair instances**;
-- Pilot 1 = **2 five-pair AS trunks**;
-- Pilot 1 ASb = **2 six-pair branch trajectories with explicit parent-trunk joins**.
-
-## Secondary treatment-origin view
-
-The older `dae-first-treatment-prompts` query answers a narrower question: whether a normalized battery observation itself contains enough mechanically verified evidence to certify a lived developmental origin.
-
-Its grouping-level census remains useful for provenance diagnostics, but it is **not** the primary answer to “what is the first turn of every model instance?” In particular:
-
-- cold groups being `no_lived_parent_by_design` does not make their first input non-applicable;
-- Pilot-1 branch rows being incomplete in that projection does not make the underlying branch trajectories historically unresolved;
-- replicate labels that produce multiple first inputs are grouping labels, not failed instance identities.
-
-## Message lineage layer
-
-For verified lived-prefix evidence:
+By trajectory kind:
 
 ```text
-treatmentInstanceId = hash(collection + trunkKey + verified parentSnapshotId)
+root_lived_trunk         42
+root_single_call        670
+branch_from_lived_trunk 1708
 ```
 
-and message identity retains the event/content distinction:
+The earlier statistic that 1,750 instances had “further input-output pairs” described user/assistant-shaped exchanges visible in reconstructed context. It is retained only as a compatibility/context measurement. It must not be reported as inference-call depth.
+
+## Observation/message compatibility projection
+
+The existing normalized observation/message graph remains useful for old queries and exact reconstruction of the battery-observation layer:
+
+- 2,378 addressable normalized observations
+- 2,028 in the historical non-cold-schema projection
+- 7,889 message/output nodes
+- 2,378 / 2,378 model-visible observation contexts reconstruct exactly
+
+This is now explicitly a compatibility/projection layer beneath the package ontology, not the definition of an inference event.
+
+The old treatment-origin query also remains as a secondary provenance diagnostic. Its “59 resolved / 53 not applicable / 2 incomplete” grouping census must not be confused with first-package or trajectory identity.
+
+## Portable representation
+
+The first package-first portable build exposed a useful failure: embedding the full package graph inside the whole-corpus index duplicated large amounts of text and hit `RangeError: Invalid string length`.
+
+The fix follows the scientific ontology rather than raising memory limits.
+
+Portable v1 now stores:
 
 ```text
-messageUid
-role
-content
-contentHash
-parentMessageUid
-datumRole
-identityClass
-ordinal
-collection
-trunkKey
-treatmentInstanceId
-parentSnapshotId
-sourceObservationId
+dae-whole-corpus-index-v1.json
+  -> lightweight inferencePackageGraphRef
+
+dae-inference-package-graph-v0.json
+  calls
+  input-package events
+  output-package events
+  section events
+  contentStore[contentHash] = text
 ```
 
-The pinned normalized observation graph currently has:
+Package/section event objects retain UIDs and content hashes. Repeated text is stored once in the content-addressed store. Packages can be reconstructed deterministically from ordered section refs plus that store.
 
-- **2,378** addressable battery observations;
-- **2,028** in the historical non-cold-schema projection;
-- **7,889** addressable message/output nodes;
-- **2,378 / 2,378** indexed model-visible contexts reconstructing exactly from UID references.
+Pinned portable result:
 
-Observation population and instance population are deliberately different objects.
+- 2,659 calls / input packages / output packages
+- 38,222 section events
+- **8,101 unique content blobs**
+- all package refs reconstruct offline
+- all 2,420 trajectories retain first call/package refs offline
+- raw7 C-r1 remains 25 distinct input-package events
+- both Pilot ASb branches reconstruct inherited history while remaining one-call trajectories
 
-## Portable means scientifically inspectable
-
-Portable v1 may omit repeated per-observation `modelVisibleMessages` arrays only because their complete content remains UID-addressable in `messageGraph`.
-
-It now also ships `instanceStartCensus`, so offline inspection can directly ask:
-
-```text
-instanceUid
-collection
-family
-replicate
-probeId
-instanceKind
-firstInput
-firstOutput
-ioPairCount
-hasFurtherInputOutputPairs
-downstreamInputOutputPairCount
-parentInstanceUid
-```
-
-without opening the full witness tree.
-
-The full-witness bundle remains the byte-level reconstruction/audit artifact. The portable bundle is allowed to normalize representation, not delete the intervention or the instance topology.
+The full-witness bundle remains the byte/provider-level audit artifact. Portable normalization changes representation, not evidence.
 
 ## Hard regressions
 
-The implementation is not green unless all hold:
+The implementation is not green unless all of these hold:
 
-1. independently administered identical prompts remain distinct events;
-2. verified sibling prefixes reuse ancestor message UIDs only when lineage evidence warrants it;
-3. every indexed model-visible observation reconstructs exactly;
-4. every generated indexed output is addressable;
-5. every instance in the instance census has a first input;
-6. raw7 C contains 250 independent instances and C-r1 contains 25;
-7. Pilot-1 AS contains two five-pair trunks;
-8. Pilot-1 ASb contains two six-pair branch trajectories joined to their explicit parent trunks;
-9. replicate/trunk labels are never silently promoted to model-instance identity;
-10. portable-analysis preserves both the message graph and the complete instance-start census offline.
+1. every administered call owns exactly one input package and one output package;
+2. every call is owned by exactly one trajectory;
+3. every trajectory binds to at least one package-bearing call;
+4. independent identical packages retain different event UIDs;
+5. system framing is a section of the input package, not a peer inference unit;
+6. output sections are subordinate to the complete raw output package;
+7. raw7 C-r1 contains 25 distinct one-call/input-package events;
+8. Pilot AS trunks contain five inference calls each;
+9. Pilot ASb branches contain one inference call each, six visible context pairs, and explicit parent-trajectory ancestry;
+10. inherited conversational context never inflates branch inference-call depth;
+11. portable package content reconstructs from section refs + content store;
+12. the portable whole index references rather than duplicates the standalone package graph;
+13. the compatibility 2,378-observation message graph still reconstructs every indexed observation exactly.
 
-## Next extension
+CI currently passes the full chain including the compact portable package bundle.
 
-February Blum's phrase was **every datum**, not merely every message. Parsed response surfaces (`reply`, `reflection`, `debate`, `deliberation`, revisions, adjudication evidence spans) should next receive deterministic derived-datum identities linked back to their source output message rather than becoming another parallel identity system.
+## Next critique targets
+
+The package ontology resolves the unit-of-inference problem, but several stronger provenance tests remain desirable:
+
+1. **Trunk extension proof.** Verify mechanically that each successive trunk call's input package extends the previous trajectory state rather than selecting a terminal call merely by turn/order heuristics.
+2. **Parent relation proof.** For raw2+ branches, validate parent-trajectory relations against exact inherited package/prefix evidence rather than relying only on `trunkKey` correspondence.
+3. **Outcome-aware depth.** Distinguish administered calls from successful/complete/truncated/failed calls using the already-preserved `callOutcome` and `stopReason`.
+4. **Measurement linkage.** Attach measurements/adjudications to output package/section UIDs rather than creating another independent identity universe.
+
+Target chain:
+
+```text
+CALL
+ -> INPUT PACKAGE
+ -> OUTPUT PACKAGE
+ -> OUTPUT SECTION (when useful)
+ -> MEASUREMENT
+ -> ADJUDICATION
+ -> CLAIM
+```
+
+Everything downstream should point back into this one provenance spine.
