@@ -1,9 +1,10 @@
 'use strict';
 
 // Verifies trajectory topology against inference-package content rather than
-// trusting turn order / trunk labels alone.
-
-const Graph = require('./dae-message-lineage-graph-v0-15sep2026.js');
+// trusting turn order / trunk labels alone. Parent lineage can be proven by
+// either a materialized parent trajectory or, when that event is absent from
+// the historical corpus, the exact frozen parent-prefix snapshot in the branch
+// witness. The latter never fabricates a missing parent call.
 
 function normalizedMessage(role, content) {
   return { role: String(role || ''), content: String(content ?? '') };
@@ -55,6 +56,7 @@ function attachTrajectoryPackageIntegrity(index) {
   const calls = pkgGraph.calls;
   const inputs = pkgGraph.inputPackages;
   const outputs = pkgGraph.outputPackages;
+  const snapshotProofByCall = index?.witnessParentSnapshotIntegrity?.byCallUid || {};
   const instanceByUid = new Map(census.instances.map(x => [x.instanceUid, x]));
   const transitions = [];
   const parentRelations = [];
@@ -80,6 +82,7 @@ function attachTrajectoryPackageIntegrity(index) {
           toCallUid: current.callUid,
           fromTurn: prev.turn ?? null,
           toTurn: current.turn ?? null,
+          proofClass:'materialized_parent_trajectory',
           systemPromptStable,
           ...result,
         };
@@ -102,25 +105,47 @@ function attachTrajectoryPackageIntegrity(index) {
       const parentTerminalCall = parent ? calls[parent.terminalCallUid] || null : null;
       let relation;
       if (!ownedCall) {
-        relation = { status: 'branch_call_missing' };
+        relation = { status:'branch_call_missing', proofClass:'unverified' };
       } else if (!parent || !parentTerminalCall) {
-        relation = {
-          status: 'parent_trajectory_unmaterialized',
-          reason: !instance.parentInstanceUid
-            ? 'no_parent_instance_uid_materialized'
-            : !parent
-              ? 'parent_instance_uid_not_present_in_census'
-              : 'parent_terminal_call_not_present_in_package_graph',
-        };
+        const snapshotProof = snapshotProofByCall[ownedCall.callUid] || null;
+        if (snapshotProof?.status === 'verified_witness_parent_snapshot_extension') {
+          relation = {
+            status:'verified_witness_parent_snapshot_extension',
+            proofClass:'frozen_witness_parent_snapshot',
+            materializedParentTrajectory:false,
+            reason:!instance.parentInstanceUid ? 'parent_event_absent_snapshot_verified' : 'materialized_parent_unavailable_snapshot_verified',
+            parentSnapshotId:snapshotProof.parentSnapshotId || null,
+            declaredParentPrefix:snapshotProof.declaredParentPrefix || null,
+            expectedPrefixHash:snapshotProof.expectedPrefixHash || null,
+            actualPrefixHash:snapshotProof.actualPrefixHash || null,
+            prefixLen:snapshotProof.prefixLen ?? null,
+            exactlyOneNewUser:snapshotProof.exactlyOneNewUser === true,
+          };
+        } else {
+          relation = {
+            status:'parent_lineage_unverified',
+            proofClass:'unverified',
+            materializedParentTrajectory:false,
+            reason:!instance.parentInstanceUid
+              ? 'no_parent_instance_uid_materialized'
+              : !parent
+                ? 'parent_instance_uid_not_present_in_census'
+                : 'parent_terminal_call_not_present_in_package_graph',
+            snapshotVerificationStatus:snapshotProof?.status || 'snapshot_proof_missing',
+          };
+        }
       } else {
         const parentInput = inputs[parentTerminalCall.inputPackageUid];
         const parentOutput = outputs[parentTerminalCall.outputPackageUid];
         const branchInput = inputs[ownedCall.inputPackageUid];
         const expectedPrefix = expectedStateAfterCall(parentInput, parentOutput);
         relation = classifyExtension(branchInput?.canonicalPackage?.messages || [], expectedPrefix);
+        relation.proofClass = 'materialized_parent_trajectory';
+        relation.materializedParentTrajectory = true;
         relation.systemPromptStable = (parentInput?.canonicalPackage?.systemPrompt ?? null) === (branchInput?.canonicalPackage?.systemPrompt ?? null);
       }
       instance.parentRelationVerificationStatus = relation.status;
+      instance.parentRelationProofClass = relation.proofClass || null;
       instance.parentRelationVerificationReason = relation.reason || null;
       parentRelations.push({
         trajectoryUid: instance.instanceUid,
@@ -145,26 +170,38 @@ function attachTrajectoryPackageIntegrity(index) {
     out[row.status] = (out[row.status] || 0) + 1;
     return out;
   }, {});
+  const countByProof = rows => rows.reduce((out, row) => {
+    const key = row.proofClass || '<missing>';
+    out[key] = (out[key] || 0) + 1;
+    return out;
+  }, {});
 
-  const unmaterialized = parentRelations.filter(x => x.status === 'parent_trajectory_unmaterialized');
+  const unverified = parentRelations.filter(x => !['verified_exact_extension','verified_witness_parent_snapshot_extension'].includes(x.status));
+  const snapshotVerified = parentRelations.filter(x => x.status === 'verified_witness_parent_snapshot_extension');
+  const materializedVerified = parentRelations.filter(x => x.status === 'verified_exact_extension');
   index.trajectoryPackageIntegrity = {
-    schema: 'blum-dae-trajectory-package-integrity-v0',
-    trunkTransitionCount: transitions.length,
-    trunkTransitionStatuses: countByStatus(transitions),
-    branchParentRelationCount: parentRelations.length,
-    branchParentRelationStatuses: countByStatus(parentRelations),
-    branchParentRelationStatusesByCollection: nestedCount(parentRelations, 'collection', 'status'),
-    unmaterializedParentCount: unmaterialized.length,
-    unmaterializedParentReasons: countByStatus(unmaterialized.map(row => ({ status: row.reason || '<missing>' }))),
-    unmaterializedParentsByCollection: unmaterialized.reduce((out, row) => {
-      const key = String(row.collection || '<missing>');
-      out[key] = (out[key] || 0) + 1;
-      return out;
-    }, {}),
+    schema:'blum-dae-trajectory-package-integrity-v0',
+    semantics:{
+      materialized_parent_trajectory:'branch prefix proven against the terminal state of an addressable parent inference trajectory',
+      frozen_witness_parent_snapshot:'parent event is not materialized; branch prefix proven against the immutable parent snapshot embedded in the branch witness; this does not imply a parent call UID',
+    },
+    trunkTransitionCount:transitions.length,
+    trunkTransitionStatuses:countByStatus(transitions),
+    branchParentRelationCount:parentRelations.length,
+    branchParentRelationStatuses:countByStatus(parentRelations),
+    branchParentRelationProofClasses:countByProof(parentRelations),
+    branchParentRelationStatusesByCollection:nestedCount(parentRelations,'collection','status'),
+    materializedParentVerifiedCount:materializedVerified.length,
+    witnessSnapshotParentVerifiedCount:snapshotVerified.length,
+    unverifiedParentCount:unverified.length,
+    unverifiedParentReasons:countByStatus(unverified.map(row => ({status:row.reason || '<missing>'}))),
+    unverifiedParentsByCollection:unverified.reduce((out,row) => {
+      const key=String(row.collection || '<missing>'); out[key]=(out[key]||0)+1; return out;
+    },{}),
     transitions,
     parentRelations,
   };
   return index;
 }
 
-module.exports = { equalMessage, prefixMatches, expectedStateAfterCall, classifyExtension, nestedCount, attachTrajectoryPackageIntegrity };
+module.exports={equalMessage,prefixMatches,expectedStateAfterCall,classifyExtension,nestedCount,attachTrajectoryPackageIntegrity};
