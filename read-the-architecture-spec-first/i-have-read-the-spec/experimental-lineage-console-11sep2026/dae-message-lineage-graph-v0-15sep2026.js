@@ -8,9 +8,9 @@
 // Rules:
 // - Every model-visible message and every generated output gets a stable UID.
 // - `contentHash` answers "same bytes/text?"; UID answers "same datum/event?".
-// - A verified shared trunk prefix is deduplicated only when BOTH trunk identity
-//   and verified parent-prefix identity agree. Text equality alone never merges
-//   independent events.
+// - A verified shared trunk prefix is deduplicated only within one treatment
+//   instance: collection + trunkKey + verified parentSnapshotId. Text equality
+//   or a reused trunk label alone never merges independent events.
 // - Raw `modelVisibleMessages` remain authoritative witness data. This graph is
 //   a reversible normalized projection, not a replacement for the witness.
 
@@ -90,13 +90,22 @@ function prefixEvidence(row, sourceObservation) {
   const verified = row?.parentVerificationStatus === 'verified_from_sent_prefix'
     && Boolean(row?.parentSnapshotId)
     && Boolean(row?.trunkKey)
+    && Boolean(row?.collection)
     && Number.isInteger(prefixLen)
     && prefixLen >= 0;
+  const collection = verified ? String(row.collection) : null;
+  const trunkKey = verified ? String(row.trunkKey) : null;
+  const parentSnapshotId = verified ? String(row.parentSnapshotId) : null;
+  const treatmentInstanceId = verified
+    ? uid('treat', { collection, trunkKey, parentSnapshotId })
+    : null;
   return {
     verified,
     prefixLen: verified ? prefixLen : 0,
-    parentSnapshotId: verified ? row.parentSnapshotId : null,
-    trunkKey: verified ? row.trunkKey : null,
+    collection,
+    parentSnapshotId,
+    trunkKey,
+    treatmentInstanceId,
   };
 }
 
@@ -117,9 +126,8 @@ function annotateObservation(row, sourceObservation, nodes) {
     const sharedVerifiedPrefix = prefix.verified && ordinal < prefix.prefixLen;
     const identity = sharedVerifiedPrefix
       ? {
-          kind: 'verified_trunk_prefix_message',
-          trunkKey: prefix.trunkKey,
-          parentSnapshotId: prefix.parentSnapshotId,
+          kind: 'verified_treatment_prefix_message',
+          treatmentInstanceId: prefix.treatmentInstanceId,
           ordinal,
           role,
         }
@@ -139,7 +147,9 @@ function annotateObservation(row, sourceObservation, nodes) {
       datumRole: 'model_visible_message',
       identityClass: identity.kind,
       ordinal,
-      trunkKey: sharedVerifiedPrefix ? prefix.trunkKey : (row.trunkKey || null),
+      collection: row.collection || null,
+      trunkKey: row.trunkKey || null,
+      treatmentInstanceId: sharedVerifiedPrefix ? prefix.treatmentInstanceId : null,
       parentSnapshotId: sharedVerifiedPrefix ? prefix.parentSnapshotId : null,
       sourceObservationId: sharedVerifiedPrefix ? null : observationId,
     });
@@ -162,7 +172,9 @@ function annotateObservation(row, sourceObservation, nodes) {
       datumRole: 'system_prompt',
       identityClass: 'observation_system_prompt',
       ordinal: null,
+      collection: row.collection || null,
       trunkKey: row.trunkKey || null,
+      treatmentInstanceId: prefix.treatmentInstanceId,
       parentSnapshotId: null,
       sourceObservationId: observationId,
     });
@@ -179,7 +191,9 @@ function annotateObservation(row, sourceObservation, nodes) {
     datumRole: 'model_output',
     identityClass: 'observation_output',
     ordinal: null,
+    collection: row.collection || null,
     trunkKey: row.trunkKey || null,
+    treatmentInstanceId: prefix.treatmentInstanceId,
     parentSnapshotId: null,
     sourceObservationId: observationId,
   });
@@ -189,6 +203,7 @@ function annotateObservation(row, sourceObservation, nodes) {
   row.outputMessageId = outputMessageId;
   row.systemMessageId = systemMessageId;
   row.parentPrefixLen = prefix.verified ? prefix.prefixLen : null;
+  row.treatmentInstanceId = prefix.treatmentInstanceId;
   return row;
 }
 
@@ -209,7 +224,8 @@ function attachMessageGraph(index, { collections = [] } = {}) {
     identitySemantics: {
       messageUid: 'stable datum/event identity; never inferred from text equality alone',
       contentHash: 'SHA-256 of normalized textual content; equality means same content, not same event',
-      verifiedSharedPrefix: 'shared only when trunkKey + verified parentSnapshotId + ordinal agree',
+      treatmentInstanceId: 'verified lived-prefix instance scoped by collection + trunkKey + parentSnapshotId',
+      verifiedSharedPrefix: 'shared only within one treatmentInstanceId and ordinal; reused trunk labels across collections remain separate events',
       outputIdentity: 'one generated output datum per observationId',
       systemPromptIdentity: 'one recorded system-prompt datum per observation when present',
     },
