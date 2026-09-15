@@ -15,6 +15,7 @@ const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
 const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
 const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
 const TrajectoryPackages = require('./dae-trajectory-package-bind-v0-15sep2026.js');
+const TrajectoryIntegrity = require('./dae-trajectory-package-integrity-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
   if (!fs.existsSync(file)) return null;
@@ -77,6 +78,11 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
   InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
   TrajectoryPackages.bindTrajectoryPackages(index);
 
+  // Prove topology from package contents rather than trusting labels/order alone:
+  // each trunk call should extend the previous call state by one new user input;
+  // each materialized branch should extend its parent's terminal state likewise.
+  TrajectoryIntegrity.attachTrajectoryPackageIntegrity(index);
+
   index.source = {
     experimentRoot: root,
     repository: options.repository || 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -112,6 +118,8 @@ function main(argv) {
     trajectories: index.instanceStartCensus?.instanceCount ?? null,
     packageBoundTrajectories: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
     trajectoriesWithFurtherInferenceCalls: index.instanceStartCensus?.withFurtherInferenceCalls ?? null,
+    trunkTransitionStatuses: index.trajectoryPackageIntegrity?.trunkTransitionStatuses ?? null,
+    branchParentRelationStatuses: index.trajectoryPackageIntegrity?.branchParentRelationStatuses ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
     largestItemHistories: Object.values(index.itemHistories)
