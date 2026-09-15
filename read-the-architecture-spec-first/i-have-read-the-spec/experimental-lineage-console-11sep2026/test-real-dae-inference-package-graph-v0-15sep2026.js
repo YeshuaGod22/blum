@@ -33,8 +33,7 @@ function main() {
     assert.ok(output, `output package missing: ${call.callUid}`);
     assert.equal(input.callUid, call.callUid);
     assert.equal(output.callUid, call.callUid);
-    assert.ok(Array.isArray(input.sectionUids));
-    for (const sectionUid of input.sectionUids) {
+    for (const sectionUid of input.sectionUids || []) {
       assert.ok(sections[sectionUid], `input section missing: ${sectionUid}`);
       assert.equal(sections[sectionUid].packageUid, input.inputPackageUid);
     }
@@ -57,27 +56,22 @@ function main() {
     assert.ok(outputPackages[instance.firstOutputPackageUid]);
     assert.ok(Array.isArray(instance.ownedCallUids));
     assert.ok(instance.ownedCallUids.length >= 1, `trajectory owns no calls: ${instance.instanceUid}`);
-    assert.equal(instance.callCount, instance.callUids.length);
-    if (instance.instanceKind === 'branch_from_lived_trunk') {
-      assert.ok(instance.inheritedCallUids.length >= 1, `branch has no inherited calls: ${instance.instanceUid}`);
-      assert.equal(instance.callUids.at(-1), instance.ownedCallUids.at(-1));
-    }
+    assert.deepEqual(instance.callUids, instance.ownedCallUids, 'trajectory call depth must count owned inference calls only');
+    assert.equal(instance.callCount, instance.ownedCallUids.length);
+    assert.equal(instance.hasFurtherInferenceCalls, instance.downstreamInferenceCallCount > 0);
+    assert.equal(instance.downstreamInferenceCallCount, Math.max(0, instance.callCount - 1));
   }
 
-  // Call ownership conservation: every administered call is owned by exactly one
-  // trajectory. Inherited call references do not count as ownership.
+  // Every administered call is owned exactly once. Parent trajectory calls may be
+  // referenced as ancestry metadata, but are not duplicated into branch depth.
   const ownership = new Map();
   for (const instance of census.instances) {
-    for (const callUid of instance.ownedCallUids) {
-      ownership.set(callUid, (ownership.get(callUid) || 0) + 1);
-    }
+    for (const callUid of instance.ownedCallUids) ownership.set(callUid, (ownership.get(callUid) || 0) + 1);
   }
   assert.equal(ownership.size, graph.callCount, 'some calls are not owned by a trajectory');
-  for (const [callUid, count] of ownership.entries()) {
-    assert.equal(count, 1, `call ownership is not conserved: ${callUid}`);
-  }
+  for (const [callUid, count] of ownership.entries()) assert.equal(count, 1, `call ownership is not conserved: ${callUid}`);
 
-  // The system prompt is a section of the input package, not a peer package.
+  // System framing is a section of ONE inference input package.
   const packageWithSystem = Object.values(inputPackages).find(pkg => pkg.canonicalPackage.systemPrompt !== null);
   if (packageWithSystem) {
     const systemSections = packageWithSystem.sectionUids.map(id => sections[id]).filter(x => x.sectionType === 'system');
@@ -85,21 +79,30 @@ function main() {
     assert.equal(systemSections[0].content, packageWithSystem.canonicalPackage.systemPrompt);
   }
 
-  // C-r1 remains 25 independent one-call trajectories and therefore 25 distinct
-  // input-package events, even when package content happens to be identical.
   const raw7Cr1 = census.instances.filter(x => x.collection === 'raw7' && x.family === 'C' && Number(x.replicate) === 1 && x.instanceKind === 'root_single_call');
   assert.equal(raw7Cr1.length, 25);
   assert.equal(new Set(raw7Cr1.map(x => x.firstInputPackageUid)).size, 25);
-  assert.ok(raw7Cr1.every(x => x.callCount === 1));
+  assert.ok(raw7Cr1.every(x => x.callCount === 1 && x.hasFurtherInferenceCalls === false));
 
-  // Pilot ASb branch trajectory inherits the five parent calls and owns one
-  // branch call; its terminal input package is therefore the actual N9 branch
-  // inference package, while its first package is the parent's first call.
+  // ASb is one branch inference call whose INPUT PACKAGE contains the inherited
+  // five-turn conversation. The inherited history must not be counted as five
+  // earlier calls belonging to the branch trajectory.
   const pilotAsb = census.instances.filter(x => x.collection === 'pilot1' && x.family === 'ASb');
   assert.equal(pilotAsb.length, 2);
-  assert.ok(pilotAsb.every(x => x.inheritedCallUids.length === 5));
   assert.ok(pilotAsb.every(x => x.ownedCallUids.length === 1));
-  assert.ok(pilotAsb.every(x => x.callCount === 6));
+  assert.ok(pilotAsb.every(x => x.callCount === 1));
+  assert.ok(pilotAsb.every(x => x.hasFurtherInferenceCalls === false));
+  assert.ok(pilotAsb.every(x => x.visibleContextExchangePairCount === 6));
+  assert.ok(pilotAsb.every(x => x.parentTrajectoryCallUids.length === 5));
+  for (const branch of pilotAsb) {
+    const pkg = inputPackages[branch.firstInputPackageUid];
+    assert.ok(pkg.canonicalPackage.messages.length >= 11, 'ASb input package should contain inherited history plus N9 user input');
+  }
+
+  // Root Pilot trunks really are multi-call trajectories.
+  const pilotTrunks = census.instances.filter(x => x.collection === 'pilot1' && x.instanceKind === 'root_lived_trunk');
+  assert.equal(pilotTrunks.length, 2);
+  assert.ok(pilotTrunks.every(x => x.callCount === 5 && x.downstreamInferenceCallCount === 4));
 
   const bySourceKind = {};
   for (const call of calls) bySourceKind[call.sourceKind] = (bySourceKind[call.sourceKind] || 0) + 1;
@@ -111,18 +114,12 @@ function main() {
     outputPackages: graph.outputPackageCount,
     sections: graph.sectionCount,
     trajectories: census.instanceCount,
+    trajectoriesWithFurtherInferenceCalls: census.withFurtherInferenceCalls,
     packageBoundTrajectories: census.packageBoundInstanceCount,
     callOwnershipCount: ownership.size,
     bySourceKind,
     raw7Cr1InputPackages: raw7Cr1.length,
-    pilotAsb: pilotAsb.map(x => ({
-      instanceUid: x.instanceUid,
-      inheritedCalls: x.inheritedCallUids.length,
-      ownedCalls: x.ownedCallUids.length,
-      totalTrajectoryCalls: x.callCount,
-      firstInputPackageUid: x.firstInputPackageUid,
-      terminalInputPackageUid: x.terminalInputPackageUid,
-    })),
+    pilotAsb: pilotAsb.map(x => ({ instanceUid: x.instanceUid, callCount: x.callCount, visibleContextPairs: x.visibleContextExchangePairCount, parentTrajectoryCalls: x.parentTrajectoryCallUids.length, firstInputPackageUid: x.firstInputPackageUid })),
   }, null, 2));
 }
 
