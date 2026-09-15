@@ -3,11 +3,10 @@
 /**
  * Blum portable DAE lab bundle builder v1 — 15 Sep 2026
  *
- * Runs the frozen v0 bundle builder, then upgrades the normalized portable
- * projection so repeated modelVisibleMessages arrays may remain omitted while
- * their complete prompt/output content stays UID-addressable in messageGraph.
- * It also ships the instance-start census: every root/trunk/branch instance's
- * first administered input plus downstream input-output depth.
+ * Runs the frozen v0 builder, then upgrades the normalized portable projection.
+ * Primary scientific unit is now CALL -> INPUT PACKAGE -> OUTPUT PACKAGE.
+ * System framing and ordered conversation content are subdivisions of one input
+ * package; parsed output spans are subdivisions of one output package.
  */
 
 import fs from 'node:fs/promises';
@@ -35,13 +34,8 @@ function parseArgs(argv) {
   return out;
 }
 
-async function exists(p) {
-  try { await fs.access(p); return true; } catch { return false; }
-}
-
-async function sha256File(p) {
-  return crypto.createHash('sha256').update(await fs.readFile(p)).digest('hex');
-}
+async function exists(p) { try { await fs.access(p); return true; } catch { return false; } }
+async function sha256File(p) { return crypto.createHash('sha256').update(await fs.readFile(p)).digest('hex'); }
 
 async function inventory(root, { excludeManifest = true } = {}) {
   const rows = [];
@@ -76,41 +70,29 @@ function uniqueObservationRows(index) {
 function populationCounts(index) {
   const rows = uniqueObservationRows(index);
   const coldSchema = rows.filter(row => row.ancestryType === 'cold_schema_no_lived_parent').length;
-  return {
-    allAddressableObservations: rows.length,
-    coldSchemaNoLivedParent: coldSchema,
-    nonColdSchemaObservations: rows.length - coldSchema,
-  };
+  return { allAddressableObservations: rows.length, coldSchemaNoLivedParent: coldSchema, nonColdSchemaObservations: rows.length - coldSchema };
 }
 
 function csvCell(value) {
-  const text = value === null || value === undefined
-    ? ''
-    : Array.isArray(value)
-      ? value.join(' | ')
-      : String(value);
+  const text = value === null || value === undefined ? '' : Array.isArray(value) ? value.join(' | ') : String(value);
   return `"${text.replaceAll('"', '""')}"`;
 }
 
 function instanceCensusCsv(census) {
   const fields = [
-    'instanceUid','collection','instanceKind','ancestryType','family','replicate',
-    'trunkKey','probeId','forkId','parentInstanceUid','ioPairCount',
-    'hasFurtherInputOutputPairs','downstreamInputOutputPairCount',
+    'instanceUid','collection','instanceKind','ancestryType','family','replicate','trunkKey','probeId','forkId','parentInstanceUid',
+    'callCount','firstCallUid','firstInputPackageUid','firstOutputPackageUid','terminalCallUid','terminalInputPackageUid','terminalOutputPackageUid',
+    'ownedCallUids','inheritedCallUids','ioPairCount','hasFurtherInputOutputPairs','downstreamInputOutputPairCount',
     'inheritedPrefixMessageCount','inheritedHistoryStatus','firstInput','firstOutput','sourcePaths',
   ];
   const lines = [fields.map(csvCell).join(',')];
-  for (const row of (census?.instances || [])) {
-    lines.push(fields.map(field => csvCell(row[field])).join(','));
-  }
+  for (const row of (census?.instances || [])) lines.push(fields.map(field => csvCell(row[field])).join(','));
   return lines.join('\n') + '\n';
 }
 
 async function main() {
   const args = parseArgs(process.argv);
-  if (!args['blum-root'] || !args['dae-root'] || !args.out) {
-    throw new Error('Required: --blum-root PATH --dae-root PATH --out PATH [--profile portable-analysis|full-witness] [--allow-unpinned-dae true]');
-  }
+  if (!args['blum-root'] || !args['dae-root'] || !args.out) throw new Error('Required: --blum-root PATH --dae-root PATH --out PATH [--profile portable-analysis|full-witness] [--allow-unpinned-dae true]');
 
   const blumRoot = path.resolve(args['blum-root']);
   const daeRoot = path.resolve(args['dae-root']);
@@ -120,23 +102,16 @@ async function main() {
   const v0 = path.join(labSource, 'build-portable-dae-lab-bundle-v0-12sep2026.mjs');
   const wholeIndexCli = path.join(labSource, 'dae-whole-corpus-index-cli-v1-12sep2026.js');
   const graphModule = path.join(labSource, 'dae-message-lineage-graph-v0-15sep2026.js');
+  const packageModule = path.join(labSource, 'dae-inference-package-graph-v0-15sep2026.js');
   const treatmentQuery = path.join(labSource, 'dae-first-treatment-prompts-v0-15sep2026.js');
   const instanceCensusModule = path.join(labSource, 'dae-instance-start-census-v0-15sep2026.js');
 
-  for (const required of [v0, wholeIndexCli, graphModule, treatmentQuery, instanceCensusModule]) {
+  for (const required of [v0, wholeIndexCli, graphModule, packageModule, treatmentQuery, instanceCensusModule]) {
     if (!(await exists(required))) throw new Error(`Required source missing: ${required}`);
   }
 
-  const v0Args = [
-    v0,
-    '--blum-root', blumRoot,
-    '--dae-root', daeRoot,
-    '--out', outRoot,
-    '--profile', profile,
-  ];
-  if (String(args['allow-unpinned-dae'] || '').toLowerCase() === 'true') {
-    v0Args.push('--allow-unpinned-dae', 'true');
-  }
+  const v0Args = [v0, '--blum-root', blumRoot, '--dae-root', daeRoot, '--out', outRoot, '--profile', profile];
+  if (String(args['allow-unpinned-dae'] || '').toLowerCase() === 'true') v0Args.push('--allow-unpinned-dae', 'true');
   await execFileAsync(process.execPath, v0Args, { maxBuffer: 32 * 1024 * 1024 });
 
   const manifestPath = path.join(outRoot, 'BUNDLE-MANIFEST.json');
@@ -144,8 +119,6 @@ async function main() {
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
   const portableIndex = JSON.parse(await fs.readFile(indexPath, 'utf8'));
 
-  // Rebuild from the same pinned witness checkout used by v0. We need the
-  // canonical graph and instance census because v0 predates both layers.
   const { buildWholeCorpusIndex } = require(wholeIndexCli);
   const fullIndex = buildWholeCorpusIndex(path.join(daeRoot, DAE_EXP_REL), {
     repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -153,18 +126,13 @@ async function main() {
     pathPrefix: DAE_EXP_REL,
   });
 
-  if (!fullIndex.messageGraph?.nodes || !fullIndex.messageLineage) {
-    throw new Error('Canonical index did not produce message lineage graph');
-  }
-  if (!fullIndex.instanceStartCensus?.instances) {
-    throw new Error('Canonical index did not produce instance-start census');
-  }
+  if (!fullIndex.messageGraph?.nodes || !fullIndex.messageLineage) throw new Error('Canonical index did not produce compatibility message lineage graph');
+  if (!fullIndex.inferencePackageGraph?.calls) throw new Error('Canonical index did not produce inference package graph');
+  if (!fullIndex.instanceStartCensus?.instances) throw new Error('Canonical index did not produce instance-start census');
 
-  // The portable rows already retain modelVisibleMessageIds/input/output refs
-  // because v0 strips only the repeated modelVisibleMessages payload. Injecting
-  // the graph therefore makes those refs fully dereferenceable offline.
   portableIndex.messageGraph = fullIndex.messageGraph;
   portableIndex.messageLineage = fullIndex.messageLineage;
+  portableIndex.inferencePackageGraph = fullIndex.inferencePackageGraph;
   portableIndex.instanceStartCensus = fullIndex.instanceStartCensus;
   portableIndex.populationCounts = populationCounts(portableIndex);
   portableIndex.portableProjection = {
@@ -172,41 +140,55 @@ async function main() {
     schema: 'blum-dae-portable-index-projection-v1',
     modelVisibleMessagesOmittedFromRows: true,
     messageGraphIncluded: true,
+    inferencePackageGraphIncluded: true,
+    packageContentAddressable: true,
     messageContentAddressable: true,
     generatedOutputContentAddressable: true,
     instanceStartCensusIncluded: true,
-    rationale: 'Repeated modelVisibleMessages arrays are omitted only because their complete message/output content is retained once in the UID-addressable message graph. Instance starts and downstream pair depth remain directly inspectable offline. Content is not deleted from the portable scientific record.',
+    rationale: 'Inference input/output packages are primary addressable experimental units. System framing and conversation messages remain second-layer package sections. Repeated per-observation message arrays may be omitted because package/message content stays addressable offline.',
   };
   await fs.writeFile(indexPath, `${JSON.stringify(portableIndex)}\n`, 'utf8');
 
-  // Also publish the instance view as standalone files so it is discoverable
-  // without knowing the nesting of the whole-corpus index.
   const instanceJsonPath = path.join(outRoot, 'data', 'dae-instance-start-census-v0.json');
   const instanceCsvPath = path.join(outRoot, 'data', 'dae-instance-start-census-v0.csv');
+  const packageJsonPath = path.join(outRoot, 'data', 'dae-inference-package-graph-v0.json');
   await fs.writeFile(instanceJsonPath, `${JSON.stringify(portableIndex.instanceStartCensus, null, 2)}\n`, 'utf8');
   await fs.writeFile(instanceCsvPath, instanceCensusCsv(portableIndex.instanceStartCensus), 'utf8');
+  await fs.writeFile(packageJsonPath, `${JSON.stringify(portableIndex.inferencePackageGraph)}\n`, 'utf8');
 
-  // Ship deterministic readers required to traverse/query the normalized data.
   await fs.copyFile(graphModule, path.join(outRoot, 'app', path.basename(graphModule)));
+  await fs.copyFile(packageModule, path.join(outRoot, 'app', path.basename(packageModule)));
   await fs.copyFile(treatmentQuery, path.join(outRoot, 'app', path.basename(treatmentQuery)));
   await fs.copyFile(instanceCensusModule, path.join(outRoot, 'app', path.basename(instanceCensusModule)));
 
   const startHerePath = path.join(outRoot, 'START-HERE.md');
   let startHere = await fs.readFile(startHerePath, 'utf8');
-  startHere += `\n## Addressable treatment history and instance starts (v1)\n\nThe portable normalized index includes a UID-addressable message graph with **${portableIndex.messageGraph.nodeCount} message/output nodes**. Repeated per-observation \`modelVisibleMessages\` arrays may be omitted, but their complete textual content remains in \`messageGraph.nodes\` and each observation retains message UID references.\n\nThe index also includes \`instanceStartCensus\` with **${portableIndex.instanceStartCensus.instanceCount} model instances/trajectories**. Each entry exposes its first administered input, first output when available, total complete input-output pairs, and whether further pairs occur downstream. Cold/cold-schema calls are ordinary root instances; replicate labels are not treated as instance IDs. The same view is published directly as \`data/dae-instance-start-census-v0.json\` and \`data/dae-instance-start-census-v0.csv\`.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. These are different populations, not interchangeable denominators.\n`;
+  startHere += `\n## Inference packages and trajectories (v1)\n\nThe primary unit is **call → input package → output package**. This bundle includes **${portableIndex.inferencePackageGraph.callCount} calls**, each with exactly one addressable input package and one addressable output package. System framing plus ordered model-visible conversation content are sections of the input package, not peer top-level messages. Output XML spans are optional second-layer sections of the raw output package.\n\nThe package graph is available at \`data/dae-inference-package-graph-v0.json\`. The compatibility message graph remains available for message-level traversal.\n\nThe trajectory census contains **${portableIndex.instanceStartCensus.instanceCount} trajectories**. Each exposes its ordered call UIDs and first/terminal input/output package UIDs. Cold/cold-schema calls are ordinary one-call root trajectories; branch trajectories reference inherited parent calls plus their owned branch call. The same view is published as \`data/dae-instance-start-census-v0.json\` and \`data/dae-instance-start-census-v0.csv\`.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. Observation, call, and trajectory populations are distinct objects.\n`;
   await fs.writeFile(startHerePath, startHere, 'utf8');
 
-  manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-message-addressable';
+  manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-inference-package-addressable';
+  manifest.inferencePackageGraph = {
+    schema: portableIndex.inferencePackageGraph.schema,
+    callCount: portableIndex.inferencePackageGraph.callCount,
+    inputPackageCount: portableIndex.inferencePackageGraph.inputPackageCount,
+    outputPackageCount: portableIndex.inferencePackageGraph.outputPackageCount,
+    sectionCount: portableIndex.inferencePackageGraph.sectionCount,
+    jsonPath: 'data/dae-inference-package-graph-v0.json',
+    availableOffline: true,
+  };
   manifest.normalizedMessageGraph = {
     schema: portableIndex.messageGraph.schema,
     nodeCount: portableIndex.messageGraph.nodeCount,
     graphField: 'messageGraph',
     contentAddressableOffline: true,
+    compatibilityProjection: true,
     repeatedMessageArraysOmitted: true,
   };
   manifest.instanceStartCensus = {
     schema: portableIndex.instanceStartCensus.schema,
     instanceCount: portableIndex.instanceStartCensus.instanceCount,
+    packageBoundInstanceCount: portableIndex.instanceStartCensus.packageBoundInstanceCount,
+    packageUnboundInstanceCount: portableIndex.instanceStartCensus.packageUnboundInstanceCount,
     withFurtherInputOutputPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
     withoutFurtherInputOutputPairs: portableIndex.instanceStartCensus.withoutFurtherInputOutputPairs,
     missingFirstInput: portableIndex.instanceStartCensus.missingFirstInput,
@@ -219,8 +201,11 @@ async function main() {
     allAddressableObservations: portableIndex.populationCounts.allAddressableObservations,
     coldSchemaNoLivedParent: portableIndex.populationCounts.coldSchemaNoLivedParent,
     nonColdSchemaObservations: portableIndex.populationCounts.nonColdSchemaObservations,
+    inferenceCalls: portableIndex.inferencePackageGraph.callCount,
+    inputPackages: portableIndex.inferencePackageGraph.inputPackageCount,
+    outputPackages: portableIndex.inferencePackageGraph.outputPackageCount,
     messageNodes: portableIndex.messageGraph.nodeCount,
-    modelInstances: portableIndex.instanceStartCensus.instanceCount,
+    modelTrajectories: portableIndex.instanceStartCensus.instanceCount,
   };
   manifest.portableIndexProjection = portableIndex.portableProjection;
   manifest.inventoryStatus = 'verified-v1-staged-files-excluding-manifest-itself';
@@ -232,18 +217,16 @@ async function main() {
     profile,
     output: outRoot,
     observations: portableIndex.populationCounts.allAddressableObservations,
-    nonColdSchemaObservations: portableIndex.populationCounts.nonColdSchemaObservations,
-    coldSchemaNoLivedParent: portableIndex.populationCounts.coldSchemaNoLivedParent,
-    messageNodes: portableIndex.messageGraph.nodeCount,
-    instances: portableIndex.instanceStartCensus.instanceCount,
-    instancesWithFurtherPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
+    calls: portableIndex.inferencePackageGraph.callCount,
+    inputPackages: portableIndex.inferencePackageGraph.inputPackageCount,
+    outputPackages: portableIndex.inferencePackageGraph.outputPackageCount,
+    trajectories: portableIndex.instanceStartCensus.instanceCount,
+    packageBoundTrajectories: portableIndex.instanceStartCensus.packageBoundInstanceCount,
+    packageJson: 'data/dae-inference-package-graph-v0.json',
     instanceJson: 'data/dae-instance-start-census-v0.json',
     instanceCsv: 'data/dae-instance-start-census-v0.csv',
     projection: portableIndex.portableProjection.schema,
   }, null, 2));
 }
 
-main().catch(error => {
-  console.error(error.stack || String(error));
-  process.exitCode = 1;
-});
+main().catch(error => { console.error(error.stack || String(error)); process.exitCode = 1; });
