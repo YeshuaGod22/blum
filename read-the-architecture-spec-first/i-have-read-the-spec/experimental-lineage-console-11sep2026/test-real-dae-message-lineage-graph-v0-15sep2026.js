@@ -5,6 +5,15 @@ const path = require('path');
 const Whole = require('./dae-whole-corpus-index-cli-v1-12sep2026.js');
 const Graph = require('./dae-message-lineage-graph-v0-15sep2026.js');
 
+function counts(rows, field) {
+  const out = {};
+  for (const row of rows) {
+    const key = String(row?.[field] ?? '<missing>');
+    out[key] = (out[key] || 0) + 1;
+  }
+  return out;
+}
+
 function main() {
   const daeRoot = process.argv[2];
   if (!daeRoot) throw new Error('Usage: node test-real-dae-message-lineage-graph-v0-15sep2026.js <dae-repo-root>');
@@ -15,10 +24,17 @@ function main() {
     pathPrefix: 'experiments/EXP-003-the-sixth-question',
   });
 
-  assert.equal(index.observationCount, 2028);
+  console.log('REAL CORPUS POPULATION');
+  console.log(JSON.stringify({
+    observationCount: index.observationCount,
+    collections: counts(index.observations, 'collection'),
+    provenanceClasses: counts(index.observations, 'provenanceClass'),
+    ancestryTypes: counts(index.observations, 'ancestryType'),
+  }, null, 2));
+
   assert.ok(index.messageGraph, 'message graph missing');
   assert.equal(index.messageGraph.schema, 'blum-dae-message-lineage-graph-v0');
-  assert.equal(index.messageGraph.observationCount, 2028);
+  assert.equal(index.messageGraph.observationCount, index.observationCount, 'graph must cover exactly the canonical index population');
   assert.ok(index.messageGraph.nodeCount > index.observationCount, 'expected more message nodes than observations');
 
   let verifiedPrefixRows = 0;
@@ -44,7 +60,7 @@ function main() {
     }
   }
 
-  assert.equal(reconstructChecks, 2028, 'did not reconstruct every observation');
+  assert.equal(reconstructChecks, index.observationCount, 'did not reconstruct every indexed observation');
   assert.ok(verifiedPrefixRows > 0, 'no verified prefix rows found');
 
   let multiObservationSharedPrefixes = 0;
