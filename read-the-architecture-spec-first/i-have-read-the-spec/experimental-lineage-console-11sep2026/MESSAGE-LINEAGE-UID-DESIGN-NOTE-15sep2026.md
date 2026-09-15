@@ -1,10 +1,10 @@
-# Message lineage UID design note — 15 Sep 2026
+# Message lineage + instance identity design note — 15 Sep 2026
 
 ## Why this exists
 
 February Blum established a strong traceability rule: **every datum has a UID**, maximum-detail ground truth is retained, and foveation/projection happens at read time rather than by deleting the underlying evidence.
 
-EXP-003's September observation index had strong observation/trunk/snapshot provenance but no first-class identity for individual model-visible messages or generated outputs. The portable projection then removed repeated `modelVisibleMessages` arrays entirely. This made scientifically elementary questions such as “what was the first treatment prompt of each trunk?” depend on witness archaeology.
+EXP-003's September observation index had strong observation/trunk/snapshot provenance but no first-class identity for individual model-visible messages or generated outputs. The portable projection then removed repeated `modelVisibleMessages` arrays entirely. This made elementary questions such as “what was the first message to every model instance, and did anything come after it?” depend on witness archaeology.
 
 This note freezes the correction.
 
@@ -22,108 +22,148 @@ Therefore:
 - `contentHash` = textual identity;
 - equal `contentHash` does not imply equal `messageUid`.
 
-### 2. Neither `parentSnapshotId` nor `trunkKey` is sufficient event identity
+### 2. Historical labels are not instance identities
 
-September `parentSnapshotId` is content-addressed from the exact sent prefix. Two independent treatments with identical prefixes can therefore have the same snapshot hash.
+`parentSnapshotId` is content-addressed from the exact sent prefix, so two independent treatments with identical prefixes can share a snapshot hash.
 
-`trunkKey` is also a historical label, not a globally unique treatment instance. The pinned corpus reuses labels such as `CP-r1`, `F-r1`, and `H-r1` across raw collections with genuinely different treatment openings.
+`trunkKey` is a historical label, not a globally unique treatment instance. The pinned corpus reuses labels such as `CP-r1`, `F-r1`, and `H-r1` across raw collections with genuinely different treatment openings.
 
-The pre-existing field named `trunkInstanceId` is not sufficient either: the raw adapter derives it from `{ trunkKey }`, so it inherits the same cross-collection collision.
+The pre-existing field named `trunkInstanceId` is not sufficient either: the raw adapter derives it from `{ trunkKey }`, so it inherits the same collision. Cold calls had the same problem: `C-r1-N4`, `C-r1-A1`, etc. were all being assigned a pseudo-instance identity derived only from `C-r1`, even though they are independent subject calls.
 
-**Rejected:**
-
-- `parentSnapshotId + ordinal` as a shared-message UID;
-- `trunkKey + parentSnapshotId + ordinal` as a globally shared-message UID;
-- trusting the old `trunkInstanceId` name without inspecting its constructor.
-
-A verified lived-prefix event now has an explicit:
-
-```text
-treatmentInstanceId = hash(collection + trunkKey + verified parentSnapshotId)
-```
-
-A shared-prefix message is identified within that treatment instance by:
-
-```text
-treatmentInstanceId + ordinal (+ role)
-```
-
-This means:
-
-- same verified treatment instance → same ancestor message UIDs;
-- same trunk label reused in another collection → different treatment instance and different message UIDs;
-- different treatment instances with identical words → different message UIDs, equal content hashes;
-- branch-specific suffixes → different event UIDs.
+**Rejected:** treating replicate/trunk labels as model-instance IDs.
 
 ### 3. Do not infer ancestry from matching strings
 
 A graph edge is a scientific claim about lineage, not a compression trick.
 
-Text equality may support content comparison but never establishes conversational ancestry. Shared ancestor identity is admitted only from existing verified lineage evidence.
+Text equality may support content comparison but never establishes conversational ancestry. Shared ancestor identity is admitted only from existing lineage evidence.
 
-### 4. Corpus identity and analysis population are different objects
+### 4. There are two useful identity levels
 
-The pinned current whole-corpus builder admits **2,378** addressable observations:
+The corpus needs both:
 
-- `cold_no_lived_parent`: 320
-- `pilot1_lived_trunk_branch`: 2
-- `lived_trunk_branch`: 1,706
-- `cold_schema_no_lived_parent`: 350
+1. **message / datum identity** — exact model-visible inputs and outputs;
+2. **model-instance / trajectory identity** — the conversational root, trunk, or branch in which those messages occur.
 
-The familiar **2,028** population is exactly the projection excluding the 350 cold-schema/no-lived-parent observations.
+These must not be confused with analysis groupings such as family, replicate, condition, or battery item.
 
-Therefore:
+## Primary instance ontology
 
-- UID/addressability covers all admitted corpus observations;
-- a battery analysis may freeze a narrower population;
-- no single observation count may silently stand for both corpus identity and a claim-specific denominator.
+For the question “what was the first message to every instance, and are there later input-output pairs?” the primary object is now `instanceStartCensus`.
 
-### 5. “First user message” is not automatically “first treatment prompt”
+### Root lived trunk
 
-Pilot 1's normalized battery rows do not preserve the full lived prefix. Cold observations have no lived parent by design. Reused `trunkKey` labels may denote different treatment instances across collections.
-
-**Rejected:** return the first user message visible in any row and label it the treatment origin, or group treatment origins globally by `trunkKey`.
-
-The strict first-treatment query:
-
-- resolves only from a complete mechanically verified lived prefix;
-- groups verified evidence by `treatmentInstanceId`;
-- returns weaker provenance as `unresolved` rather than guessing;
-- retains the old trunk-label helper only as a convenience surface that is allowed to expose reused-label conflicts.
-
-Pinned real-corpus result at this design revision:
-
-- **114** treatment-instance / unresolved groups;
-- **59 resolved** treatment instances;
-- **55 unresolved** weaker-provenance groups;
-- **0 conflicts** inside verified treatment instances;
-- **2 Pilot 1 groups explicitly unresolved**.
-
-### 6. Portable means self-sufficient for ordinary scientific inspection
-
-The portable bundle may omit repeated per-observation `modelVisibleMessages` arrays **only if**:
-
-- each row retains message UID references;
-- every reference dereferences offline;
-- complete prompt/output content remains in the UID graph;
-- first-treatment queries work without opening the archived witness tree.
-
-Portable bundle v1 implements that rule as a wrapper around the frozen v0 builder. It preserves the existing v0 build path, then injects the canonical message graph, ships deterministic graph/treatment readers, updates population bookkeeping, and re-hashes the manifest.
-
-The full-witness bundle remains the byte-level reconstruction/audit artifact. The portable bundle is allowed to normalize representation, not delete the experimental stimulus.
-
-## Current objects
-
-### Treatment instance
+One developmental conversation per collection + trunk lineage. Raw2+ trunk turns are stored as separate call files, but their successively growing `sent` contexts belong to one lived conversation instance.
 
 ```text
-treatmentInstanceId
-collection
-trunkKey
-parentSnapshotId
+instanceKind = root_lived_trunk
+firstInput
+firstOutput
+ioPairCount
+hasFurtherInputOutputPairs
+downstreamInputOutputPairCount
+parentInstanceUid = null
 ```
 
-### Message node
+### Root single call
+
+Every cold or cold-schema subject call is its **own** model instance.
+
+`C-r1` is a replicate grouping, not an instance. For example, raw7 contains:
+
+```text
+C: r1-r10 × 25 battery items = 250 independent model instances
+C-r1: 25 independent model instances
+```
+
+Each normally has:
+
+```text
+instanceKind = root_single_call
+ioPairCount = 1
+hasFurtherInputOutputPairs = false
+parentInstanceUid = null
+```
+
+“Cold” therefore means **no inherited lived parent**. It does not mean “no first turn,” “not applicable,” or “one multi-question C conversation.”
+
+### Branch instance
+
+Every branch observation is its own forked model instance/trajectory. Its model-visible trajectory retains the inherited trunk prefix plus its branch input/output.
+
+```text
+instanceKind = branch_from_lived_trunk
+parentInstanceUid = lived trunk instance when mechanically joinable
+inheritedPrefixMessageCount
+ioPairCount
+hasFurtherInputOutputPairs
+```
+
+### Pilot 1
+
+Pilot 1 uses session-event JSONL rather than one-file-per-call storage. `record.json` reconstructs the dialogue.
+
+Crucially, the two ASb branch records are **not first-turn roots**:
+
+```text
+ASb-r1-N9.raw.jsonl -> parent_trunk = AS-r1-trunk.raw.jsonl
+ASb-r2-N9.raw.jsonl -> parent_trunk = AS-r2-trunk.raw.jsonl
+```
+
+The instance census joins those explicit parent links. Each AS trunk is a five-pair developmental instance; each ASb branch trajectory contains those five inherited pairs plus its N9 branch pair, for six complete pairs total.
+
+The older treatment-origin query still reports these Pilot-1 rows as incomplete **within the stripped normalized battery-row projection**. That is a limitation of that secondary projection, not a corpus-level uncertainty about whether the ASb files were first turns.
+
+## Pinned instance-start census
+
+On the pinned EXP-003 corpus:
+
+- **2,420 actual model instances / trajectories**;
+- **1,750** have further complete input-output pairs downstream of the first pair;
+- **670** do not;
+- **0** instances are missing a first input.
+
+By instance kind:
+
+- **42** `root_lived_trunk`;
+- **670** `root_single_call`;
+- **1,708** `branch_from_lived_trunk`.
+
+By ancestry metadata:
+
+- 2 `pilot1_lived_trunk`;
+- 40 `lived_trunk`;
+- 320 `cold_no_lived_parent`;
+- 350 `cold_schema_no_lived_parent`;
+- 2 `pilot1_lived_trunk_branch`;
+- 1,706 `lived_trunk_branch`.
+
+Hard examples:
+
+- raw7 `C` = **250 independent instances**;
+- raw7 `C-r1` = **25 independent one-pair instances**;
+- Pilot 1 = **2 five-pair AS trunks**;
+- Pilot 1 ASb = **2 six-pair branch trajectories with explicit parent-trunk joins**.
+
+## Secondary treatment-origin view
+
+The older `dae-first-treatment-prompts` query answers a narrower question: whether a normalized battery observation itself contains enough mechanically verified evidence to certify a lived developmental origin.
+
+Its grouping-level census remains useful for provenance diagnostics, but it is **not** the primary answer to “what is the first turn of every model instance?” In particular:
+
+- cold groups being `no_lived_parent_by_design` does not make their first input non-applicable;
+- Pilot-1 branch rows being incomplete in that projection does not make the underlying branch trajectories historically unresolved;
+- replicate labels that produce multiple first inputs are grouping labels, not failed instance identities.
+
+## Message lineage layer
+
+For verified lived-prefix evidence:
+
+```text
+treatmentInstanceId = hash(collection + trunkKey + verified parentSnapshotId)
+```
+
+and message identity retains the event/content distinction:
 
 ```text
 messageUid
@@ -141,52 +181,55 @@ parentSnapshotId
 sourceObservationId
 ```
 
-### Observation references
+The pinned normalized observation graph currently has:
 
-```text
-observationId
-modelVisibleMessageIds[]
-inputMessageId
-outputMessageId
-systemMessageId
-parentPrefixLen
-treatmentInstanceId
-```
-
-### Index extension
-
-```text
-messageGraph
-messageLineage
-```
-
-## Pinned corpus regressions
-
-At the current identity semantics the pinned corpus has:
-
-- **2,378** addressable observations;
-- **2,028** observations in the historical non-cold-schema projection;
+- **2,378** addressable battery observations;
+- **2,028** in the historical non-cold-schema projection;
 - **7,889** addressable message/output nodes;
-- **1,706** verified lived-prefix rows;
-- **2,378 / 2,378** model-visible contexts reconstructing exactly from UID references.
+- **2,378 / 2,378** indexed model-visible contexts reconstructing exactly from UID references.
 
-The old trunk-label convenience surface deliberately exposes reused labels: at the current revision it finds **34 explicit reused-label conflicts**. That is not a graph failure; it is evidence that a label is not an instance identity.
+Observation population and instance population are deliberately different objects.
+
+## Portable means scientifically inspectable
+
+Portable v1 may omit repeated per-observation `modelVisibleMessages` arrays only because their complete content remains UID-addressable in `messageGraph`.
+
+It now also ships `instanceStartCensus`, so offline inspection can directly ask:
+
+```text
+instanceUid
+collection
+family
+replicate
+probeId
+instanceKind
+firstInput
+firstOutput
+ioPairCount
+hasFurtherInputOutputPairs
+downstreamInputOutputPairCount
+parentInstanceUid
+```
+
+without opening the full witness tree.
+
+The full-witness bundle remains the byte-level reconstruction/audit artifact. The portable bundle is allowed to normalize representation, not delete the intervention or the instance topology.
 
 ## Hard regressions
 
 The implementation is not green unless all hold:
 
-1. independently administered identical prompts have different event UIDs and equal content hashes;
-2. verified siblings within one treatment instance reuse the same ancestor UIDs;
-3. same label/snapshot/text in a different collection remains a distinct treatment event;
-4. every indexed model-visible context reconstructs exactly from UID references;
-5. every generated output has an addressable UID;
-6. no message UID collision can hide conflicting role/content/parentage;
-7. the pinned current corpus distinction remains explicit: 2,378 addressable vs 2,028 non-cold-schema;
-8. strict first-treatment prompt queries do not guess from Pilot 1/cold/local-probe evidence and have zero conflicts within verified treatment instances;
-9. portable-analysis may omit repeated arrays only while complete message/output content remains dereferenceable offline;
-10. the strict treatment query must run against the portable bundle alone.
+1. independently administered identical prompts remain distinct events;
+2. verified sibling prefixes reuse ancestor message UIDs only when lineage evidence warrants it;
+3. every indexed model-visible observation reconstructs exactly;
+4. every generated indexed output is addressable;
+5. every instance in the instance census has a first input;
+6. raw7 C contains 250 independent instances and C-r1 contains 25;
+7. Pilot-1 AS contains two five-pair trunks;
+8. Pilot-1 ASb contains two six-pair branch trajectories joined to their explicit parent trunks;
+9. replicate/trunk labels are never silently promoted to model-instance identity;
+10. portable-analysis preserves both the message graph and the complete instance-start census offline.
 
 ## Next extension
 
-February Blum's phrase was **every datum**, not merely every message. Once this layer is stable, parsed response surfaces (`reply`, `reflection`, `debate`, `deliberation`, revisions, adjudication evidence spans) should receive deterministic derived-datum identities linked back to their source output message rather than becoming another parallel identity system.
+February Blum's phrase was **every datum**, not merely every message. Parsed response surfaces (`reply`, `reflection`, `debate`, `deliberation`, revisions, adjudication evidence spans) should next receive deterministic derived-datum identities linked back to their source output message rather than becoming another parallel identity system.
