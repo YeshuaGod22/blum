@@ -16,6 +16,7 @@ const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
 const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
 const TrajectoryPackages = require('./dae-trajectory-package-bind-v0-15sep2026.js');
 const TrajectoryIntegrity = require('./dae-trajectory-package-integrity-v0-15sep2026.js');
+const CallOutcomes = require('./dae-call-outcome-census-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
   if (!fs.existsSync(file)) return null;
@@ -78,10 +79,12 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
   InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
   TrajectoryPackages.bindTrajectoryPackages(index);
 
-  // Prove topology from package contents rather than trusting labels/order alone:
-  // each trunk call should extend the previous call state by one new user input;
-  // each materialized branch should extend its parent's terminal state likewise.
+  // Prove topology from package contents rather than trusting labels/order alone.
   TrajectoryIntegrity.attachTrajectoryPackageIntegrity(index);
+
+  // Outcome is a property of an already-identified call, never part of its UID.
+  // This separates administered depth from normally-completed depth.
+  CallOutcomes.attachCallOutcomeCensus(index);
 
   index.source = {
     experimentRoot: root,
@@ -120,6 +123,8 @@ function main(argv) {
     trajectoriesWithFurtherInferenceCalls: index.instanceStartCensus?.withFurtherInferenceCalls ?? null,
     trunkTransitionStatuses: index.trajectoryPackageIntegrity?.trunkTransitionStatuses ?? null,
     branchParentRelationStatuses: index.trajectoryPackageIntegrity?.branchParentRelationStatuses ?? null,
+    callOutcomeCounts: index.callOutcomeCensus?.callOutcomeCounts ?? null,
+    trajectoriesWithIncompleteCalls: index.callOutcomeCensus?.trajectoriesWithIncompleteCalls ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
     largestItemHistories: Object.values(index.itemHistories)
