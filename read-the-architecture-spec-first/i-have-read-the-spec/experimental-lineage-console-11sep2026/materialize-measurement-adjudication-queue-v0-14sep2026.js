@@ -2,7 +2,7 @@
 
 // MATERIALIZE MEASUREMENT ADJUDICATION QUEUE v0 — 14 Sep 2026
 // Converts unresolved canonical measurement rows into blinded, frozen
-// blum-adjudication-batch-v2 assignments. Experimental labels and source
+// blum-adjudication-batch-v2 assignments. Experimental labels and source/event
 // provenance remain outside reader packets.
 
 const crypto=require('crypto');
@@ -91,6 +91,12 @@ function materialize(measurements,index,battery,spec,options={}) {
       taskType:row.adjudicationTask.taskType,
       measurementId:row.measurementId,
       observationId:row.observationId,
+      callUid:row.packageProvenance?.callUid || row.adjudicationTask?.callUid || null,
+      inputPackageUid:row.packageProvenance?.inputPackageUid || null,
+      outputPackageUid:row.packageProvenance?.outputPackageUid || row.adjudicationTask?.outputPackageUid || null,
+      outputSectionUid:row.packageProvenance?.outputSectionUid || row.adjudicationTask?.outputSectionUid || null,
+      packageProvenanceStatus:row.packageProvenance?.status || null,
+      outputSectionStatus:row.packageProvenance?.outputSectionStatus || null,
       itemId:row.itemId,
       collection:row.collection,
       condition:row.condition,
@@ -114,8 +120,12 @@ function materialize(measurements,index,battery,spec,options={}) {
     assignments,
     provenance,
     privacyBoundary:{
-      readerPacketsOmit:['collection','condition','family','replicate','sourcePath','hypothesis','siblingResponse','aggregateStatistics','downstreamClaim'],
+      readerPacketsOmit:[
+        'collection','condition','family','replicate','sourcePath','hypothesis','siblingResponse','aggregateStatistics','downstreamClaim',
+        'callUid','inputPackageUid','outputPackageUid','outputSectionUid','packageProvenanceStatus','outputSectionStatus'
+      ],
       provenanceStoredOutsideReaderPacket:true,
+      packageEventIdsStoredOutsideReaderPacket:true,
     },
   };
 }
