@@ -28,8 +28,56 @@ function firstUserInVerifiedPrefix(index, row) {
   return null;
 }
 
+function firstAdministeredInput(index, group) {
+  const nodes = index?.messageGraph?.nodes || {};
+  const candidates = [];
+  for (const row of group || []) {
+    const firstUserId = (row.modelVisibleMessageIds || []).find(id => nodes[id]?.role === 'user');
+    if (!firstUserId) continue;
+    const node = nodes[firstUserId];
+    candidates.push({ messageUid: firstUserId, content: node.content, contentHash: node.contentHash, observationId: row.observationId });
+  }
+  const byUid = new Map(candidates.map(x => [x.messageUid, x]));
+  const unique = [...byUid.values()].sort((a, b) => a.messageUid.localeCompare(b.messageUid));
+  if (!unique.length) return { status: 'missing' };
+  if (unique.length === 1) return { status: 'resolved', ...unique[0] };
+  return { status: 'multiple', candidates: unique };
+}
+
 function unresolvedGroupingKey(row) {
   return `unresolved::${row?.collection || '<missing>'}::${row?.trunkKey || '<missing>'}`;
+}
+
+function classifyOriginGroup(group) {
+  const ancestryTypes = [...new Set((group || []).map(r => r.ancestryType || null))].sort();
+  const statuses = [...new Set((group || []).map(r => r.parentVerificationStatus || null))].sort();
+
+  const onlyCold = ancestryTypes.length > 0 && ancestryTypes.every(x => x === 'cold_no_lived_parent' || x === 'cold_schema_no_lived_parent');
+  if (onlyCold) return {
+    developmentalOriginStatus: 'not_applicable',
+    developmentalOriginClass: 'no_lived_parent_by_design',
+    reason: 'cold_administration_has_no_lived_developmental_parent',
+  };
+
+  if (ancestryTypes.some(x => x === 'pilot1_lived_trunk' || x === 'pilot1_lived_trunk_branch')) return {
+    developmentalOriginStatus: 'unresolved',
+    developmentalOriginClass: 'incomplete_historical_context',
+    reason: 'pilot1_normalized_rows_do_not_preserve_complete_lived_prefix',
+  };
+
+  if (ancestryTypes.includes('lived_trunk_branch')) return {
+    developmentalOriginStatus: 'unresolved',
+    developmentalOriginClass: 'lineage_unverified',
+    reason: 'lived_branch_present_but_complete_verified_prefix_unavailable',
+    parentVerificationStatuses: statuses,
+  };
+
+  return {
+    developmentalOriginStatus: 'unresolved',
+    developmentalOriginClass: 'other_unresolved',
+    reason: 'no_verified_lived_prefix_in_index',
+    parentVerificationStatuses: statuses,
+  };
 }
 
 function queryFirstTreatmentPrompts(index, options = {}) {
@@ -38,38 +86,34 @@ function queryFirstTreatmentPrompts(index, options = {}) {
   const rows = Graph.collectObservations(index);
   const groups = new Map();
 
-  // Verified lived prefixes are grouped by the actual treatment-prefix event
-  // instance. Everything else is kept collection-scoped and unresolved.
   for (const row of rows) {
     if (!row?.trunkKey) continue;
-    const key = livedPrefixEligible(row)
-      ? String(row.treatmentInstanceId)
-      : unresolvedGroupingKey(row);
+    const key = livedPrefixEligible(row) ? String(row.treatmentInstanceId) : unresolvedGroupingKey(row);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
 
   const out = [];
-  for (const [groupKey, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const eligible = group.filter(livedPrefixEligible);
     const exemplar = group[0] || {};
+    const administered = firstAdministeredInput(index, group);
 
     if (!eligible.length) {
       if (!includeUnresolved) continue;
-      const ancestryTypes = [...new Set(group.map(r => r.ancestryType || null))];
-      const reason = ancestryTypes.some(x => x === 'pilot1_lived_trunk' || x === 'pilot1_lived_trunk_branch')
-        ? 'pilot1_normalized_rows_do_not_preserve_complete_lived_prefix'
-        : 'no_verified_lived_prefix_in_index';
+      const ancestryTypes = [...new Set(group.map(r => r.ancestryType || null))].sort();
+      const classification = classifyOriginGroup(group);
       out.push({
         treatmentInstanceId: null,
         trunkKey: exemplar.trunkKey || null,
         collection: exemplar.collection || null,
-        status: 'unresolved',
-        reason,
+        status: classification.developmentalOriginStatus === 'not_applicable' ? 'not_applicable' : 'unresolved',
+        ...classification,
         family: exemplar.family || null,
         replicate: exemplar.replicate ?? null,
-        ancestryTypes: ancestryTypes.sort(),
+        ancestryTypes,
         observationCount: group.length,
+        firstAdministeredInput: administered,
       });
       continue;
     }
@@ -99,18 +143,19 @@ function queryFirstTreatmentPrompts(index, options = {}) {
         trunkKey: eligible[0].trunkKey,
         collection: eligible[0].collection,
         status: 'unresolved',
+        developmentalOriginStatus: 'unresolved',
+        developmentalOriginClass: 'verified_prefix_without_user_input',
         reason: 'verified_prefix_contains_no_user_message',
         family: eligible[0]?.family || null,
         replicate: eligible[0]?.replicate ?? null,
         observationCount: group.length,
+        firstAdministeredInput: administered,
       });
       continue;
     }
 
     const byUid = new Map();
-    for (const candidate of candidates) {
-      if (!byUid.has(candidate.messageUid)) byUid.set(candidate.messageUid, candidate);
-    }
+    for (const candidate of candidates) if (!byUid.has(candidate.messageUid)) byUid.set(candidate.messageUid, candidate);
     const unique = [...byUid.values()].sort((a, b) => a.messageUid.localeCompare(b.messageUid));
 
     if (unique.length !== 1) {
@@ -119,11 +164,14 @@ function queryFirstTreatmentPrompts(index, options = {}) {
         trunkKey: eligible[0].trunkKey,
         collection: eligible[0].collection,
         status: 'conflict',
+        developmentalOriginStatus: 'conflict',
+        developmentalOriginClass: 'multiple_verified_origins',
         reason: 'multiple_verified_first_prompt_events_within_treatment_instance',
         family: eligible[0]?.family || null,
         replicate: eligible[0]?.replicate ?? null,
         observationCount: group.length,
         candidates: unique,
+        firstAdministeredInput: administered,
       });
       continue;
     }
@@ -134,6 +182,8 @@ function queryFirstTreatmentPrompts(index, options = {}) {
       trunkKey: winner.trunkKey,
       collection: winner.collection,
       status: 'resolved',
+      developmentalOriginStatus: 'resolved',
+      developmentalOriginClass: 'verified_lived_origin',
       firstPromptMessageId: winner.messageUid,
       firstPrompt: winner.content,
       firstPromptContentHash: winner.contentHash,
@@ -142,6 +192,7 @@ function queryFirstTreatmentPrompts(index, options = {}) {
       replicate: winner.replicate,
       observationCount: group.length,
       evidenceObservationCount: eligible.length,
+      firstAdministeredInput: administered,
     });
   }
 
@@ -150,14 +201,24 @@ function queryFirstTreatmentPrompts(index, options = {}) {
 
 function summary(rows) {
   const statuses = {};
-  for (const row of rows) statuses[row.status] = (statuses[row.status] || 0) + 1;
-  return { treatmentInstances: rows.length, statuses };
+  const originClasses = {};
+  const administeredInputStatuses = {};
+  for (const row of rows) {
+    statuses[row.status] = (statuses[row.status] || 0) + 1;
+    const cls = row.developmentalOriginClass || '<missing>';
+    originClasses[cls] = (originClasses[cls] || 0) + 1;
+    const ais = row.firstAdministeredInput?.status || '<missing>';
+    administeredInputStatuses[ais] = (administeredInputStatuses[ais] || 0) + 1;
+  }
+  return { treatmentGroups: rows.length, statuses, originClasses, administeredInputStatuses };
 }
 
 module.exports = {
   livedPrefixEligible,
   firstUserInVerifiedPrefix,
+  firstAdministeredInput,
   unresolvedGroupingKey,
+  classifyOriginGroup,
   queryFirstTreatmentPrompts,
   summary,
 };
