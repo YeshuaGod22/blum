@@ -83,6 +83,29 @@ function populationCounts(index) {
   };
 }
 
+function csvCell(value) {
+  const text = value === null || value === undefined
+    ? ''
+    : Array.isArray(value)
+      ? value.join(' | ')
+      : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function instanceCensusCsv(census) {
+  const fields = [
+    'instanceUid','collection','instanceKind','ancestryType','family','replicate',
+    'trunkKey','probeId','forkId','parentInstanceUid','ioPairCount',
+    'hasFurtherInputOutputPairs','downstreamInputOutputPairCount',
+    'inheritedPrefixMessageCount','inheritedHistoryStatus','firstInput','firstOutput','sourcePaths',
+  ];
+  const lines = [fields.map(csvCell).join(',')];
+  for (const row of (census?.instances || [])) {
+    lines.push(fields.map(field => csvCell(row[field])).join(','));
+  }
+  return lines.join('\n') + '\n';
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (!args['blum-root'] || !args['dae-root'] || !args.out) {
@@ -156,6 +179,13 @@ async function main() {
   };
   await fs.writeFile(indexPath, `${JSON.stringify(portableIndex)}\n`, 'utf8');
 
+  // Also publish the instance view as standalone files so it is discoverable
+  // without knowing the nesting of the whole-corpus index.
+  const instanceJsonPath = path.join(outRoot, 'data', 'dae-instance-start-census-v0.json');
+  const instanceCsvPath = path.join(outRoot, 'data', 'dae-instance-start-census-v0.csv');
+  await fs.writeFile(instanceJsonPath, `${JSON.stringify(portableIndex.instanceStartCensus, null, 2)}\n`, 'utf8');
+  await fs.writeFile(instanceCsvPath, instanceCensusCsv(portableIndex.instanceStartCensus), 'utf8');
+
   // Ship deterministic readers required to traverse/query the normalized data.
   await fs.copyFile(graphModule, path.join(outRoot, 'app', path.basename(graphModule)));
   await fs.copyFile(treatmentQuery, path.join(outRoot, 'app', path.basename(treatmentQuery)));
@@ -163,7 +193,7 @@ async function main() {
 
   const startHerePath = path.join(outRoot, 'START-HERE.md');
   let startHere = await fs.readFile(startHerePath, 'utf8');
-  startHere += `\n## Addressable treatment history and instance starts (v1)\n\nThe portable normalized index includes a UID-addressable message graph with **${portableIndex.messageGraph.nodeCount} message/output nodes**. Repeated per-observation \`modelVisibleMessages\` arrays may be omitted, but their complete textual content remains in \`messageGraph.nodes\` and each observation retains message UID references.\n\nThe index also includes \`instanceStartCensus\` with **${portableIndex.instanceStartCensus.instanceCount} model instances/trajectories**. Each entry exposes its first administered input, first output when available, total complete input-output pairs, and whether further pairs occur downstream. Cold/cold-schema calls are ordinary root instances; replicate labels are not treated as instance IDs.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. These are different populations, not interchangeable denominators.\n`;
+  startHere += `\n## Addressable treatment history and instance starts (v1)\n\nThe portable normalized index includes a UID-addressable message graph with **${portableIndex.messageGraph.nodeCount} message/output nodes**. Repeated per-observation \`modelVisibleMessages\` arrays may be omitted, but their complete textual content remains in \`messageGraph.nodes\` and each observation retains message UID references.\n\nThe index also includes \`instanceStartCensus\` with **${portableIndex.instanceStartCensus.instanceCount} model instances/trajectories**. Each entry exposes its first administered input, first output when available, total complete input-output pairs, and whether further pairs occur downstream. Cold/cold-schema calls are ordinary root instances; replicate labels are not treated as instance IDs. The same view is published directly as \`data/dae-instance-start-census-v0.json\` and \`data/dae-instance-start-census-v0.csv\`.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. These are different populations, not interchangeable denominators.\n`;
   await fs.writeFile(startHerePath, startHere, 'utf8');
 
   manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-message-addressable';
@@ -180,6 +210,8 @@ async function main() {
     withFurtherInputOutputPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
     withoutFurtherInputOutputPairs: portableIndex.instanceStartCensus.withoutFurtherInputOutputPairs,
     missingFirstInput: portableIndex.instanceStartCensus.missingFirstInput,
+    jsonPath: 'data/dae-instance-start-census-v0.json',
+    csvPath: 'data/dae-instance-start-census-v0.csv',
     availableOffline: true,
   };
   manifest.generatedCorpusCensus = {
@@ -205,6 +237,8 @@ async function main() {
     messageNodes: portableIndex.messageGraph.nodeCount,
     instances: portableIndex.instanceStartCensus.instanceCount,
     instancesWithFurtherPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
+    instanceJson: 'data/dae-instance-start-census-v0.json',
+    instanceCsv: 'data/dae-instance-start-census-v0.csv',
     projection: portableIndex.portableProjection.schema,
   }, null, 2));
 }
