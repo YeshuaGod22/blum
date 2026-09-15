@@ -14,6 +14,23 @@ function normalizeOutcome(call) {
   return raw || 'unknown';
 }
 
+function callLocator(call, ordinal) {
+  return {
+    callUid: call.callUid,
+    ordinal,
+    normalizedOutcome: call.normalizedOutcome,
+    rawOutcome: call.callOutcome || null,
+    stopReason: call.stopReason ?? null,
+    sourcePath: call.sourcePath || null,
+    collection: call.collection || null,
+    trunkKey: call.trunkKey || null,
+    turn: call.turn ?? null,
+    probeId: call.probeId || null,
+    inputPackageUid: call.inputPackageUid,
+    outputPackageUid: call.outputPackageUid,
+  };
+}
+
 function attachCallOutcomeCensus(index) {
   const graph = index?.inferencePackageGraph;
   const census = index?.instanceStartCensus;
@@ -41,6 +58,7 @@ function attachCallOutcomeCensus(index) {
     const otherCallCount = administeredCallCount - completeCallCount - truncatedCallCount - contextLimitCallCount - apiFailureCallCount - missingOutputCallCount;
 
     const completeOrdinals = owned.map((call, ordinal) => ({ call, ordinal })).filter(x => x.call.normalizedOutcome === 'complete').map(x => x.ordinal);
+    const incompleteCalls = owned.map((call, ordinal) => ({ call, ordinal })).filter(x => x.call.normalizedOutcome !== 'complete').map(x => callLocator(x.call, x.ordinal));
     const firstCallComplete = owned[0]?.normalizedOutcome === 'complete';
     const terminalCallComplete = owned.at(-1)?.normalizedOutcome === 'complete';
     const completeAfterFirstCount = owned.slice(1).filter(call => call.normalizedOutcome === 'complete').length;
@@ -58,10 +76,17 @@ function attachCallOutcomeCensus(index) {
       hasFurtherCompleteInferenceCalls: completeAfterFirstCount > 0,
       downstreamCompleteInferenceCallCount: completeAfterFirstCount,
       callOutcomeCounts: byOutcome,
+      incompleteCallUids: incompleteCalls.map(x => x.callUid),
     });
 
     trajectoryRows.push({
       instanceUid: instance.instanceUid,
+      collection: instance.collection || null,
+      instanceKind: instance.instanceKind || null,
+      ancestryType: instance.ancestryType || null,
+      family: instance.family || null,
+      replicate: instance.replicate ?? null,
+      trunkKey: instance.trunkKey || null,
       administeredCallCount,
       completeCallCount,
       truncatedCallCount,
@@ -73,6 +98,7 @@ function attachCallOutcomeCensus(index) {
       terminalCallComplete,
       downstreamCompleteInferenceCallCount: completeAfterFirstCount,
       completeCallOrdinals: completeOrdinals,
+      incompleteCalls,
       callOutcomeCounts: byOutcome,
     });
   }
@@ -97,4 +123,4 @@ function attachCallOutcomeCensus(index) {
   return index;
 }
 
-module.exports = { normalizeOutcome, attachCallOutcomeCensus };
+module.exports = { normalizeOutcome, callLocator, attachCallOutcomeCensus };
