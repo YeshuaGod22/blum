@@ -74,8 +74,8 @@ function instanceCensusCsv(census) {
     'instanceUid','collection','instanceKind','ancestryType','family','replicate','trunkKey','probeId','forkId','parentInstanceUid',
     'callCount','firstCallUid','firstInputPackageUid','firstOutputPackageUid','terminalCallUid','terminalInputPackageUid','terminalOutputPackageUid',
     'ownedCallUids','parentTrajectoryCallUids','hasFurtherInferenceCalls','downstreamInferenceCallCount',
-    'completeCallCount','truncatedCallCount','contextLimitCallCount','apiFailureCallCount','missingOutputCallCount','otherCallCount',
-    'hasFurtherCompleteInferenceCalls','downstreamCompleteInferenceCallCount','trunkExtensionStatus','parentRelationVerificationStatus',
+    'completeCallCount','truncatedCallCount','contextLimitCallCount','apiFailureCallCount','missingOutputCallCount','otherCallCount','incompleteCallUids',
+    'hasFurtherCompleteInferenceCalls','downstreamCompleteInferenceCallCount','trunkExtensionStatus','parentRelationVerificationStatus','parentRelationVerificationReason',
     'visibleContextExchangePairCount','visibleContextHasFurtherPairs','visibleContextDownstreamPairCount',
     'inheritedPrefixMessageCount','inheritedHistoryStatus','firstInput','firstOutput','sourcePaths',
   ];
@@ -131,6 +131,7 @@ async function main() {
   const outcomeRel = 'data/dae-call-outcome-census-v0.json';
   const censusJsonRel = 'data/dae-instance-start-census-v0.json';
   const censusCsvRel = 'data/dae-instance-start-census-v0.csv';
+  const incompleteTrajectories = fullIndex.callOutcomeCensus.trajectories.filter(row => row.completeCallCount !== row.administeredCallCount);
 
   portableIndex.messageGraph = fullIndex.messageGraph;
   portableIndex.messageLineage = fullIndex.messageLineage;
@@ -146,6 +147,10 @@ async function main() {
     trunkTransitionStatuses: fullIndex.trajectoryPackageIntegrity.trunkTransitionStatuses,
     branchParentRelationCount: fullIndex.trajectoryPackageIntegrity.branchParentRelationCount,
     branchParentRelationStatuses: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses,
+    branchParentRelationStatusesByCollection: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatusesByCollection,
+    unmaterializedParentCount: fullIndex.trajectoryPackageIntegrity.unmaterializedParentCount,
+    unmaterializedParentReasons: fullIndex.trajectoryPackageIntegrity.unmaterializedParentReasons,
+    unmaterializedParentsByCollection: fullIndex.trajectoryPackageIntegrity.unmaterializedParentsByCollection,
   };
   portableIndex.callOutcomeCensusRef = {
     schema: fullIndex.callOutcomeCensus.schema, path: outcomeRel,
@@ -154,6 +159,14 @@ async function main() {
     trajectoryCount: fullIndex.callOutcomeCensus.trajectoryCount,
     trajectoriesFullyComplete: fullIndex.callOutcomeCensus.trajectoriesFullyComplete,
     trajectoriesWithIncompleteCalls: fullIndex.callOutcomeCensus.trajectoriesWithIncompleteCalls,
+    incompleteTrajectoryLocators: incompleteTrajectories.map(row => ({
+      instanceUid: row.instanceUid,
+      collection: row.collection,
+      family: row.family,
+      replicate: row.replicate,
+      trunkKey: row.trunkKey,
+      incompleteCalls: row.incompleteCalls,
+    })),
   };
   delete portableIndex.inferencePackageGraph;
   delete portableIndex.trajectoryPackageIntegrity;
@@ -185,7 +198,7 @@ async function main() {
 
   const startHerePath = path.join(outRoot, 'START-HERE.md');
   let startHere = await fs.readFile(startHerePath, 'utf8');
-  startHere += `\n## Inference packages and trajectories (v1)\n\nThe primary unit is **call → input package → output package**. There are **${compactPackageGraph.callCount} calls**, each with one input and output package. System/history/current-user material are sections of the input package; parsed response spans are sections of the raw output package.\n\nPackage graph: \`${packageRel}\`. Trajectory topology proof: \`${integrityRel}\`. Call-outcome census: \`${outcomeRel}\`. Trajectory starts: \`${censusJsonRel}\` / \`${censusCsvRel}\`.\n\nThere are **${portableIndex.instanceStartCensus.instanceCount} trajectories**; **${portableIndex.instanceStartCensus.withFurtherInferenceCalls}** own more than one inference call. The integrity layer proves **${fullIndex.trajectoryPackageIntegrity.trunkTransitionCount}** trunk transitions and records all **${fullIndex.trajectoryPackageIntegrity.branchParentRelationCount}** branch-parent relation states. Outcome counts are preserved separately from administered depth.\n`;
+  startHere += `\n## Inference packages and trajectories (v1)\n\nThe primary unit is **call → input package → output package**. There are **${compactPackageGraph.callCount} calls**, each with one input and output package. System/history/current-user material are sections of the input package; parsed response spans are sections of the raw output package.\n\nPackage graph: \`${packageRel}\`. Trajectory topology proof: \`${integrityRel}\`. Call-outcome census: \`${outcomeRel}\`. Trajectory starts: \`${censusJsonRel}\` / \`${censusCsvRel}\`.\n\nThere are **${portableIndex.instanceStartCensus.instanceCount} trajectories**; **${portableIndex.instanceStartCensus.withFurtherInferenceCalls}** own more than one inference call. The integrity layer proves **${fullIndex.trajectoryPackageIntegrity.trunkTransitionCount}** trunk transitions. Of **${fullIndex.trajectoryPackageIntegrity.branchParentRelationCount}** branch-parent relation states, **${fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses.verified_exact_extension || 0}** are exact materialized extensions and **${fullIndex.trajectoryPackageIntegrity.unmaterializedParentCount || 0}** have no materialized parent trajectory in the normalized corpus. Outcome counts are preserved separately from administered depth; **${fullIndex.callOutcomeCensus.trajectoriesWithIncompleteCalls}** trajectory/trajectories contain an incomplete call.\n`;
   await fs.writeFile(startHerePath, startHere, 'utf8');
 
   manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-inference-package-addressable';
@@ -218,7 +231,9 @@ async function main() {
     trajectoriesWithFurtherInferenceCalls: portableIndex.instanceStartCensus.withFurtherInferenceCalls,
     trunkTransitionStatuses: fullIndex.trajectoryPackageIntegrity.trunkTransitionStatuses,
     branchParentRelationStatuses: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses,
+    unmaterializedParentsByCollection: fullIndex.trajectoryPackageIntegrity.unmaterializedParentsByCollection,
     callOutcomeCounts: fullIndex.callOutcomeCensus.callOutcomeCounts,
+    incompleteTrajectoryLocators: portableIndex.callOutcomeCensusRef.incompleteTrajectoryLocators,
   }, null, 2));
 }
 
