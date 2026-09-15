@@ -34,8 +34,11 @@ async function main() {
   assert.equal(index.portableProjection.schema, 'blum-dae-portable-index-projection-v1');
   assert.equal(index.portableProjection.messageGraphIncluded, true);
   assert.equal(index.portableProjection.messageContentAddressable, true);
+  assert.equal(index.portableProjection.instanceStartCensusIncluded, true);
   assert.ok(index.messageGraph?.nodes, 'portable message graph missing');
   assert.equal(index.messageGraph.nodeCount, 7889, 'pinned message graph node census changed');
+  assert.ok(index.instanceStartCensus?.instances, 'portable instance-start census missing');
+  assert.equal(index.instanceStartCensus.missingFirstInput, 0, 'portable instance census has missing first inputs');
   assert.deepEqual(index.populationCounts, {
     allAddressableObservations: 2378,
     coldSchemaNoLivedParent: 350,
@@ -59,6 +62,20 @@ async function main() {
   assert.equal(rows, 2378);
   assert.ok(refs > 0);
 
+  // Instance-first view must survive in the portable bundle. In particular,
+  // C-r1 is 25 independent calls, not one 25-question pseudo-instance.
+  const instances = index.instanceStartCensus.instances;
+  const raw7C = instances.filter(x => x.collection === 'raw7' && x.family === 'C' && x.instanceKind === 'root_single_call');
+  const raw7Cr1 = raw7C.filter(x => Number(x.replicate) === 1);
+  assert.equal(raw7C.length, 250);
+  assert.equal(raw7Cr1.length, 25);
+  assert.ok(raw7Cr1.every(x => x.ioPairCount === 1 && !x.hasFurtherInputOutputPairs));
+
+  const pilotAsb = instances.filter(x => x.collection === 'pilot1' && x.family === 'ASb');
+  assert.equal(pilotAsb.length, 2);
+  assert.ok(pilotAsb.every(x => x.ioPairCount === 6 && x.hasFurtherInputOutputPairs));
+  assert.ok(pilotAsb.every(x => x.inheritedHistoryStatus === 'reconstructed_from_explicit_parent_trunk'));
+
   const treatmentQuery = require(path.join(out, 'app', 'dae-first-treatment-prompts-v0-15sep2026.js'));
   const treatments = treatmentQuery.queryFirstTreatmentPrompts(index);
   const asTrunk1 = treatments.find(x => x.trunkKey === 'AS-trunk1' && x.status === 'resolved');
@@ -66,6 +83,8 @@ async function main() {
   assert.ok(asTrunk1.firstPrompt.startsWith('Hi Claude!'));
 
   const graphModule = require(path.join(out, 'app', 'dae-message-lineage-graph-v0-15sep2026.js'));
+  const instanceModule = require(path.join(out, 'app', 'dae-instance-start-census-v0-15sep2026.js'));
+  assert.equal(typeof instanceModule.summarizeTranscript, 'function');
   const asHistoryRow = Object.values(index.itemHistories)
     .flatMap(h => h.observations || [])
     .find(row => row.trunkKey === 'AS-trunk1' && row.parentVerificationStatus === 'verified_from_sent_prefix');
@@ -82,17 +101,26 @@ async function main() {
   assert.equal(manifest.normalizedMessageGraph.contentAddressableOffline, true);
   assert.equal(manifest.generatedCorpusCensus.allAddressableObservations, 2378);
   assert.equal(manifest.generatedCorpusCensus.nonColdSchemaObservations, 2028);
+  assert.equal(manifest.instanceStartCensus.instanceCount, index.instanceStartCensus.instanceCount);
+  assert.equal(manifest.instanceStartCensus.missingFirstInput, 0);
+  assert.equal(manifest.instanceStartCensus.availableOffline, true);
 
   const manifestPaths = new Set((manifest.files || []).map(x => x.path));
   assert.ok(manifestPaths.has('data/dae-whole-corpus-index-v1.json'));
   assert.ok(manifestPaths.has('app/dae-message-lineage-graph-v0-15sep2026.js'));
   assert.ok(manifestPaths.has('app/dae-first-treatment-prompts-v0-15sep2026.js'));
+  assert.ok(manifestPaths.has('app/dae-instance-start-census-v0-15sep2026.js'));
 
   console.log('PASS portable message-addressable bundle v1');
   console.log(JSON.stringify({
     rows,
     messageRefsChecked: refs,
     messageNodes: index.messageGraph.nodeCount,
+    instances: index.instanceStartCensus.instanceCount,
+    instancesWithFurtherPairs: index.instanceStartCensus.withFurtherInputOutputPairs,
+    instancesWithoutFurtherPairs: index.instanceStartCensus.withoutFurtherInputOutputPairs,
+    raw7CInstances: raw7C.length,
+    raw7Cr1Instances: raw7Cr1.length,
     populationCounts: index.populationCounts,
     firstTreatmentQuery: treatmentQuery.summary(treatments),
     asTrunk1: {
