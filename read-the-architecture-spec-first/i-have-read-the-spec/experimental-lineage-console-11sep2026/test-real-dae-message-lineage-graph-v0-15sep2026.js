@@ -24,13 +24,27 @@ function main() {
     pathPrefix: 'experiments/EXP-003-the-sixth-question',
   });
 
+  const collectionCounts = counts(index.observations, 'collection');
+  const provenanceClasses = counts(index.observations, 'provenanceClass');
+  const ancestryTypes = counts(index.observations, 'ancestryType');
+  const nonColdSchemaCount = index.observations.filter(row => row.ancestryType !== 'cold_schema_no_lived_parent').length;
+
   console.log('REAL CORPUS POPULATION');
   console.log(JSON.stringify({
     observationCount: index.observationCount,
-    collections: counts(index.observations, 'collection'),
-    provenanceClasses: counts(index.observations, 'provenanceClass'),
-    ancestryTypes: counts(index.observations, 'ancestryType'),
+    nonColdSchemaCount,
+    collections: collectionCounts,
+    provenanceClasses,
+    ancestryTypes,
   }, null, 2));
+
+  // Pin the distinction that had previously been implicit in discussion/artifacts:
+  // the current canonical builder admits 2,378 addressable observations, while
+  // the familiar 2,028 population is exactly the projection that excludes the
+  // 350 cold-schema/no-lived-parent observations.
+  assert.equal(index.observationCount, 2378, 'canonical current corpus population changed');
+  assert.equal(ancestryTypes.cold_schema_no_lived_parent, 350, 'cold-schema population changed');
+  assert.equal(nonColdSchemaCount, 2028, 'historical non-cold-schema projection changed');
 
   assert.ok(index.messageGraph, 'message graph missing');
   assert.equal(index.messageGraph.schema, 'blum-dae-message-lineage-graph-v0');
@@ -88,10 +102,11 @@ function main() {
   console.log('PASS real DAE message lineage graph');
   console.log(JSON.stringify({
     observations: index.observationCount,
+    nonColdSchemaObservations: nonColdSchemaCount,
     messageNodes: index.messageGraph.nodeCount,
     verifiedPrefixRows,
     sharedPrefixGroups: multiObservationSharedPrefixes,
-    reconstructionChecks,
+    reconstructChecks,
     firstPromptTrunks: firstPrompts.length,
     resolvedFirstPrompts: resolved.length,
     explicitFirstPromptConflicts: conflicts.length,
