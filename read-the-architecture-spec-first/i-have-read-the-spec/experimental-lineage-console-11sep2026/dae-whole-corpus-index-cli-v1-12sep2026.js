@@ -15,6 +15,7 @@ const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
 const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
 const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
 const TrajectoryPackages = require('./dae-trajectory-package-bind-v0-15sep2026.js');
+const WitnessParentSnapshots = require('./dae-witness-parent-snapshot-integrity-v0-15sep2026.js');
 const TrajectoryIntegrity = require('./dae-trajectory-package-integrity-v0-15sep2026.js');
 const CallOutcomes = require('./dae-call-outcome-census-v0-15sep2026.js');
 
@@ -79,7 +80,15 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
   InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
   TrajectoryPackages.bindTrajectoryPackages(index);
 
+  // Historical collections sometimes preserve the exact inherited parent prefix
+  // inside each branch witness without retaining the parent inference calls as
+  // materialized corpus events. Verify that frozen snapshot independently. This
+  // proves prefix ancestry without fabricating a missing parent trajectory.
+  WitnessParentSnapshots.attachWitnessParentSnapshotIntegrity(index, { collections });
+
   // Prove topology from package contents rather than trusting labels/order alone.
+  // Materialized parents use terminal-call state; absent parents may use the
+  // independently verified frozen witness snapshot proof class above.
   TrajectoryIntegrity.attachTrajectoryPackageIntegrity(index);
 
   // Outcome is a property of an already-identified call, never part of its UID.
@@ -121,6 +130,7 @@ function main(argv) {
     trajectories: index.instanceStartCensus?.instanceCount ?? null,
     packageBoundTrajectories: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
     trajectoriesWithFurtherInferenceCalls: index.instanceStartCensus?.withFurtherInferenceCalls ?? null,
+    witnessParentSnapshotStatuses: index.witnessParentSnapshotIntegrity?.statuses ?? null,
     trunkTransitionStatuses: index.trajectoryPackageIntegrity?.trunkTransitionStatuses ?? null,
     branchParentRelationStatuses: index.trajectoryPackageIntegrity?.branchParentRelationStatuses ?? null,
     callOutcomeCounts: index.callOutcomeCensus?.callOutcomeCounts ?? null,
