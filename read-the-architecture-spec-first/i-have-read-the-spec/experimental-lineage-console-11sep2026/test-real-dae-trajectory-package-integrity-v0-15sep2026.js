@@ -4,6 +4,14 @@ const assert = require('assert');
 const path = require('path');
 const Whole = require('./dae-whole-corpus-index-cli-v1-12sep2026.js');
 
+function countBy(rows, field) {
+  return rows.reduce((out, row) => {
+    const key = String(row?.[field] ?? '<missing>');
+    out[key] = (out[key] || 0) + 1;
+    return out;
+  }, {});
+}
+
 function main() {
   const daeRoot = process.argv[2];
   if (!daeRoot) throw new Error('Usage: node test-real-dae-trajectory-package-integrity-v0-15sep2026.js <dae-repo-root>');
@@ -23,9 +31,8 @@ function main() {
   const badTransitions = integrity.transitions.filter(x => x.status !== 'verified_exact_extension');
   const materializedParentRelations = integrity.parentRelations.filter(x => x.parentTerminalCallUid);
   const badMaterializedParents = materializedParentRelations.filter(x => x.status !== 'verified_exact_extension');
+  const unmaterialized = integrity.parentRelations.filter(x => x.status === 'parent_trajectory_unmaterialized');
 
-  // We intentionally print before asserting so a corpus disagreement is diagnostic,
-  // not a mystery red badge.
   console.log('TRAJECTORY PACKAGE INTEGRITY CENSUS');
   console.log(JSON.stringify({
     trunkTransitionCount: integrity.trunkTransitionCount,
@@ -35,6 +42,9 @@ function main() {
     branchParentRelationStatuses: integrity.branchParentRelationStatuses,
     materializedParentRelations: materializedParentRelations.length,
     nonExactMaterializedParents: badMaterializedParents.slice(0, 20),
+    unmaterializedParentRelations: unmaterialized.length,
+    unmaterializedByCollection: countBy(unmaterialized, 'collection'),
+    unmaterializedTrunkKeysSample: unmaterialized.slice(0, 30).map(x => ({ collection: x.collection, trunkKey: x.trunkKey, trajectoryUid: x.trajectoryUid })),
   }, null, 2));
 
   assert.equal(badTransitions.length, 0, 'some lived-trunk transitions are not exact package extensions');
@@ -46,9 +56,7 @@ function main() {
 
   const branches = index.instanceStartCensus.instances.filter(x => x.instanceKind === 'branch_from_lived_trunk');
   assert.equal(branches.length, 1708);
-  for (const branch of branches) {
-    assert.ok(branch.parentRelationVerificationStatus, `branch relation status missing: ${branch.instanceUid}`);
-  }
+  for (const branch of branches) assert.ok(branch.parentRelationVerificationStatus, `branch relation status missing: ${branch.instanceUid}`);
 
   console.log('PASS real DAE trajectory package integrity');
 }
