@@ -21,18 +21,40 @@ function main() {
   const conflicts = rows.filter(x => x.status === 'conflict');
   const unresolved = rows.filter(x => x.status === 'unresolved');
   const notApplicable = rows.filter(x => x.status === 'not_applicable');
+  const rawResolved = resolved.filter(x => x.developmentalOriginClass === 'verified_lived_origin');
+  const pilotResolved = resolved.filter(x => x.developmentalOriginClass === 'verified_pilot_parent_trajectory_origin');
 
-  assert.ok(resolved.length > 0, 'no treatment prompts resolved');
+  assert.ok(rawResolved.length > 0, 'no raw lived treatment prompts resolved');
+  assert.equal(pilotResolved.length, 2, 'both Pilot ASb treatment origins should resolve from explicit verified parent trajectories');
   assert.equal(conflicts.length, 0, 'verified treatment instances must not contain conflicting origins');
   assert.ok(notApplicable.length > 0, 'expected no-lived-parent-by-design groups');
-  assert.ok(unresolved.length > 0, 'expected at least Pilot 1 historical-context gaps');
+  assert.equal(unresolved.length, 0, 'no treatment-origin group should remain unresolved after package-first Pilot lineage recovery');
 
-  for (const row of resolved) {
-    assert.equal(row.developmentalOriginClass, 'verified_lived_origin');
+  for (const row of rawResolved) {
     assert.ok(row.firstPromptMessageId, `missing firstPromptMessageId: ${row.trunkKey}`);
     assert.ok(row.firstPrompt, `missing firstPrompt: ${row.trunkKey}`);
     assert.ok(row.parentSnapshotId, `missing parentSnapshotId: ${row.trunkKey}`);
     assert.ok(row.evidenceObservationCount > 0, `missing evidence count: ${row.trunkKey}`);
+    assert.equal(row.provenanceRoute, 'verified_raw_lived_prefix_message');
+  }
+
+  for (const row of pilotResolved) {
+    assert.equal(row.collection, 'pilot1');
+    assert.ok(row.firstPromptCallUid, `Pilot origin missing first call UID: ${row.trunkKey}`);
+    assert.ok(row.firstPromptInputPackageUid, `Pilot origin missing first input package UID: ${row.trunkKey}`);
+    assert.ok(row.firstPromptInputSectionUid, `Pilot origin missing first user section UID: ${row.trunkKey}`);
+    assert.ok(row.parentTrajectoryUid, `Pilot origin missing parent trajectory UID: ${row.trunkKey}`);
+    assert.ok(row.branchTrajectoryUid, `Pilot origin missing branch trajectory UID: ${row.trunkKey}`);
+    assert.ok(row.firstPrompt.startsWith('Hi Claude!'), `Pilot first prompt changed unexpectedly: ${row.trunkKey}`);
+    assert.equal(row.provenanceRoute, 'package_first_explicit_parent_trajectory');
+    const parent = index.instanceStartCensus.instances.find(x => x.instanceUid === row.parentTrajectoryUid);
+    const branch = index.instanceStartCensus.instances.find(x => x.instanceUid === row.branchTrajectoryUid);
+    assert.ok(parent && branch);
+    assert.equal(branch.parentInstanceUid, parent.instanceUid);
+    assert.equal(branch.parentRelationVerificationStatus, 'verified_exact_extension');
+    assert.equal(branch.parentRelationProofClass, 'materialized_parent_trajectory');
+    assert.equal(parent.firstCallUid, row.firstPromptCallUid);
+    assert.equal(parent.firstInputPackageUid, row.firstPromptInputPackageUid);
   }
 
   for (const row of notApplicable) {
@@ -40,13 +62,7 @@ function main() {
     assert.ok(['resolved', 'multiple'].includes(row.firstAdministeredInput?.status), `cold group lacks recoverable administered input: ${row.collection}/${row.trunkKey}`);
   }
 
-  const pilotLike = unresolved.filter(x => x.developmentalOriginClass === 'incomplete_historical_context');
-  assert.ok(pilotLike.length > 0, 'Pilot 1 provenance limitation should remain explicit');
-  const lineageUnverified = unresolved.filter(x => x.developmentalOriginClass === 'lineage_unverified');
-  const other = unresolved.filter(x => x.developmentalOriginClass === 'other_unresolved');
-  assert.equal(other.length, 0, 'all unresolved groups should have a specific mechanistic class');
-
-  const asTrunk1 = resolved.find(x => x.trunkKey === 'AS-trunk1');
+  const asTrunk1 = rawResolved.find(x => x.trunkKey === 'AS-trunk1');
   assert.ok(asTrunk1, 'AS-trunk1 should resolve from verified lived-prefix evidence');
   assert.ok(asTrunk1.firstPrompt.startsWith('Hi Claude!'), 'AS-trunk1 first treatment prompt changed unexpectedly');
 
@@ -54,21 +70,21 @@ function main() {
   console.log(JSON.stringify({
     ...report,
     resolved: resolved.length,
+    rawVerifiedOrigins: rawResolved.length,
+    pilotPackageVerifiedOrigins: pilotResolved.length,
     notApplicable: notApplicable.length,
     unresolved: unresolved.length,
     conflicts: conflicts.length,
-    pilot1IncompleteHistoricalContext: pilotLike.length,
-    lineageUnverified: lineageUnverified.length,
-    otherUnresolved: other.length,
     notApplicableByAncestry: Object.fromEntries([...new Set(notApplicable.flatMap(x => x.ancestryTypes || []))].sort().map(type => [type, notApplicable.filter(x => (x.ancestryTypes || []).includes(type)).length])),
-    unresolvedDetails: unresolved.map(x => ({
-      collection: x.collection,
-      trunkKey: x.trunkKey,
-      family: x.family,
-      developmentalOriginClass: x.developmentalOriginClass,
-      reason: x.reason,
-      ancestryTypes: x.ancestryTypes,
-      firstAdministeredInputStatus: x.firstAdministeredInput?.status,
+    pilotOrigins: pilotResolved.map(x => ({
+      trunkKey:x.trunkKey,
+      family:x.family,
+      replicate:x.replicate,
+      parentTrajectoryUid:x.parentTrajectoryUid,
+      branchTrajectoryUid:x.branchTrajectoryUid,
+      firstPromptCallUid:x.firstPromptCallUid,
+      firstPromptInputPackageUid:x.firstPromptInputPackageUid,
+      firstPromptInputSectionUid:x.firstPromptInputSectionUid,
     })),
   }, null, 2));
 }
