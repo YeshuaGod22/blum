@@ -43,7 +43,9 @@ function main() {
   });
   const n4 = index.itemHistories.N4;
   assert.ok(n4, 'N4 history exists');
-  assert.equal(n4.observationCount, 107, 'pinned corpus still has 107 N4 observations');
+  // Whole-corpus v1 intentionally includes every addressable N4 observation
+  // across Pilot-1 and raw2..raw12. The older 107 pin predated that expansion.
+  assert.equal(n4.observationCount, 129, 'pinned canonical whole corpus has 129 N4 observations');
   assert.ok(n4.presentationVariantCount > n4.itemCoreVariantCount,
     'condition-specific presentations produce more variants than extracted battery item cores');
 
