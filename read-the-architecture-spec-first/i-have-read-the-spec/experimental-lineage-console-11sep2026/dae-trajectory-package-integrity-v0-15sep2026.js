@@ -36,6 +36,17 @@ function classifyExtension(actualMessages, expectedPrefix) {
   };
 }
 
+function nestedCount(rows, outerKey, innerKey) {
+  const out = {};
+  for (const row of rows) {
+    const outer = String(row?.[outerKey] ?? '<missing>');
+    const inner = String(row?.[innerKey] ?? '<missing>');
+    if (!out[outer]) out[outer] = {};
+    out[outer][inner] = (out[outer][inner] || 0) + 1;
+  }
+  return out;
+}
+
 function attachTrajectoryPackageIntegrity(index) {
   const census = index?.instanceStartCensus;
   const pkgGraph = index?.inferencePackageGraph;
@@ -93,7 +104,14 @@ function attachTrajectoryPackageIntegrity(index) {
       if (!ownedCall) {
         relation = { status: 'branch_call_missing' };
       } else if (!parent || !parentTerminalCall) {
-        relation = { status: 'parent_trajectory_unmaterialized' };
+        relation = {
+          status: 'parent_trajectory_unmaterialized',
+          reason: !instance.parentInstanceUid
+            ? 'no_parent_instance_uid_materialized'
+            : !parent
+              ? 'parent_instance_uid_not_present_in_census'
+              : 'parent_terminal_call_not_present_in_package_graph',
+        };
       } else {
         const parentInput = inputs[parentTerminalCall.inputPackageUid];
         const parentOutput = outputs[parentTerminalCall.outputPackageUid];
@@ -103,13 +121,21 @@ function attachTrajectoryPackageIntegrity(index) {
         relation.systemPromptStable = (parentInput?.canonicalPackage?.systemPrompt ?? null) === (branchInput?.canonicalPackage?.systemPrompt ?? null);
       }
       instance.parentRelationVerificationStatus = relation.status;
+      instance.parentRelationVerificationReason = relation.reason || null;
       parentRelations.push({
         trajectoryUid: instance.instanceUid,
         parentTrajectoryUid: instance.parentInstanceUid || null,
         collection: instance.collection,
+        family: instance.family || null,
+        replicate: instance.replicate ?? null,
         trunkKey: instance.trunkKey,
+        probeId: instance.probeId || null,
+        forkId: instance.forkId || null,
+        sourcePaths: instance.sourcePaths || [],
         branchCallUid: ownedCall?.callUid || null,
+        branchInputPackageUid: ownedCall?.inputPackageUid || null,
         parentTerminalCallUid: parentTerminalCall?.callUid || null,
+        parentTerminalOutputPackageUid: parentTerminalCall?.outputPackageUid || null,
         ...relation,
       });
     }
@@ -120,16 +146,25 @@ function attachTrajectoryPackageIntegrity(index) {
     return out;
   }, {});
 
+  const unmaterialized = parentRelations.filter(x => x.status === 'parent_trajectory_unmaterialized');
   index.trajectoryPackageIntegrity = {
     schema: 'blum-dae-trajectory-package-integrity-v0',
     trunkTransitionCount: transitions.length,
     trunkTransitionStatuses: countByStatus(transitions),
     branchParentRelationCount: parentRelations.length,
     branchParentRelationStatuses: countByStatus(parentRelations),
+    branchParentRelationStatusesByCollection: nestedCount(parentRelations, 'collection', 'status'),
+    unmaterializedParentCount: unmaterialized.length,
+    unmaterializedParentReasons: countByStatus(unmaterialized.map(row => ({ status: row.reason || '<missing>' }))),
+    unmaterializedParentsByCollection: unmaterialized.reduce((out, row) => {
+      const key = String(row.collection || '<missing>');
+      out[key] = (out[key] || 0) + 1;
+      return out;
+    }, {}),
     transitions,
     parentRelations,
   };
   return index;
 }
 
-module.exports = { equalMessage, prefixMatches, expectedStateAfterCall, classifyExtension, attachTrajectoryPackageIntegrity };
+module.exports = { equalMessage, prefixMatches, expectedStateAfterCall, classifyExtension, nestedCount, attachTrajectoryPackageIntegrity };
