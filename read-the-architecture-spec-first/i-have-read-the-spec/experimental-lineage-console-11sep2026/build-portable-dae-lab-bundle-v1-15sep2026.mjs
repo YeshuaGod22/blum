@@ -5,7 +5,7 @@
  *
  * Primary scientific unit: CALL -> INPUT PACKAGE -> OUTPUT PACKAGE.
  * Package/event topology stays intact while repeated text is stored once by hash.
- * Trajectory integrity and call-outcome views are published as standalone evidence.
+ * Trajectory, witness-parent and call-outcome proofs are standalone evidence.
  */
 
 import fs from 'node:fs/promises';
@@ -75,7 +75,7 @@ function instanceCensusCsv(census) {
     'callCount','firstCallUid','firstInputPackageUid','firstOutputPackageUid','terminalCallUid','terminalInputPackageUid','terminalOutputPackageUid',
     'ownedCallUids','parentTrajectoryCallUids','hasFurtherInferenceCalls','downstreamInferenceCallCount',
     'completeCallCount','truncatedCallCount','contextLimitCallCount','apiFailureCallCount','missingOutputCallCount','otherCallCount','incompleteCallUids',
-    'hasFurtherCompleteInferenceCalls','downstreamCompleteInferenceCallCount','trunkExtensionStatus','parentRelationVerificationStatus','parentRelationVerificationReason',
+    'hasFurtherCompleteInferenceCalls','downstreamCompleteInferenceCallCount','trunkExtensionStatus','parentRelationVerificationStatus','parentRelationProofClass','parentRelationVerificationReason',
     'visibleContextExchangePairCount','visibleContextHasFurtherPairs','visibleContextDownstreamPairCount',
     'inheritedPrefixMessageCount','inheritedHistoryStatus','firstInput','firstOutput','sourcePaths',
   ];
@@ -98,6 +98,7 @@ async function main() {
     package: path.join(lab, 'dae-inference-package-graph-v0-15sep2026.js'),
     portablePackage: path.join(lab, 'dae-portable-inference-package-projection-v0-15sep2026.js'),
     trajectoryBind: path.join(lab, 'dae-trajectory-package-bind-v0-15sep2026.js'),
+    witnessParentSnapshots: path.join(lab, 'dae-witness-parent-snapshot-integrity-v0-15sep2026.js'),
     trajectoryIntegrity: path.join(lab, 'dae-trajectory-package-integrity-v0-15sep2026.js'),
     callOutcomes: path.join(lab, 'dae-call-outcome-census-v0-15sep2026.js'),
     treatment: path.join(lab, 'dae-first-treatment-prompts-v0-15sep2026.js'),
@@ -121,12 +122,13 @@ async function main() {
     commit: manifest?.sourceCorpus?.commit || null,
     pathPrefix: DAE_EXP_REL,
   });
-  if (!fullIndex.inferencePackageGraph?.calls || !fullIndex.instanceStartCensus?.instances || !fullIndex.trajectoryPackageIntegrity || !fullIndex.callOutcomeCensus) {
-    throw new Error('Canonical package/trajectory/integrity/outcome layers missing');
+  if (!fullIndex.inferencePackageGraph?.calls || !fullIndex.instanceStartCensus?.instances || !fullIndex.witnessParentSnapshotIntegrity || !fullIndex.trajectoryPackageIntegrity || !fullIndex.callOutcomeCensus) {
+    throw new Error('Canonical package/trajectory/witness-parent/integrity/outcome layers missing');
   }
 
   const compactPackageGraph = compactInferencePackageGraph(fullIndex.inferencePackageGraph);
   const packageRel = 'data/dae-inference-package-graph-v0.json';
+  const witnessParentRel = 'data/dae-witness-parent-snapshot-integrity-v0.json';
   const integrityRel = 'data/dae-trajectory-package-integrity-v0.json';
   const outcomeRel = 'data/dae-call-outcome-census-v0.json';
   const censusJsonRel = 'data/dae-instance-start-census-v0.json';
@@ -141,16 +143,24 @@ async function main() {
     inputPackageCount: compactPackageGraph.inputPackageCount, outputPackageCount: compactPackageGraph.outputPackageCount,
     sectionCount: compactPackageGraph.sectionCount, contentBlobCount: compactPackageGraph.contentBlobCount,
   };
+  portableIndex.witnessParentSnapshotIntegrityRef = {
+    schema: fullIndex.witnessParentSnapshotIntegrity.schema,
+    path: witnessParentRel,
+    branchCallCount: fullIndex.witnessParentSnapshotIntegrity.branchCallCount,
+    statuses: fullIndex.witnessParentSnapshotIntegrity.statuses,
+    verifiedCount: fullIndex.witnessParentSnapshotIntegrity.verifiedCount,
+  };
   portableIndex.trajectoryPackageIntegrityRef = {
     schema: fullIndex.trajectoryPackageIntegrity.schema, path: integrityRel,
     trunkTransitionCount: fullIndex.trajectoryPackageIntegrity.trunkTransitionCount,
     trunkTransitionStatuses: fullIndex.trajectoryPackageIntegrity.trunkTransitionStatuses,
     branchParentRelationCount: fullIndex.trajectoryPackageIntegrity.branchParentRelationCount,
     branchParentRelationStatuses: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses,
+    branchParentRelationProofClasses: fullIndex.trajectoryPackageIntegrity.branchParentRelationProofClasses,
     branchParentRelationStatusesByCollection: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatusesByCollection,
-    unmaterializedParentCount: fullIndex.trajectoryPackageIntegrity.unmaterializedParentCount,
-    unmaterializedParentReasons: fullIndex.trajectoryPackageIntegrity.unmaterializedParentReasons,
-    unmaterializedParentsByCollection: fullIndex.trajectoryPackageIntegrity.unmaterializedParentsByCollection,
+    materializedParentVerifiedCount: fullIndex.trajectoryPackageIntegrity.materializedParentVerifiedCount,
+    witnessSnapshotParentVerifiedCount: fullIndex.trajectoryPackageIntegrity.witnessSnapshotParentVerifiedCount,
+    unverifiedParentCount: fullIndex.trajectoryPackageIntegrity.unverifiedParentCount,
   };
   portableIndex.callOutcomeCensusRef = {
     schema: fullIndex.callOutcomeCensus.schema, path: outcomeRel,
@@ -160,15 +170,12 @@ async function main() {
     trajectoriesFullyComplete: fullIndex.callOutcomeCensus.trajectoriesFullyComplete,
     trajectoriesWithIncompleteCalls: fullIndex.callOutcomeCensus.trajectoriesWithIncompleteCalls,
     incompleteTrajectoryLocators: incompleteTrajectories.map(row => ({
-      instanceUid: row.instanceUid,
-      collection: row.collection,
-      family: row.family,
-      replicate: row.replicate,
-      trunkKey: row.trunkKey,
-      incompleteCalls: row.incompleteCalls,
+      instanceUid: row.instanceUid, collection: row.collection, family: row.family,
+      replicate: row.replicate, trunkKey: row.trunkKey, incompleteCalls: row.incompleteCalls,
     })),
   };
   delete portableIndex.inferencePackageGraph;
+  delete portableIndex.witnessParentSnapshotIntegrity;
   delete portableIndex.trajectoryPackageIntegrity;
   delete portableIndex.callOutcomeCensus;
   portableIndex.populationCounts = populationCounts(portableIndex);
@@ -178,15 +185,17 @@ async function main() {
     modelVisibleMessagesOmittedFromRows: true,
     messageGraphIncluded: true,
     inferencePackageGraphStandalone: true,
+    witnessParentSnapshotIntegrityStandalone: true,
     trajectoryIntegrityStandalone: true,
     callOutcomesStandalone: true,
     packageContentAddressable: true,
     instanceStartCensusIncluded: true,
-    rationale: 'Inference packages are primary units. Package topology, trajectory proofs, and call outcomes are standalone addressable views; the whole index keeps only compact refs/summaries rather than duplicating them.',
+    rationale: 'Inference packages are primary units. Package topology, frozen witness-prefix proofs, trajectory proofs, and call outcomes are standalone addressable views; the whole index keeps only compact refs/summaries rather than duplicating them.',
   };
 
   await fs.writeFile(indexPath, `${JSON.stringify(portableIndex)}\n`, 'utf8');
   await fs.writeFile(path.join(outRoot, packageRel), `${JSON.stringify(compactPackageGraph)}\n`, 'utf8');
+  await fs.writeFile(path.join(outRoot, witnessParentRel), `${JSON.stringify(fullIndex.witnessParentSnapshotIntegrity, null, 2)}\n`, 'utf8');
   await fs.writeFile(path.join(outRoot, integrityRel), `${JSON.stringify(fullIndex.trajectoryPackageIntegrity, null, 2)}\n`, 'utf8');
   await fs.writeFile(path.join(outRoot, outcomeRel), `${JSON.stringify(fullIndex.callOutcomeCensus, null, 2)}\n`, 'utf8');
   await fs.writeFile(path.join(outRoot, censusJsonRel), `${JSON.stringify(portableIndex.instanceStartCensus, null, 2)}\n`, 'utf8');
@@ -198,11 +207,12 @@ async function main() {
 
   const startHerePath = path.join(outRoot, 'START-HERE.md');
   let startHere = await fs.readFile(startHerePath, 'utf8');
-  startHere += `\n## Inference packages and trajectories (v1)\n\nThe primary unit is **call → input package → output package**. There are **${compactPackageGraph.callCount} calls**, each with one input and output package. System/history/current-user material are sections of the input package; parsed response spans are sections of the raw output package.\n\nPackage graph: \`${packageRel}\`. Trajectory topology proof: \`${integrityRel}\`. Call-outcome census: \`${outcomeRel}\`. Trajectory starts: \`${censusJsonRel}\` / \`${censusCsvRel}\`.\n\nThere are **${portableIndex.instanceStartCensus.instanceCount} trajectories**; **${portableIndex.instanceStartCensus.withFurtherInferenceCalls}** own more than one inference call. The integrity layer proves **${fullIndex.trajectoryPackageIntegrity.trunkTransitionCount}** trunk transitions. Of **${fullIndex.trajectoryPackageIntegrity.branchParentRelationCount}** branch-parent relation states, **${fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses.verified_exact_extension || 0}** are exact materialized extensions and **${fullIndex.trajectoryPackageIntegrity.unmaterializedParentCount || 0}** have no materialized parent trajectory in the normalized corpus. Outcome counts are preserved separately from administered depth; **${fullIndex.callOutcomeCensus.trajectoriesWithIncompleteCalls}** trajectory/trajectories contain an incomplete call.\n`;
+  startHere += `\n## Inference packages and trajectories (v1)\n\nThe primary unit is **call → input package → output package**. There are **${compactPackageGraph.callCount} calls**, each with one input and output package. System/history/current-user material are sections of the input package; parsed response spans are sections of the raw output package.\n\nPackage graph: \`${packageRel}\`. Frozen parent-prefix proof: \`${witnessParentRel}\`. Trajectory topology proof: \`${integrityRel}\`. Call-outcome census: \`${outcomeRel}\`. Trajectory starts: \`${censusJsonRel}\` / \`${censusCsvRel}\`.\n\nThere are **${portableIndex.instanceStartCensus.instanceCount} trajectories**; **${portableIndex.instanceStartCensus.withFurtherInferenceCalls}** own more than one inference call. The integrity layer proves **${fullIndex.trajectoryPackageIntegrity.trunkTransitionCount}** trunk transitions and all **${fullIndex.trajectoryPackageIntegrity.branchParentRelationCount}** branch relations: **${fullIndex.trajectoryPackageIntegrity.materializedParentVerifiedCount}** against materialized parent trajectories and **${fullIndex.trajectoryPackageIntegrity.witnessSnapshotParentVerifiedCount}** against exact frozen parent-prefix snapshots, with **${fullIndex.trajectoryPackageIntegrity.unverifiedParentCount}** unverified. Snapshot proof verifies inherited content but does not fabricate a missing parent call/event. Outcome counts are separate from administered depth; **${fullIndex.callOutcomeCensus.trajectoriesWithIncompleteCalls}** trajectory/trajectories contain an incomplete call.\n`;
   await fs.writeFile(startHerePath, startHere, 'utf8');
 
   manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-inference-package-addressable';
   manifest.inferencePackageGraph = { ...portableIndex.inferencePackageGraphRef, availableOffline: true, contentAddressed: true };
+  manifest.witnessParentSnapshotIntegrity = { ...portableIndex.witnessParentSnapshotIntegrityRef, availableOffline: true };
   manifest.trajectoryPackageIntegrity = { ...portableIndex.trajectoryPackageIntegrityRef, availableOffline: true };
   manifest.callOutcomeCensus = { ...portableIndex.callOutcomeCensusRef, availableOffline: true };
   manifest.normalizedMessageGraph = { schema: portableIndex.messageGraph.schema, nodeCount: portableIndex.messageGraph.nodeCount, compatibilityProjection: true, contentAddressableOffline: true };
@@ -229,9 +239,10 @@ async function main() {
     outputPackages: compactPackageGraph.outputPackageCount, sections: compactPackageGraph.sectionCount,
     contentBlobs: compactPackageGraph.contentBlobCount, trajectories: portableIndex.instanceStartCensus.instanceCount,
     trajectoriesWithFurtherInferenceCalls: portableIndex.instanceStartCensus.withFurtherInferenceCalls,
+    witnessParentSnapshotStatuses: fullIndex.witnessParentSnapshotIntegrity.statuses,
     trunkTransitionStatuses: fullIndex.trajectoryPackageIntegrity.trunkTransitionStatuses,
     branchParentRelationStatuses: fullIndex.trajectoryPackageIntegrity.branchParentRelationStatuses,
-    unmaterializedParentsByCollection: fullIndex.trajectoryPackageIntegrity.unmaterializedParentsByCollection,
+    branchParentRelationProofClasses: fullIndex.trajectoryPackageIntegrity.branchParentRelationProofClasses,
     callOutcomeCounts: fullIndex.callOutcomeCensus.callOutcomeCounts,
     incompleteTrajectoryLocators: portableIndex.callOutcomeCensusRef.incompleteTrajectoryLocators,
   }, null, 2));
