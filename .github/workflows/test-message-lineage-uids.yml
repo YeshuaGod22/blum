@@ -7,6 +7,7 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-inference-package-graph-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-portable-inference-package-projection-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-bind-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-witness-parent-snapshot-integrity-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-integrity-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-call-outcome-census-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/measurement-package-provenance-v0-15sep2026.js'
