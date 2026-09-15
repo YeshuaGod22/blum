@@ -2,9 +2,10 @@
 
 // DAE FIRST TREATMENT PROMPTS v0 — 15 Sep 2026
 //
-// A treatment's first prompt is resolved only from a VERIFIED lived trunk
-// prefix. Reused trunk labels, matching strings, and local battery probes are
-// not enough evidence to call something the treatment origin.
+// Treatment origin is resolved only from verified lineage evidence. Raw2+
+// branches use verified lived-prefix message evidence. Pilot-1 may use its
+// explicit package-first parent trajectory when that parent edge is verified.
+// Reused labels and matching strings are never enough.
 
 const Graph = require('./dae-message-lineage-graph-v0-15sep2026.js');
 
@@ -62,7 +63,7 @@ function classifyOriginGroup(group) {
   if (ancestryTypes.some(x => x === 'pilot1_lived_trunk' || x === 'pilot1_lived_trunk_branch')) return {
     developmentalOriginStatus: 'unresolved',
     developmentalOriginClass: 'incomplete_historical_context',
-    reason: 'pilot1_normalized_rows_do_not_preserve_complete_lived_prefix',
+    reason: 'pilot1_message_projection_lacks_complete_lived_prefix_and_no_verified_package_parent_was_resolved',
   };
 
   if (ancestryTypes.includes('lived_trunk_branch')) return {
@@ -77,6 +78,65 @@ function classifyOriginGroup(group) {
     developmentalOriginClass: 'other_unresolved',
     reason: 'no_verified_lived_prefix_in_index',
     parentVerificationStatuses: statuses,
+  };
+}
+
+function pilotPackageOrigin(index, group) {
+  const exemplar = group?.[0] || {};
+  if (exemplar.collection !== 'pilot1') return null;
+  const ancestryTypes = [...new Set((group || []).map(r => r.ancestryType || null))];
+  if (!ancestryTypes.includes('pilot1_lived_trunk_branch')) return null;
+  const census = index?.instanceStartCensus?.instances || [];
+  const graph = index?.inferencePackageGraph;
+  if (!graph?.calls || !graph?.inputPackages || !graph?.sections) return null;
+
+  const sourcePaths = new Set((group || []).map(r => r.sourcePath).filter(Boolean));
+  const branchCandidates = census.filter(instance => {
+    if (instance.collection !== 'pilot1' || instance.instanceKind !== 'branch_from_lived_trunk') return false;
+    if ((instance.family || null) !== (exemplar.family || null)) return false;
+    if ((instance.replicate ?? null) !== (exemplar.replicate ?? null)) return false;
+    if (sourcePaths.size && !(instance.sourcePaths || []).some(p => sourcePaths.has(p))) return false;
+    return true;
+  });
+  if (branchCandidates.length !== 1) return null;
+
+  const branch = branchCandidates[0];
+  if (branch.parentRelationVerificationStatus !== 'verified_exact_extension' || branch.parentRelationProofClass !== 'materialized_parent_trajectory') return null;
+  if (!branch.parentInstanceUid) return null;
+  const parent = census.find(x => x.instanceUid === branch.parentInstanceUid) || null;
+  if (!parent?.firstCallUid || !parent?.firstInputPackageUid) return null;
+  const firstCall = graph.calls[parent.firstCallUid] || null;
+  const input = graph.inputPackages[parent.firstInputPackageUid] || null;
+  if (!firstCall || !input) return null;
+
+  const firstUserMessage = (input.canonicalPackage?.messages || []).find(m => m?.role === 'user') || null;
+  if (!firstUserMessage) return null;
+  const firstUserSection = (input.sectionUids || [])
+    .map(uid => graph.sections[uid])
+    .find(section => section?.packageSide === 'input' && section?.sectionType === 'message' && section?.role === 'user') || null;
+
+  return {
+    treatmentInstanceId: parent.instanceUid,
+    trunkKey: exemplar.trunkKey || branch.trunkKey || null,
+    collection: 'pilot1',
+    status: 'resolved',
+    developmentalOriginStatus: 'resolved',
+    developmentalOriginClass: 'verified_pilot_parent_trajectory_origin',
+    reason: 'explicit_pilot_parent_trajectory_verified_by_exact_package_extension',
+    firstPromptMessageId: null,
+    firstPromptInputPackageUid: input.inputPackageUid,
+    firstPromptInputSectionUid: firstUserSection?.sectionUid || null,
+    firstPromptCallUid: firstCall.callUid,
+    firstPrompt: String(firstUserMessage.content ?? ''),
+    firstPromptContentHash: Graph.sha256Text(firstUserMessage.content ?? ''),
+    parentTrajectoryUid: parent.instanceUid,
+    branchTrajectoryUid: branch.instanceUid,
+    family: exemplar.family || null,
+    replicate: exemplar.replicate ?? null,
+    observationCount: group.length,
+    evidenceObservationCount: group.length,
+    provenanceRoute: 'package_first_explicit_parent_trajectory',
+    firstAdministeredInput: firstAdministeredInput(index, group),
   };
 }
 
@@ -100,6 +160,11 @@ function queryFirstTreatmentPrompts(index, options = {}) {
     const administered = firstAdministeredInput(index, group);
 
     if (!eligible.length) {
+      const pilotResolved = pilotPackageOrigin(index, group);
+      if (pilotResolved) {
+        out.push(pilotResolved);
+        continue;
+      }
       if (!includeUnresolved) continue;
       const ancestryTypes = [...new Set(group.map(r => r.ancestryType || null))].sort();
       const classification = classifyOriginGroup(group);
@@ -192,6 +257,7 @@ function queryFirstTreatmentPrompts(index, options = {}) {
       replicate: winner.replicate,
       observationCount: group.length,
       evidenceObservationCount: eligible.length,
+      provenanceRoute: 'verified_raw_lived_prefix_message',
       firstAdministeredInput: administered,
     });
   }
@@ -219,6 +285,7 @@ module.exports = {
   firstAdministeredInput,
   unresolvedGroupingKey,
   classifyOriginGroup,
+  pilotPackageOrigin,
   queryFirstTreatmentPrompts,
   summary,
 };
