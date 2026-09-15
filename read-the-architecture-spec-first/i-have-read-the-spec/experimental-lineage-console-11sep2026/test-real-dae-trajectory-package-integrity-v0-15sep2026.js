@@ -40,11 +40,24 @@ function main() {
     nonExactTrunkTransitions: badTransitions.slice(0, 20),
     branchParentRelationCount: integrity.branchParentRelationCount,
     branchParentRelationStatuses: integrity.branchParentRelationStatuses,
+    branchParentRelationStatusesByCollection: integrity.branchParentRelationStatusesByCollection,
     materializedParentRelations: materializedParentRelations.length,
     nonExactMaterializedParents: badMaterializedParents.slice(0, 20),
     unmaterializedParentRelations: unmaterialized.length,
     unmaterializedByCollection: countBy(unmaterialized, 'collection'),
-    unmaterializedTrunkKeysSample: unmaterialized.slice(0, 30).map(x => ({ collection: x.collection, trunkKey: x.trunkKey, trajectoryUid: x.trajectoryUid })),
+    unmaterializedByReason: countBy(unmaterialized, 'reason'),
+    unmaterializedSample: unmaterialized.slice(0, 30).map(x => ({
+      collection: x.collection,
+      family: x.family,
+      replicate: x.replicate,
+      trunkKey: x.trunkKey,
+      probeId: x.probeId,
+      forkId: x.forkId,
+      reason: x.reason,
+      parentTrajectoryUid: x.parentTrajectoryUid,
+      sourcePaths: x.sourcePaths,
+      trajectoryUid: x.trajectoryUid,
+    })),
   }, null, 2));
 
   assert.equal(badTransitions.length, 0, 'some lived-trunk transitions are not exact package extensions');
