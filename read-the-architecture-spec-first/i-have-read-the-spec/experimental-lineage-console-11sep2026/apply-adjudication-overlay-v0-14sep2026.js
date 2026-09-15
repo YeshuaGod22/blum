@@ -63,6 +63,7 @@ function applyAdjudicationOverlay(measurements,overlay) {
         overlayId:entry.overlayId,
         judgment:entry.judgment,
         provenance:entry.provenance,
+        packageProvenance:entry.packageProvenance || null,
       },
       effective:{...e,source:'historical_adjudication'},
     };

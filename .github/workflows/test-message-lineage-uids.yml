@@ -1,0 +1,90 @@
+name: Test message lineage UIDs
+
+on:
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-message-lineage-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-inference-package-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-portable-inference-package-projection-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-bind-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-witness-parent-snapshot-integrity-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-integrity-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-call-outcome-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/measurement-package-provenance-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/canonical-measurement-compiler-v0-14sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-first-treatment-prompts-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-instance-start-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-whole-corpus-index-cli-v1-12sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/build-portable-dae-lab-bundle-v1-15sep2026.mjs'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-message-lineage-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-message-lineage-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-inference-package-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-trajectory-package-integrity-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-call-outcome-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-measurement-package-provenance-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-first-treatment-prompts-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-instance-start-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-portable-message-addressability-v1-15sep2026.mjs'
+      - '.github/workflows/test-message-lineage-uids.yml'
+  push:
+    branches:
+      - message-lineage-uids-15sep2026
+
+permissions:
+  contents: read
+
+jobs:
+  message-lineage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Blum
+        uses: actions/checkout@v4
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Test event identity vs content identity
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-dae-message-lineage-graph-v0-15sep2026.js
+
+      - name: Checkout pinned DAE witness corpus
+        uses: actions/checkout@v4
+        with:
+          repository: YeshuaGod22/DevelopmentalAttractorEngineering
+          ref: e2d484b41461013832c00e9f1ba3549ac0ef2517
+          path: dae-witness
+
+      - name: Test every real EXP-003 observation reconstructs exactly
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-message-lineage-graph-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test call and inference package identity/conservation
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-inference-package-graph-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test trajectory package extension and branch-parent integrity
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-trajectory-package-integrity-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test outcome-aware inference call census
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-call-outcome-census-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test observation and measurement package provenance
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-measurement-package-provenance-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test every model trajectory exposes its first package and downstream depth
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-instance-start-census-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test provenance-strict first treatment prompt query
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-first-treatment-prompts-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test compact portable package bundle
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-portable-message-addressability-v1-15sep2026.mjs "$GITHUB_WORKSPACE/dae-witness" "$GITHUB_WORKSPACE"

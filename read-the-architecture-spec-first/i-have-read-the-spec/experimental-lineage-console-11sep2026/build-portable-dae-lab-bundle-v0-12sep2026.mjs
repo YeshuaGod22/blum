@@ -111,6 +111,26 @@ function stripPortableRow(row) {
   return rest;
 }
 
+function uniqueObservationRows(index) {
+  const rows = new Map();
+  for (const history of Object.values(index?.itemHistories || {})) {
+    for (const row of history?.observations || []) {
+      if (row?.observationId && !rows.has(String(row.observationId))) rows.set(String(row.observationId), row);
+    }
+  }
+  return [...rows.values()];
+}
+
+function observationPopulationCounts(index) {
+  const rows = uniqueObservationRows(index);
+  const coldSchemaNoLivedParent = rows.filter(row => row.ancestryType === 'cold_schema_no_lived_parent').length;
+  return {
+    allAddressableObservations: rows.length,
+    coldSchemaNoLivedParent,
+    nonColdSchemaObservations: rows.length - coldSchemaNoLivedParent,
+  };
+}
+
 function portableIndexProjection(index, daeCommit) {
   const itemHistories = {};
   for (const [itemId, history] of Object.entries(index.itemHistories || {})) {
@@ -119,11 +139,13 @@ function portableIndexProjection(index, daeCommit) {
       observations: (history.observations || []).map(stripPortableRow)
     };
   }
+  const populationCounts = observationPopulationCounts(index);
   return {
     schema: index.schema,
     identitySemantics: index.identitySemantics,
     generatedAt: index.generatedAt,
     observationCount: index.observationCount,
+    populationCounts,
     itemCount: index.itemCount,
     collections: index.collections,
     itemHistories,
@@ -278,7 +300,7 @@ async function main() {
     omittedWitnessClasses.push('Pilot raw witness payloads not explicitly included as normalized index or methodology');
   }
 
-  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Open the lab\n\nServe this directory locally:\n\n\`python3 -m http.server 8000\`\n\nthen open:\n\n\`http://localhost:8000/\`\n\nThe populated normalized corpus is bundled at:\n\n\`data/dae-whole-corpus-index-v1.json\`\n\nCompare and Analyze auto-mount that index in bundled mode. Their manual loaders remain available as fallback.\n\n## Corpus census generated during this build\n\n- observations: **${corpusIndex.observationCount}**\n- canonical items: **${corpusIndex.itemCount}**\n- discovered collections: \`${(corpusIndex.collectionDiscovery || []).join(', ')}\`\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. The populated normalized corpus index remains available for inspection. Use the full-witness profile for independent witness reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
+  const startHere = `# Blum + DAE portable experimental lab\n\nProfile: **${profile}**\n\n## Open the lab\n\nServe this directory locally:\n\n\`python3 -m http.server 8000\`\n\nthen open:\n\n\`http://localhost:8000/\`\n\nThe populated normalized corpus is bundled at:\n\n\`data/dae-whole-corpus-index-v1.json\`\n\nCompare and Analyze auto-mount that index in bundled mode. Their manual loaders remain available as fallback.\n\n## Corpus census generated during this build\n\n- addressable observations: **${corpusIndex.populationCounts.allAddressableObservations}**\n- non-cold-schema battery observations: **${corpusIndex.populationCounts.nonColdSchemaObservations}**\n- cold-schema observations: **${corpusIndex.populationCounts.coldSchemaNoLivedParent}**\n- canonical items: **${corpusIndex.itemCount}**\n- discovered collections: \`${(corpusIndex.collectionDiscovery || []).join(', ')}\`\n\n## Provenance\n\n- Blum commit: \`${blumCommit}\`\n- DAE commit: \`${daeCommit}\`${daeCommit === PINNED_DAE_COMMIT ? ' (pinned)' : ' (UNPINNED DEVELOPMENT BUILD)'}\n- Source experiment: \`${DAE_EXP_REL}\`\n\n## Bundle semantics\n\nRaw witness, mechanical projection, adjudication, derived measurement and graph/claim remain distinct layers. See \`BUNDLE-MANIFEST.json\` and the files under \`methodology/\`.\n\n${profile === 'portable-analysis' ? 'This analysis profile intentionally omits the bulk archived raw witness corpus. The populated normalized corpus index remains available for inspection. Use the full-witness profile for independent witness reconstruction.\n' : 'This full-witness profile includes the EXP-003 source experiment tree used for independent reconstruction/audit.\n'}\n`;
   await fs.writeFile(path.join(outRoot, 'START-HERE.md'), startHere, 'utf8');
 
   const stagedInventory = await inventory(outRoot);
@@ -298,7 +320,10 @@ async function main() {
       experimentPath: DAE_EXP_REL
     },
     generatedCorpusCensus: {
-      batteryObservations: corpusIndex.observationCount,
+      allAddressableObservations: corpusIndex.populationCounts.allAddressableObservations,
+      batteryObservations: corpusIndex.populationCounts.nonColdSchemaObservations,
+      nonColdSchemaObservations: corpusIndex.populationCounts.nonColdSchemaObservations,
+      coldSchemaNoLivedParent: corpusIndex.populationCounts.coldSchemaNoLivedParent,
       canonicalItemIds: corpusIndex.itemCount,
       discoveredCollections: corpusIndex.collectionDiscovery || [],
       collectionSummaries: corpusIndex.collectionSummaries || []
@@ -320,7 +345,9 @@ async function main() {
     output: outRoot,
     blumCommit,
     daeCommit,
-    observations: corpusIndex.observationCount,
+    observations: corpusIndex.populationCounts.allAddressableObservations,
+    batteryObservations: corpusIndex.populationCounts.nonColdSchemaObservations,
+    coldSchemaObservations: corpusIndex.populationCounts.coldSchemaNoLivedParent,
     items: corpusIndex.itemCount,
     files: finalInventory.length,
     bytes: finalInventory.reduce((n, x) => n + x.bytes, 0)

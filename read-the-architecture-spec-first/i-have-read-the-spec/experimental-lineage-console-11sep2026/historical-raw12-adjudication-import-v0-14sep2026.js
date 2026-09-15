@@ -3,10 +3,11 @@
 // HISTORICAL RAW12 ADJUDICATION IMPORT v0 — 14 Sep 2026
 //
 // Imports the frozen DAE EXP-003/RAW12-ADJUDICATIONS.json artifact as an
-// adjudication overlay. Matching is deliberately conservative:
+// adjudication overlay. Matching remains deliberately conservative:
 //   collection == raw12 AND exact source basename == historical row key
 // must identify exactly one canonical measurement row.
 // No response semantics are consulted and no fuzzy filename matching occurs.
+// Package/event provenance is copied only AFTER that exact measurement match.
 
 const path=require('path');
 const crypto=require('crypto');
@@ -46,6 +47,19 @@ function candidateRows(measurements,fileName) {
   );
 }
 
+function packageProvenanceFromRow(row) {
+  const p=row?.packageProvenance || {};
+  return {
+    status:p.status || null,
+    joinMethod:p.joinMethod || null,
+    callUid:p.callUid || null,
+    inputPackageUid:p.inputPackageUid || null,
+    outputPackageUid:p.outputPackageUid || null,
+    outputSectionUid:p.outputSectionUid || null,
+    outputSectionStatus:p.outputSectionStatus || null,
+  };
+}
+
 function importRaw12Adjudications(measurements,artifact,source={}) {
   if (!measurements || measurements.schema!=='blum-canonical-measurement-dataset-v0') throw new Error('unsupported_measurement_schema');
   validateHistoricalArtifact(artifact);
@@ -69,6 +83,7 @@ function importRaw12Adjudications(measurements,artifact,source={}) {
       measurementId:row.measurementId,
       observationId:row.observationId,
       itemId:row.itemId,
+      packageProvenance:packageProvenanceFromRow(row),
       sourceMatch:{collection:'raw12',sourceBasename:fileName,sourcePath:row.sourcePath},
       judgment:{
         validatedStatus:judgment.status,
@@ -84,6 +99,7 @@ function importRaw12Adjudications(measurements,artifact,source={}) {
         sourceSchemaVersion:artifact.schema_version,
         sourceRubric:artifact.rubric,
         importPolicy:'exact_raw12_collection_plus_exact_source_basename_unique_match_v0',
+        measurementPackageProvenanceCopiedAfterExactMeasurementMatch:true,
       },
     });
   }
@@ -107,4 +123,4 @@ function importRaw12Adjudications(measurements,artifact,source={}) {
   };
 }
 
-module.exports={stableStringify,sha256,basename,validateHistoricalArtifact,normalizeJudgment,candidateRows,importRaw12Adjudications};
+module.exports={stableStringify,sha256,basename,validateHistoricalArtifact,normalizeJudgment,candidateRows,packageProvenanceFromRow,importRaw12Adjudications};

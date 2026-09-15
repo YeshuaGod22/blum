@@ -9,6 +9,10 @@ function row(measurementId,sourcePath,extra={}) {
     collection:extra.collection||'raw12',condition:extra.condition||'C',family:'C',replicate:1,sourcePath,
     parseStatus:extra.parseStatus||'unparsed',resolutionStatus:extra.resolutionStatus||'adjudication_required',
     valueKind:extra.valueKind||null,value:extra.value??null,adjudicationTask:{taskId:'adj-'+measurementId},parserEvidence:{parserId:'strict_number'},
+    packageProvenance:{
+      status:'call_resolved',joinMethod:'observation_id',callUid:'call-'+measurementId,inputPackageUid:'in-'+measurementId,
+      outputPackageUid:'out-'+measurementId,outputSectionUid:'sec-'+measurementId,outputSectionStatus:'resolved_by_tag',
+    },
   };
 }
 const measurements={
@@ -43,6 +47,14 @@ assert.deepEqual(imported.ambiguous[0].measurementIds.sort(),['m_dup1','m_dup2']
 assert.deepEqual(imported.unmatched.map(x=>x.fileName).sort(),['MISSING.json','ONLY11.json']);
 assert.ok(imported.sourceArtifact.fingerprint.startsWith('sha256:'));
 assert.equal(imported.imported[0].provenance.importPolicy,'exact_raw12_collection_plus_exact_source_basename_unique_match_v0');
+assert.equal(imported.imported[0].provenance.measurementPackageProvenanceCopiedAfterExactMeasurementMatch,true);
+
+const exactEntry=imported.imported.find(x=>x.measurementId==='m_exact');
+assert.equal(exactEntry.packageProvenance.callUid,'call-m_exact');
+assert.equal(exactEntry.packageProvenance.inputPackageUid,'in-m_exact');
+assert.equal(exactEntry.packageProvenance.outputPackageUid,'out-m_exact');
+assert.equal(exactEntry.packageProvenance.outputSectionUid,'sec-m_exact');
+assert.equal(exactEntry.packageProvenance.status,'call_resolved');
 
 const effective=O.applyAdjudicationOverlay(measurements,imported);
 assert.equal(effective.schema,'blum-effective-measurement-dataset-v0');
@@ -56,6 +68,9 @@ assert.equal(byId.m_exact.effective.value,null);
 assert.equal(byId.m_exact.effective.source,'historical_adjudication');
 assert.equal(byId.m_exact.mechanical.parseStatus,'unparsed');
 assert.equal(byId.m_exact.parseStatus,'unparsed','top-level canonical mechanical fields remain unchanged');
+assert.equal(byId.m_exact.adjudication.packageProvenance.callUid,'call-m_exact');
+assert.equal(byId.m_exact.adjudication.packageProvenance.outputPackageUid,'out-m_exact');
+assert.equal(byId.m_exact.adjudication.packageProvenance.outputSectionUid,'sec-m_exact');
 
 // Historical midpoint remains explicitly attributed to its historical frozen rule.
 assert.equal(byId.m_range.effective.status,'adjudicated_resolved');
@@ -65,10 +80,11 @@ assert.equal(byId.m_range.effective.derivation,'historical_range_midpoint_rule')
 assert.equal(byId.m_range.value,2,'mechanical value must not be overwritten');
 assert.equal(byId.m_range.mechanical.value,2);
 assert.equal(byId.m_range.adjudication.judgment.validatedStatus,'range_midpoint_answer');
+assert.equal(byId.m_range.adjudication.packageProvenance.callUid,'call-m_range');
 
 // Unmatched/ambiguous historical rows cannot silently alter measurements.
 assert.equal(byId.m_dup1.adjudication,null);
 assert.equal(byId.m_dup1.effective.source,'mechanical');
 assert.equal(byId.m_wrong_collection.adjudication,null);
 
-console.log('historical RAW12 adjudication import + overlay regression: PASS');
+console.log('historical RAW12 adjudication import + overlay package-provenance regression: PASS');

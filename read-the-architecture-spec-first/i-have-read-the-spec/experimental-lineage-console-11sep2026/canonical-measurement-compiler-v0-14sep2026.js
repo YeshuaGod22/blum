@@ -7,8 +7,13 @@
 // must name an item parser in the frozen battery and that parser must resolve
 // in the supplied parser registry. Anything else remains an explicit terminal
 // or adjudication-required state.
+//
+// When the source index carries the inference-package graph, each measurement
+// is also mechanically joined to the call/output package that produced it and,
+// where uniquely resolvable, the exact output section used as its answer surface.
 
 const crypto = require('crypto');
+const PackageProvenance = require('./measurement-package-provenance-v0-15sep2026.js');
 
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -63,6 +68,9 @@ function taskFor(row, taskType, reason) {
     observationId:row.observationId,
     itemId:row.itemId,
     itemVersion:row.itemVersion,
+    callUid:row.packageProvenance?.callUid || null,
+    outputPackageUid:row.packageProvenance?.outputPackageUid || null,
+    outputSectionUid:row.packageProvenance?.outputSectionUid || null,
   };
 }
 
@@ -87,6 +95,7 @@ function baseRow(battery, item, observation) {
     callOutcome:observation.callOutcome || null,
     stopReason:observation.stopReason || null,
     responseSurface:null,
+    packageProvenance:null,
     parseStatus:null,
     resolutionStatus:null,
     valueKind:null,
@@ -106,6 +115,13 @@ function compileObservation(battery, item, observation, deps) {
     text:answer.status === 'ok' ? (answer.text ?? null) : null,
     candidateText:answer.status === 'adjudication_required' ? (answer.candidateText ?? null) : null,
   };
+  row.packageProvenance = deps.packageProvenanceResolver
+    ? deps.packageProvenanceResolver(observation, row.responseSurface)
+    : {
+        status:'package_provenance_unavailable', joinMethod:null,
+        callUid:null, inputPackageUid:null, outputPackageUid:null,
+        outputSectionUid:null, outputSectionStatus:'not_resolved',
+      };
 
   if (answer.status === 'empty') {
     row.parseStatus='empty';
@@ -184,11 +200,18 @@ function compileCanonicalMeasurements(index, battery, deps) {
   if (!deps || !deps.answerOutcome || typeof deps.answerOutcome.project !== 'function') throw new Error('answer_outcome_projection_required');
   if (!deps.parsers || typeof deps.parsers !== 'object') throw new Error('parser_registry_required');
 
+  const effectiveDeps = {
+    ...deps,
+    packageProvenanceResolver: typeof deps.packageProvenanceResolver === 'function'
+      ? deps.packageProvenanceResolver
+      : ((observation, responseSurface) => PackageProvenance.resolveObservationPackageProvenance(index, observation, responseSurface)),
+  };
+
   const itemIds=battery.items.map(x => String(x.id));
   const rows=[];
   for (const item of battery.items) {
     const observations=index.itemHistories?.[item.id]?.observations || [];
-    for (const observation of observations) rows.push(compileObservation(battery,item,observation,deps));
+    for (const observation of observations) rows.push(compileObservation(battery,item,observation,effectiveDeps));
   }
 
   const adjudicationQueue=rows.filter(r => r.resolutionStatus === 'adjudication_required').map(r => ({...r.adjudicationTask}));
@@ -202,6 +225,7 @@ function compileCanonicalMeasurements(index, battery, deps) {
       itemCount:index.itemCount ?? null,
       repository:index.source?.repository || null,
       commit:index.source?.commit || null,
+      inferencePackageGraphSchema:index.inferencePackageGraph?.schema || null,
     },
     batteryRef:{
       batteryId:battery.batteryId,
@@ -211,6 +235,7 @@ function compileCanonicalMeasurements(index, battery, deps) {
     itemIds,
     measurementCount:rows.length,
     summaries:summarize(rows,itemIds),
+    packageProvenanceSummary:PackageProvenance.summarizePackageProvenance(rows),
     rows,
     adjudicationQueue,
   };

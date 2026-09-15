@@ -8,6 +8,9 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const LAB_REL = 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026';
 const EXPECTED_DAE = 'e2d484b41461013832c00e9f1ba3549ac0ef2517';
+const EXPECTED_ADDRESSABLE = 2378;
+const EXPECTED_NON_COLD_SCHEMA = 2028;
+const EXPECTED_COLD_SCHEMA = 350;
 
 function assert(ok, msg) { if (!ok) throw new Error(msg); }
 async function exists(p) { try { await fs.access(p); return true; } catch { return false; } }
@@ -26,7 +29,9 @@ async function runProfile({ blumRoot, daeRoot, profile, tmp }) {
 
   const report = JSON.parse(stdout);
   assert(report.ok === true, `${profile}: builder did not report ok`);
-  assert(report.observations === 2028, `${profile}: expected 2028 observations, got ${report.observations}`);
+  assert(report.observations === EXPECTED_ADDRESSABLE, `${profile}: expected ${EXPECTED_ADDRESSABLE} addressable observations, got ${report.observations}`);
+  assert(report.batteryObservations === EXPECTED_NON_COLD_SCHEMA, `${profile}: expected ${EXPECTED_NON_COLD_SCHEMA} non-cold-schema battery observations, got ${report.batteryObservations}`);
+  assert(report.coldSchemaObservations === EXPECTED_COLD_SCHEMA, `${profile}: expected ${EXPECTED_COLD_SCHEMA} cold-schema observations, got ${report.coldSchemaObservations}`);
   assert(report.items === 27, `${profile}: expected 27 canonical items, got ${report.items}`);
 
   for (const required of [
@@ -43,13 +48,19 @@ async function runProfile({ blumRoot, daeRoot, profile, tmp }) {
   assert(manifest.profile === profile, `${profile}: manifest profile mismatch`);
   assert(manifest.sourceCorpus.commit === EXPECTED_DAE, `${profile}: DAE commit mismatch`);
   assert(manifest.sourceCorpus.pinned === true, `${profile}: source not marked pinned`);
-  assert(manifest.generatedCorpusCensus.batteryObservations === 2028, `${profile}: manifest observation census mismatch`);
+  assert(manifest.generatedCorpusCensus.allAddressableObservations === EXPECTED_ADDRESSABLE, `${profile}: manifest addressable-observation census mismatch`);
+  assert(manifest.generatedCorpusCensus.batteryObservations === EXPECTED_NON_COLD_SCHEMA, `${profile}: manifest battery observation census mismatch`);
+  assert(manifest.generatedCorpusCensus.nonColdSchemaObservations === EXPECTED_NON_COLD_SCHEMA, `${profile}: manifest non-cold-schema census mismatch`);
+  assert(manifest.generatedCorpusCensus.coldSchemaNoLivedParent === EXPECTED_COLD_SCHEMA, `${profile}: manifest cold-schema census mismatch`);
   assert(manifest.generatedCorpusCensus.canonicalItemIds === 27, `${profile}: manifest item census mismatch`);
   assert(Array.isArray(manifest.files) && manifest.files.length > 10, `${profile}: manifest inventory missing`);
 
   const index = await readJson(path.join(out, 'data/dae-whole-corpus-index-v1.json'));
   assert(index.schema === 'blum-dae-unified-observation-index-v1', `${profile}: wrong index schema`);
-  assert(index.observationCount === 2028, `${profile}: index observation count mismatch`);
+  assert(index.observationCount === EXPECTED_ADDRESSABLE, `${profile}: index addressable-observation count mismatch`);
+  assert(index.populationCounts?.allAddressableObservations === EXPECTED_ADDRESSABLE, `${profile}: index total population census mismatch`);
+  assert(index.populationCounts?.nonColdSchemaObservations === EXPECTED_NON_COLD_SCHEMA, `${profile}: index non-cold-schema population census mismatch`);
+  assert(index.populationCounts?.coldSchemaNoLivedParent === EXPECTED_COLD_SCHEMA, `${profile}: index cold-schema population census mismatch`);
   assert(index.itemCount === 27, `${profile}: index item count mismatch`);
   assert(index.source.commit === EXPECTED_DAE, `${profile}: normalized index lacks pinned commit`);
 
@@ -82,7 +93,7 @@ async function main() {
     const results = [];
     results.push(await runProfile({ blumRoot, daeRoot: path.resolve(daeRoot), profile: 'portable-analysis', tmp }));
     results.push(await runProfile({ blumRoot, daeRoot: path.resolve(daeRoot), profile: 'full-witness', tmp }));
-    console.log(JSON.stringify({ ok: true, results }, null, 2));
+    console.log(JSON.stringify({ ok: true, populations: { allAddressable: EXPECTED_ADDRESSABLE, nonColdSchema: EXPECTED_NON_COLD_SCHEMA, coldSchema: EXPECTED_COLD_SCHEMA }, results }, null, 2));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

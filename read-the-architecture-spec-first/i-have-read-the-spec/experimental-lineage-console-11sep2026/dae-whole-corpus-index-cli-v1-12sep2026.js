@@ -4,12 +4,20 @@
 //   node dae-whole-corpus-index-cli-v1-12sep2026.js <EXP-003-root> [output.json]
 //
 // Whole-corpus battery-observation index with v1 identity semantics:
-// canonical item ID, literal item-core wording, and complete presentation.
+// canonical item ID, literal item-core wording, complete presentation,
+// inference-call/package identity, compatibility message lineage, and trajectories.
 
 const fs = require('fs');
 const path = require('path');
 const Importer = require('./dae-corpus-lineage-import-cli-v0-11sep2026.js');
 const Unified = require('./dae-unified-observation-index-v1-12sep2026.js');
+const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
+const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
+const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
+const TrajectoryPackages = require('./dae-trajectory-package-bind-v0-15sep2026.js');
+const WitnessParentSnapshots = require('./dae-witness-parent-snapshot-integrity-v0-15sep2026.js');
+const TrajectoryIntegrity = require('./dae-trajectory-package-integrity-v0-15sep2026.js');
+const CallOutcomes = require('./dae-call-outcome-census-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
   if (!fs.existsSync(file)) return null;
@@ -57,6 +65,36 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
   }
 
   const index = Unified.buildUnifiedIndex({ pilot1Record, collections });
+
+  // Compatibility projection retained for existing message-level consumers.
+  MessageGraph.attachMessageGraph(index, { collections });
+
+  // Primary experimental unit: one inference call owns one complete input package
+  // and one complete output package. System framing and conversation content are
+  // sections inside the input package, not peer top-level inference units.
+  PackageGraph.attachInferencePackageGraph(index, { pilot1Record, collections });
+
+  // Trajectories are ordered administered calls. Inherited history visible to a
+  // branch is content inside its branch input package; it is NOT counted as
+  // downstream calls belonging to the branch trajectory.
+  InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
+  TrajectoryPackages.bindTrajectoryPackages(index);
+
+  // Historical collections sometimes preserve the exact inherited parent prefix
+  // inside each branch witness without retaining the parent inference calls as
+  // materialized corpus events. Verify that frozen snapshot independently. This
+  // proves prefix ancestry without fabricating a missing parent trajectory.
+  WitnessParentSnapshots.attachWitnessParentSnapshotIntegrity(index, { collections });
+
+  // Prove topology from package contents rather than trusting labels/order alone.
+  // Materialized parents use terminal-call state; absent parents may use the
+  // independently verified frozen witness snapshot proof class above.
+  TrajectoryIntegrity.attachTrajectoryPackageIntegrity(index);
+
+  // Outcome is a property of an already-identified call, never part of its UID.
+  // This separates administered depth from normally-completed depth.
+  CallOutcomes.attachCallOutcomeCensus(index);
+
   index.source = {
     experimentRoot: root,
     repository: options.repository || 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -84,6 +122,19 @@ function main(argv) {
   console.error(JSON.stringify({
     observations: index.observationCount,
     items: index.itemCount,
+    calls: index.inferencePackageGraph?.callCount ?? null,
+    inputPackages: index.inferencePackageGraph?.inputPackageCount ?? null,
+    outputPackages: index.inferencePackageGraph?.outputPackageCount ?? null,
+    packageSections: index.inferencePackageGraph?.sectionCount ?? null,
+    compatibilityMessageNodes: index.messageGraph?.nodeCount ?? null,
+    trajectories: index.instanceStartCensus?.instanceCount ?? null,
+    packageBoundTrajectories: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
+    trajectoriesWithFurtherInferenceCalls: index.instanceStartCensus?.withFurtherInferenceCalls ?? null,
+    witnessParentSnapshotStatuses: index.witnessParentSnapshotIntegrity?.statuses ?? null,
+    trunkTransitionStatuses: index.trajectoryPackageIntegrity?.trunkTransitionStatuses ?? null,
+    branchParentRelationStatuses: index.trajectoryPackageIntegrity?.branchParentRelationStatuses ?? null,
+    callOutcomeCounts: index.callOutcomeCensus?.callOutcomeCounts ?? null,
+    trajectoriesWithIncompleteCalls: index.callOutcomeCensus?.trajectoriesWithIncompleteCalls ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
     largestItemHistories: Object.values(index.itemHistories)
