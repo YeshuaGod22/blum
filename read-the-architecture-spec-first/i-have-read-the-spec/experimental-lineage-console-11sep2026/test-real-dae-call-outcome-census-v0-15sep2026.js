@@ -32,8 +32,20 @@ function main() {
     assert.ok(instance.downstreamCompleteInferenceCallCount <= instance.downstreamInferenceCallCount);
   }
 
-  // Print census before pinning any outcome-specific counts. The point of this
-  // first run is to expose the actual corpus rather than encode expectations.
+  const incomplete = outcome.trajectories.filter(x => x.completeCallCount !== x.administeredCallCount);
+  assert.deepEqual(outcome.callOutcomeCounts, { complete: 2658, truncated: 1 });
+  assert.equal(incomplete.length, 1);
+  assert.equal(incomplete[0].collection, 'raw12');
+  assert.equal(incomplete[0].trunkKey, 'H-r1');
+  assert.equal(incomplete[0].administeredCallCount, 9);
+  assert.equal(incomplete[0].incompleteCalls.length, 1);
+  const truncated = incomplete[0].incompleteCalls[0];
+  assert.equal(truncated.normalizedOutcome, 'truncated');
+  assert.equal(truncated.turn, 5);
+  assert.equal(truncated.stopReason, 'max_tokens');
+  assert.ok(String(truncated.sourcePath).endsWith('/raw12/H-r1-t5.json') || String(truncated.sourcePath).endsWith('raw12/H-r1-t5.json'));
+  assert.ok(truncated.callUid && truncated.inputPackageUid && truncated.outputPackageUid, 'truncated call must remain fully addressable');
+
   console.log('CALL OUTCOME CENSUS');
   console.log(JSON.stringify({
     callCount: outcome.callCount,
@@ -41,7 +53,7 @@ function main() {
     trajectoryCount: outcome.trajectoryCount,
     trajectoriesFullyComplete: outcome.trajectoriesFullyComplete,
     trajectoriesWithIncompleteCalls: outcome.trajectoriesWithIncompleteCalls,
-    incompleteSamples: outcome.trajectories.filter(x => x.completeCallCount !== x.administeredCallCount).slice(0, 30),
+    incompleteSamples: incomplete,
   }, null, 2));
 
   console.log('PASS real DAE call outcome census');
