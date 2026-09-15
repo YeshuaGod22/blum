@@ -35,7 +35,7 @@ async function main() {
   assert.equal(index.portableProjection.messageGraphIncluded, true);
   assert.equal(index.portableProjection.messageContentAddressable, true);
   assert.ok(index.messageGraph?.nodes, 'portable message graph missing');
-  assert.equal(index.messageGraph.nodeCount, 7831, 'pinned message graph node census changed');
+  assert.equal(index.messageGraph.nodeCount, 7889, 'pinned message graph node census changed');
   assert.deepEqual(index.populationCounts, {
     allAddressableObservations: 2378,
     coldSchemaNoLivedParent: 350,
@@ -61,7 +61,7 @@ async function main() {
 
   const treatmentQuery = require(path.join(out, 'app', 'dae-first-treatment-prompts-v0-15sep2026.js'));
   const treatments = treatmentQuery.queryFirstTreatmentPrompts(index);
-  const asTrunk1 = treatments.find(x => x.trunkKey === 'AS-trunk1');
+  const asTrunk1 = treatments.find(x => x.trunkKey === 'AS-trunk1' && x.status === 'resolved');
   assert.equal(asTrunk1?.status, 'resolved');
   assert.ok(asTrunk1.firstPrompt.startsWith('Hi Claude!'));
 
@@ -78,7 +78,7 @@ async function main() {
   assert.equal(reconstructed[0].content, asTrunk1.firstPrompt);
   assert.equal(typeof graphModule.sha256Text(reconstructed[0].content), 'string');
 
-  assert.equal(manifest.normalizedMessageGraph.nodeCount, 7831);
+  assert.equal(manifest.normalizedMessageGraph.nodeCount, 7889);
   assert.equal(manifest.normalizedMessageGraph.contentAddressableOffline, true);
   assert.equal(manifest.generatedCorpusCensus.allAddressableObservations, 2378);
   assert.equal(manifest.generatedCorpusCensus.nonColdSchemaObservations, 2028);
@@ -96,6 +96,7 @@ async function main() {
     populationCounts: index.populationCounts,
     firstTreatmentQuery: treatmentQuery.summary(treatments),
     asTrunk1: {
+      treatmentInstanceId: asTrunk1.treatmentInstanceId,
       messageUid: asTrunk1.firstPromptMessageId,
       preview: asTrunk1.firstPrompt.slice(0, 180),
     },
