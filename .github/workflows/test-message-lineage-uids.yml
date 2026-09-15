@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-message-lineage-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-inference-package-graph-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-first-treatment-prompts-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-instance-start-census-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-whole-corpus-index-cli-v1-12sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/build-portable-dae-lab-bundle-v1-15sep2026.mjs'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-dae-message-lineage-graph-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-message-lineage-graph-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-inference-package-graph-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-first-treatment-prompts-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-instance-start-census-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-portable-message-addressability-v1-15sep2026.mjs'
@@ -49,7 +51,11 @@ jobs:
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-real-dae-message-lineage-graph-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
 
-      - name: Test every model instance exposes its first input and downstream depth
+      - name: Test call and inference package identity/conservation
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-inference-package-graph-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test every model trajectory exposes its first package and downstream depth
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-real-dae-instance-start-census-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
 
