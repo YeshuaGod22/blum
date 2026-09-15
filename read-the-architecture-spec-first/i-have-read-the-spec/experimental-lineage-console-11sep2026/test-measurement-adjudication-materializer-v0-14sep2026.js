@@ -19,7 +19,10 @@ const index={schema:'blum-dae-unified-observation-index-v1',observations:[observ
 const row={
   measurementId:'m_1',observationId:'obs1',itemId:'N4',itemVersion:1,collection:'raw7',condition:'C',family:'C',replicate:9,sourcePath:'secret/path.json',
   resolutionStatus:'adjudication_required',parseStatus:'unparsed',responseSurface:{status:'ok',source:'plain_response',text:observation.rawOutput},parserEvidence:{parserId:'strict_number',rawResult:{parsed:false}},
-  adjudicationTask:{taskId:'adj_1',taskType:'measurement_parse',measurementId:'m_1',observationId:'obs1',itemId:'N4',itemVersion:1},
+  packageProvenance:{
+    status:'call_resolved',joinMethod:'observation_id',callUid:'call_secret',inputPackageUid:'inpkg_secret',outputPackageUid:'outpkg_secret',outputSectionUid:'outsec_secret',outputSectionStatus:'resolved_by_tag'
+  },
+  adjudicationTask:{taskId:'adj_1',taskType:'measurement_parse',measurementId:'m_1',observationId:'obs1',itemId:'N4',itemVersion:1,callUid:'call_secret',outputPackageUid:'outpkg_secret',outputSectionUid:'outsec_secret'},
 };
 const measurements={schema:'blum-canonical-measurement-dataset-v0',sourceIndex:{commit:'fixture'},batteryRef:{batteryId:'fixture',version:1,fingerprint:'sha256:fixture'},rows:[row]};
 
@@ -29,14 +32,21 @@ assert.equal(batch.execution.populationSnapshot.length,1);
 assert.equal(batch.assignments.length,3);
 assert.equal(batch.provenance.length,1);
 assert.equal(batch.provenance[0].condition,'C','hidden provenance must remain recoverable outside reader packets');
+assert.equal(batch.provenance[0].callUid,'call_secret');
+assert.equal(batch.provenance[0].inputPackageUid,'inpkg_secret');
+assert.equal(batch.provenance[0].outputPackageUid,'outpkg_secret');
+assert.equal(batch.provenance[0].outputSectionUid,'outsec_secret');
+assert.equal(batch.provenance[0].packageProvenanceStatus,'call_resolved');
+assert.equal(batch.provenance[0].outputSectionStatus,'resolved_by_tag');
+assert.equal(batch.privacyBoundary.packageEventIdsStoredOutsideReaderPacket,true);
+
 const packet=batch.assignments[0].packet;
 assert.equal(packet.evidence.exact_question,'Exact presented N4 question');
 assert.equal(packet.evidence.raw_response,observation.rawOutput);
 const serialized=JSON.stringify(packet);
-assert.equal(serialized.includes('secret/path.json'),false);
-assert.equal(serialized.includes('"condition":"C"'),false);
-assert.equal(serialized.includes('"family":"C"'),false);
-assert.equal(serialized.includes('"replicate":9'),false);
+for (const hidden of ['secret/path.json','"condition":"C"','"family":"C"','"replicate":9','call_secret','inpkg_secret','outpkg_secret','outsec_secret']) {
+  assert.equal(serialized.includes(hidden),false,`reader packet leaked hidden provenance: ${hidden}`);
+}
 assert.ok(/^u_[0-9a-f]{12}$/.test(batch.assignments[0].unitId));
 assert.ok(batch.execution.executionFingerprint);
 assert.ok(batch.execution.specFingerprint);
