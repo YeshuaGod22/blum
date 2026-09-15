@@ -14,6 +14,7 @@ const Unified = require('./dae-unified-observation-index-v1-12sep2026.js');
 const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
 const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
 const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
+const TrajectoryPackages = require('./dae-trajectory-package-bind-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
   if (!fs.existsSync(file)) return null;
@@ -62,23 +63,19 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
 
   const index = Unified.buildUnifiedIndex({ pilot1Record, collections });
 
-  // Compatibility layer: preserve addressability of the September message-level
-  // normalized observation graph. This is now a projection below the inference
-  // package layer, not the primary experimental unit.
+  // Compatibility projection retained for existing message-level consumers.
   MessageGraph.attachMessageGraph(index, { collections });
 
-  // Primary inference ontology: one CALL owns one complete INPUT PACKAGE and one
-  // complete OUTPUT PACKAGE. System framing and ordered conversation messages are
-  // sections of the input package; parsed XML-ish spans are second-layer output
-  // sections. Frozen witnesses remain authoritative for provider-byte serialization.
+  // Primary experimental unit: one inference call owns one complete input package
+  // and one complete output package. System framing and conversation content are
+  // sections inside the input package, not peer top-level inference units.
   PackageGraph.attachInferencePackageGraph(index, { pilot1Record, collections });
 
-  // Trajectory identity is distinct from replicate/trunk labels and from calls.
-  // Build the trajectory census, then bind every trajectory to package-bearing
-  // call UIDs. Branch trajectories may reference inherited calls while owning
-  // only their branch call; each administered call itself is created exactly once.
+  // Trajectories are ordered administered calls. Inherited history visible to a
+  // branch is content inside its branch input package; it is NOT counted as
+  // downstream calls belonging to the branch trajectory.
   InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
-  PackageGraph.bindPackagesToInstances(index);
+  TrajectoryPackages.bindTrajectoryPackages(index);
 
   index.source = {
     experimentRoot: root,
@@ -112,9 +109,9 @@ function main(argv) {
     outputPackages: index.inferencePackageGraph?.outputPackageCount ?? null,
     packageSections: index.inferencePackageGraph?.sectionCount ?? null,
     compatibilityMessageNodes: index.messageGraph?.nodeCount ?? null,
-    instances: index.instanceStartCensus?.instanceCount ?? null,
-    packageBoundInstances: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
-    instancesWithFurtherPairs: index.instanceStartCensus?.withFurtherInputOutputPairs ?? null,
+    trajectories: index.instanceStartCensus?.instanceCount ?? null,
+    packageBoundTrajectories: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
+    trajectoriesWithFurtherInferenceCalls: index.instanceStartCensus?.withFurtherInferenceCalls ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
     largestItemHistories: Object.values(index.itemHistories)
