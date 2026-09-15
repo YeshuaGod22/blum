@@ -4,14 +4,15 @@
 //   node dae-whole-corpus-index-cli-v1-12sep2026.js <EXP-003-root> [output.json]
 //
 // Whole-corpus battery-observation index with v1 identity semantics:
-// canonical item ID, literal item-core wording, complete presentation, the
-// February-Blum-compatible message UID lineage extension, and instance starts.
+// canonical item ID, literal item-core wording, complete presentation,
+// inference-call/package identity, compatibility message lineage, and trajectories.
 
 const fs = require('fs');
 const path = require('path');
 const Importer = require('./dae-corpus-lineage-import-cli-v0-11sep2026.js');
 const Unified = require('./dae-unified-observation-index-v1-12sep2026.js');
 const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
+const PackageGraph = require('./dae-inference-package-graph-v0-15sep2026.js');
 const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
@@ -61,18 +62,23 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
 
   const index = Unified.buildUnifiedIndex({ pilot1Record, collections });
 
-  // Important: attach the message graph while the imported source observations
-  // are still available. The source objects contain verified parent-prefix
-  // lengths and recorded system prompts that v1 observation rows historically
-  // did not preserve. Message identity therefore comes from provenance/lineage,
-  // never from a later guess based on matching text.
+  // Compatibility layer: preserve addressability of the September message-level
+  // normalized observation graph. This is now a projection below the inference
+  // package layer, not the primary experimental unit.
   MessageGraph.attachMessageGraph(index, { collections });
 
-  // Instance identity is not the same as replicate/trunk labels. The census uses
-  // the original trunk-turn collections plus Pilot-1 record.json so a lived
-  // conversation is one instance, while each independent cold/cold-schema call
-  // and each branch call remains its own instance.
+  // Primary inference ontology: one CALL owns one complete INPUT PACKAGE and one
+  // complete OUTPUT PACKAGE. System framing and ordered conversation messages are
+  // sections of the input package; parsed XML-ish spans are second-layer output
+  // sections. Frozen witnesses remain authoritative for provider-byte serialization.
+  PackageGraph.attachInferencePackageGraph(index, { pilot1Record, collections });
+
+  // Trajectory identity is distinct from replicate/trunk labels and from calls.
+  // Build the trajectory census, then bind every trajectory to package-bearing
+  // call UIDs. Branch trajectories may reference inherited calls while owning
+  // only their branch call; each administered call itself is created exactly once.
   InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
+  PackageGraph.bindPackagesToInstances(index);
 
   index.source = {
     experimentRoot: root,
@@ -101,8 +107,13 @@ function main(argv) {
   console.error(JSON.stringify({
     observations: index.observationCount,
     items: index.itemCount,
-    messageNodes: index.messageGraph?.nodeCount ?? null,
+    calls: index.inferencePackageGraph?.callCount ?? null,
+    inputPackages: index.inferencePackageGraph?.inputPackageCount ?? null,
+    outputPackages: index.inferencePackageGraph?.outputPackageCount ?? null,
+    packageSections: index.inferencePackageGraph?.sectionCount ?? null,
+    compatibilityMessageNodes: index.messageGraph?.nodeCount ?? null,
     instances: index.instanceStartCensus?.instanceCount ?? null,
+    packageBoundInstances: index.instanceStartCensus?.packageBoundInstanceCount ?? null,
     instancesWithFurtherPairs: index.instanceStartCensus?.withFurtherInputOutputPairs ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
