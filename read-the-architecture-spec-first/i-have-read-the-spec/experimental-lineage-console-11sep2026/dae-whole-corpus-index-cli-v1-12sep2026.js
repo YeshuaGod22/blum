@@ -4,14 +4,15 @@
 //   node dae-whole-corpus-index-cli-v1-12sep2026.js <EXP-003-root> [output.json]
 //
 // Whole-corpus battery-observation index with v1 identity semantics:
-// canonical item ID, literal item-core wording, complete presentation, and
-// the February-Blum-compatible message UID lineage extension.
+// canonical item ID, literal item-core wording, complete presentation, the
+// February-Blum-compatible message UID lineage extension, and instance starts.
 
 const fs = require('fs');
 const path = require('path');
 const Importer = require('./dae-corpus-lineage-import-cli-v0-11sep2026.js');
 const Unified = require('./dae-unified-observation-index-v1-12sep2026.js');
 const MessageGraph = require('./dae-message-lineage-graph-v0-15sep2026.js');
+const InstanceCensus = require('./dae-instance-start-census-v0-15sep2026.js');
 
 function readJsonIfExists(file) {
   if (!fs.existsSync(file)) return null;
@@ -67,6 +68,12 @@ function buildWholeCorpusIndex(experimentRoot, options = {}) {
   // never from a later guess based on matching text.
   MessageGraph.attachMessageGraph(index, { collections });
 
+  // Instance identity is not the same as replicate/trunk labels. The census uses
+  // the original trunk-turn collections plus Pilot-1 record.json so a lived
+  // conversation is one instance, while each independent cold/cold-schema call
+  // and each branch call remains its own instance.
+  InstanceCensus.attachInstanceStartCensus(index, { pilot1Record, collections });
+
   index.source = {
     experimentRoot: root,
     repository: options.repository || 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -95,6 +102,8 @@ function main(argv) {
     observations: index.observationCount,
     items: index.itemCount,
     messageNodes: index.messageGraph?.nodeCount ?? null,
+    instances: index.instanceStartCensus?.instanceCount ?? null,
+    instancesWithFurtherPairs: index.instanceStartCensus?.withFurtherInputOutputPairs ?? null,
     collections: index.collections,
     discovered: index.collectionDiscovery,
     largestItemHistories: Object.values(index.itemHistories)
