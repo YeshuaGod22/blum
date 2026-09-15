@@ -6,9 +6,8 @@
  * Runs the frozen v0 bundle builder, then upgrades the normalized portable
  * projection so repeated modelVisibleMessages arrays may remain omitted while
  * their complete prompt/output content stays UID-addressable in messageGraph.
- *
- * This preserves the February Blum rule: keep ground-truth data addressable;
- * compress/project at read/distribution time without deleting the experiment.
+ * It also ships the instance-start census: every root/trunk/branch instance's
+ * first administered input plus downstream input-output depth.
  */
 
 import fs from 'node:fs/promises';
@@ -99,8 +98,9 @@ async function main() {
   const wholeIndexCli = path.join(labSource, 'dae-whole-corpus-index-cli-v1-12sep2026.js');
   const graphModule = path.join(labSource, 'dae-message-lineage-graph-v0-15sep2026.js');
   const treatmentQuery = path.join(labSource, 'dae-first-treatment-prompts-v0-15sep2026.js');
+  const instanceCensusModule = path.join(labSource, 'dae-instance-start-census-v0-15sep2026.js');
 
-  for (const required of [v0, wholeIndexCli, graphModule, treatmentQuery]) {
+  for (const required of [v0, wholeIndexCli, graphModule, treatmentQuery, instanceCensusModule]) {
     if (!(await exists(required))) throw new Error(`Required source missing: ${required}`);
   }
 
@@ -122,8 +122,7 @@ async function main() {
   const portableIndex = JSON.parse(await fs.readFile(indexPath, 'utf8'));
 
   // Rebuild from the same pinned witness checkout used by v0. We need the
-  // canonical graph because v0 intentionally dropped modelVisibleMessages
-  // before the message-lineage layer existed.
+  // canonical graph and instance census because v0 predates both layers.
   const { buildWholeCorpusIndex } = require(wholeIndexCli);
   const fullIndex = buildWholeCorpusIndex(path.join(daeRoot, DAE_EXP_REL), {
     repository: 'YeshuaGod22/DevelopmentalAttractorEngineering',
@@ -134,12 +133,16 @@ async function main() {
   if (!fullIndex.messageGraph?.nodes || !fullIndex.messageLineage) {
     throw new Error('Canonical index did not produce message lineage graph');
   }
+  if (!fullIndex.instanceStartCensus?.instances) {
+    throw new Error('Canonical index did not produce instance-start census');
+  }
 
   // The portable rows already retain modelVisibleMessageIds/input/output refs
   // because v0 strips only the repeated modelVisibleMessages payload. Injecting
   // the graph therefore makes those refs fully dereferenceable offline.
   portableIndex.messageGraph = fullIndex.messageGraph;
   portableIndex.messageLineage = fullIndex.messageLineage;
+  portableIndex.instanceStartCensus = fullIndex.instanceStartCensus;
   portableIndex.populationCounts = populationCounts(portableIndex);
   portableIndex.portableProjection = {
     ...(portableIndex.portableProjection || {}),
@@ -148,17 +151,19 @@ async function main() {
     messageGraphIncluded: true,
     messageContentAddressable: true,
     generatedOutputContentAddressable: true,
-    rationale: 'Repeated modelVisibleMessages arrays are omitted only because their complete message/output content is retained once in the UID-addressable message graph. Content is not deleted from the portable scientific record.',
+    instanceStartCensusIncluded: true,
+    rationale: 'Repeated modelVisibleMessages arrays are omitted only because their complete message/output content is retained once in the UID-addressable message graph. Instance starts and downstream pair depth remain directly inspectable offline. Content is not deleted from the portable scientific record.',
   };
   await fs.writeFile(indexPath, `${JSON.stringify(portableIndex)}\n`, 'utf8');
 
-  // Ship the deterministic readers required to traverse/query the graph.
+  // Ship deterministic readers required to traverse/query the normalized data.
   await fs.copyFile(graphModule, path.join(outRoot, 'app', path.basename(graphModule)));
   await fs.copyFile(treatmentQuery, path.join(outRoot, 'app', path.basename(treatmentQuery)));
+  await fs.copyFile(instanceCensusModule, path.join(outRoot, 'app', path.basename(instanceCensusModule)));
 
   const startHerePath = path.join(outRoot, 'START-HERE.md');
   let startHere = await fs.readFile(startHerePath, 'utf8');
-  startHere += `\n## Addressable treatment history (v1)\n\nThe portable normalized index includes a UID-addressable message graph with **${portableIndex.messageGraph.nodeCount} message/output nodes**. Repeated per-observation \`modelVisibleMessages\` arrays may be omitted, but their complete textual content remains in \`messageGraph.nodes\` and each observation retains message UID references.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. These are different populations, not interchangeable denominators.\n`;
+  startHere += `\n## Addressable treatment history and instance starts (v1)\n\nThe portable normalized index includes a UID-addressable message graph with **${portableIndex.messageGraph.nodeCount} message/output nodes**. Repeated per-observation \`modelVisibleMessages\` arrays may be omitted, but their complete textual content remains in \`messageGraph.nodes\` and each observation retains message UID references.\n\nThe index also includes \`instanceStartCensus\` with **${portableIndex.instanceStartCensus.instanceCount} model instances/trajectories**. Each entry exposes its first administered input, first output when available, total complete input-output pairs, and whether further pairs occur downstream. Cold/cold-schema calls are ordinary root instances; replicate labels are not treated as instance IDs.\n\nPopulation bookkeeping is explicit: **${portableIndex.populationCounts.allAddressableObservations}** addressable observations total; **${portableIndex.populationCounts.coldSchemaNoLivedParent}** are cold-schema/no-lived-parent observations; the historical non-cold-schema projection is **${portableIndex.populationCounts.nonColdSchemaObservations}**. These are different populations, not interchangeable denominators.\n`;
   await fs.writeFile(startHerePath, startHere, 'utf8');
 
   manifest.bundleSchemaVersion = 'blum-portable-lab-bundle-v1-message-addressable';
@@ -169,12 +174,21 @@ async function main() {
     contentAddressableOffline: true,
     repeatedMessageArraysOmitted: true,
   };
+  manifest.instanceStartCensus = {
+    schema: portableIndex.instanceStartCensus.schema,
+    instanceCount: portableIndex.instanceStartCensus.instanceCount,
+    withFurtherInputOutputPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
+    withoutFurtherInputOutputPairs: portableIndex.instanceStartCensus.withoutFurtherInputOutputPairs,
+    missingFirstInput: portableIndex.instanceStartCensus.missingFirstInput,
+    availableOffline: true,
+  };
   manifest.generatedCorpusCensus = {
     ...(manifest.generatedCorpusCensus || {}),
     allAddressableObservations: portableIndex.populationCounts.allAddressableObservations,
     coldSchemaNoLivedParent: portableIndex.populationCounts.coldSchemaNoLivedParent,
     nonColdSchemaObservations: portableIndex.populationCounts.nonColdSchemaObservations,
     messageNodes: portableIndex.messageGraph.nodeCount,
+    modelInstances: portableIndex.instanceStartCensus.instanceCount,
   };
   manifest.portableIndexProjection = portableIndex.portableProjection;
   manifest.inventoryStatus = 'verified-v1-staged-files-excluding-manifest-itself';
@@ -189,6 +203,8 @@ async function main() {
     nonColdSchemaObservations: portableIndex.populationCounts.nonColdSchemaObservations,
     coldSchemaNoLivedParent: portableIndex.populationCounts.coldSchemaNoLivedParent,
     messageNodes: portableIndex.messageGraph.nodeCount,
+    instances: portableIndex.instanceStartCensus.instanceCount,
+    instancesWithFurtherPairs: portableIndex.instanceStartCensus.withFurtherInputOutputPairs,
     projection: portableIndex.portableProjection.schema,
   }, null, 2));
 }
