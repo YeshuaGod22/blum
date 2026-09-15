@@ -21,6 +21,23 @@ function main() {
   const conflicts = rows.filter(x => x.status === 'conflict');
   const unresolved = rows.filter(x => x.status === 'unresolved');
 
+  if (conflicts.length) {
+    console.log('TREATMENT PROMPT CONFLICTS');
+    console.log(JSON.stringify(conflicts.map(row => ({
+      trunkKey: row.trunkKey,
+      family: row.family,
+      collections: row.collections,
+      candidates: (row.candidates || []).map(c => ({
+        messageUid: c.messageUid,
+        contentHash: c.contentHash,
+        parentSnapshotId: c.parentSnapshotId,
+        observationId: c.observationId,
+        collection: c.collection,
+        firstPromptPreview: c.content.slice(0, 220),
+      })),
+    })), null, 2));
+  }
+
   assert.ok(resolved.length > 0, 'no treatment prompts resolved');
   assert.equal(conflicts.length, 0, 'verified lived-prefix treatment query must not silently contain conflicting origins');
   assert.ok(unresolved.length > 0, 'expected explicit unresolved non-lived/pilot groupings');
@@ -36,9 +53,6 @@ function main() {
   assert.ok(asTrunk1, 'AS-trunk1 should resolve from verified lived-prefix evidence');
   assert.ok(asTrunk1.firstPrompt.startsWith('Hi Claude!'), 'AS-trunk1 first treatment prompt changed unexpectedly');
 
-  // The earlier generic first-user helper produced conflicts because not every
-  // `trunkKey` denotes a reconstructable lived developmental trunk. The strict
-  // query must instead leave weaker provenance explicitly unresolved.
   const pilotLike = unresolved.filter(x => x.reason === 'pilot1_normalized_rows_do_not_preserve_complete_lived_prefix');
   assert.ok(pilotLike.length > 0, 'Pilot 1 provenance limitation should remain explicit');
 
