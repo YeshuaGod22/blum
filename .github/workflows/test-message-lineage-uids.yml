@@ -9,6 +9,8 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-bind-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-trajectory-package-integrity-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-call-outcome-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/measurement-package-provenance-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/canonical-measurement-compiler-v0-14sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-first-treatment-prompts-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-instance-start-census-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/dae-whole-corpus-index-cli-v1-12sep2026.js'
@@ -18,6 +20,7 @@ on:
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-inference-package-graph-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-trajectory-package-integrity-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-call-outcome-census-v0-15sep2026.js'
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-measurement-package-provenance-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-first-treatment-prompts-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-real-dae-instance-start-census-v0-15sep2026.js'
       - 'read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026/test-portable-message-addressability-v1-15sep2026.mjs'
@@ -68,6 +71,10 @@ jobs:
       - name: Test outcome-aware inference call census
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
         run: node test-real-dae-call-outcome-census-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
+
+      - name: Test observation and measurement package provenance
+        working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
+        run: node test-real-dae-measurement-package-provenance-v0-15sep2026.js "$GITHUB_WORKSPACE/dae-witness"
 
       - name: Test every model trajectory exposes its first package and downstream depth
         working-directory: read-the-architecture-spec-first/i-have-read-the-spec/experimental-lineage-console-11sep2026
