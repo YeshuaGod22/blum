@@ -38,10 +38,6 @@ function main() {
     ancestryTypes,
   }, null, 2));
 
-  // Pin the distinction that had previously been implicit in discussion/artifacts:
-  // the current canonical builder admits 2,378 addressable observations, while
-  // the familiar 2,028 population is exactly the projection that excludes the
-  // 350 cold-schema/no-lived-parent observations.
   assert.equal(index.observationCount, 2378, 'canonical current corpus population changed');
   assert.equal(ancestryTypes.cold_schema_no_lived_parent, 350, 'cold-schema population changed');
   assert.equal(nonColdSchemaCount, 2028, 'historical non-cold-schema projection changed');
@@ -68,7 +64,8 @@ function main() {
 
     if (row.parentVerificationStatus === 'verified_from_sent_prefix' && Number.isInteger(row.parentPrefixLen) && row.parentPrefixLen > 0) {
       verifiedPrefixRows += 1;
-      const key = `${row.trunkKey}::${row.parentSnapshotId}`;
+      assert.ok(row.treatmentInstanceId, `verified row missing treatmentInstanceId: ${row.observationId}`);
+      const key = row.treatmentInstanceId;
       if (!sharedGroups.has(key)) sharedGroups.set(key, []);
       sharedGroups.get(key).push(row);
     }
@@ -87,17 +84,18 @@ function main() {
       assert.deepEqual(
         row.modelVisibleMessageIds.slice(0, row.parentPrefixLen),
         prefixIds,
-        `verified shared prefix failed to share message UIDs: ${row.trunkKey}`
+        `verified treatment instance failed to share prefix UIDs: ${row.treatmentInstanceId}`
       );
     }
   }
   assert.ok(multiObservationSharedPrefixes > 0, 'no repeated verified shared-prefix groups found');
 
   const firstPrompts = Graph.firstUserPromptsByTrunk(index);
-  assert.ok(firstPrompts.length > 0, 'first-prompt query returned no trunks');
+  assert.ok(firstPrompts.length > 0, 'first-prompt convenience query returned no trunk labels');
   const resolved = firstPrompts.filter(x => x.status === 'resolved');
   const conflicts = firstPrompts.filter(x => x.status === 'conflict');
-  assert.ok(resolved.length > 0, 'first-prompt query produced no resolved trunks');
+  assert.ok(resolved.length > 0, 'first-prompt convenience query produced no resolved labels');
+  assert.ok(conflicts.length > 0, 'reused trunk labels should remain visibly conflicting in the convenience helper');
 
   console.log('PASS real DAE message lineage graph');
   console.log(JSON.stringify({
@@ -105,11 +103,11 @@ function main() {
     nonColdSchemaObservations: nonColdSchemaCount,
     messageNodes: index.messageGraph.nodeCount,
     verifiedPrefixRows,
-    sharedPrefixGroups: multiObservationSharedPrefixes,
+    treatmentInstancesWithMultipleObservations: multiObservationSharedPrefixes,
     reconstructChecks,
-    firstPromptTrunks: firstPrompts.length,
-    resolvedFirstPrompts: resolved.length,
-    explicitFirstPromptConflicts: conflicts.length,
+    firstPromptTrunkLabels: firstPrompts.length,
+    resolvedFirstPromptLabels: resolved.length,
+    explicitReusedLabelConflicts: conflicts.length,
     sampleResolvedFirstPrompts: resolved.slice(0, 8),
   }, null, 2));
 }
