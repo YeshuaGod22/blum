@@ -207,7 +207,11 @@ const apiServer = http.createServer(async (req, res) => {
     if (req.method === 'GET' && messagesMatch) {
       const room = decodeURIComponent(messagesMatch[1]);
       assertAllowedRoom(room);
-      const payload = await roomRequest('GET', `/api/room/${encodeURIComponent(room)}/chatlog`);
+      const payload = await roomRequest('POST', '/api/room/pull', {
+        participant: PARTICIPANT,
+        room,
+        initiator: PARTICIPANT,
+      });
       return json(res, 200, payload);
     }
 
