@@ -2,7 +2,7 @@
 
 This module exposes one ordinary Blum **user home/client** to an authenticated external caller such as ChatGPT.
 
-It deliberately does **not** add a special ChatGPT path to the room server. The participant registers in the normal directory, joins normal rooms, receives normal `/dispatch` payloads, and sends normal `/api/message/send` messages through the room server. This follows the canonical rule that users and agents are identical at the protocol level.
+It deliberately does **not** add a special ChatGPT path to the room server. The participant registers in the normal directory, joins normal rooms, receives normal `/dispatch` payloads, pulls room state through normal `/api/room/pull`, and sends normal `/api/message/send` messages through the room server. This follows the canonical rule that users and agents are identical at the protocol level.
 
 ## Security shape
 
@@ -64,7 +64,7 @@ Returns persisted room dispatches received by this user home. `limit` is capped 
 
 ### `GET /v1/rooms/:room/messages`
 
-Returns the room server's current chatlog for an allowlisted room.
+Performs the canonical Blum participant pull (`POST /api/room/pull`) for the configured participant and returns the resulting `disp_*` provenance ID plus room chatlog.
 
 ### `POST /v1/rooms/:room/send`
 
@@ -82,7 +82,7 @@ The gateway fixes both `from` and `initiator` to its configured participant iden
 
 ## Persistence and provenance
 
-Incoming dispatches are appended unchanged to `data/<participant>-inbox.jsonl` with their room-server `dispatchId`, `triggered_by`, room UID, and receipt timestamp. The room remains the canonical conversational audit trail; the inbox is the user home's received-copy state.
+Incoming dispatches are appended unchanged to `data/<participant>-inbox.jsonl` with their room-server `dispatchId`, `triggered_by`, room UID, and receipt timestamp. Pulls preserve the room server's generated `disp_*` identifier. The room remains the canonical conversational audit trail; the inbox is the user home's received-copy state.
 
 ## Test
 
@@ -94,7 +94,7 @@ No API keys or live agents are required. The integration test starts a minimal m
 - allowlist enforcement;
 - send through `/api/message/send`;
 - normal room `/dispatch` delivery into the persistent inbox;
-- chatlog retrieval.
+- room retrieval through `/api/room/pull` with a dispatch UID.
 
 Run:
 
