@@ -39,7 +39,9 @@ const roomServer = http.createServer(async (req, res) => {
   const body = req.method === 'POST' ? await readBody(req) : {};
   if (req.method === 'GET' && req.url === '/api/directory') return sendJson(res, 200, state.directory);
   if (req.method === 'GET' && req.url === '/api/rooms') return sendJson(res, 200, state.rooms);
-  if (req.method === 'GET' && req.url === `/api/room/${ROOM}/chatlog`) return sendJson(res, 200, { room: ROOM, chatlog: state.rooms[ROOM].chatlog });
+  if (req.method === 'POST' && req.url === '/api/room/pull') {
+    return sendJson(res, 200, { success: true, dispatchId: 'disp_pull', room: body.room, roomchatlog: state.rooms[body.room].chatlog });
+  }
   if (req.method === 'POST' && req.url === '/api/directory/register') {
     state.directory[body.name] = { name: body.name, uid: 'uid_external', endpoint: body.endpoint };
     return sendJson(res, 200, { success: true, entry: state.directory[body.name] });
@@ -130,7 +132,8 @@ async function waitFor(url, options, predicate, timeoutMs = 5000) {
       headers: { Authorization: `Bearer ${TOKEN}` },
     });
     const messagesData = await messages.json();
-    assert(messagesData.chatlog.some(m => m.body.includes('raw12')));
+    assert.strictEqual(messagesData.dispatchId, 'disp_pull');
+    assert(messagesData.roomchatlog.some(m => m.body.includes('raw12')));
 
     const forbidden = await fetch(`http://127.0.0.1:${API_PORT}/v1/rooms/boardroom/messages`, {
       headers: { Authorization: `Bearer ${TOKEN}` },
