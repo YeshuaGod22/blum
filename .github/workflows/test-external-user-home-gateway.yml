@@ -1,0 +1,29 @@
+name: Test external user home gateway
+
+on:
+  pull_request:
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/external-user-home-gateway-16sep2026/**'
+      - '.github/workflows/test-external-user-home-gateway.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'read-the-architecture-spec-first/i-have-read-the-spec/external-user-home-gateway-16sep2026/**'
+      - '.github/workflows/test-external-user-home-gateway.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integration-test:
+    strategy:
+      matrix:
+        node: [20, 22]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run external user home gateway integration test
+        run: node read-the-architecture-spec-first/i-have-read-the-spec/external-user-home-gateway-16sep2026/test-blum-external-user-home-gateway-16sep2026.js
